@@ -98,7 +98,7 @@ class ProjectService {
         });
     }
 
-    Credential issueCredential(UUID id, String actor) {
+    Credential issueCredential(UUID id, Instant expiresAt, String actor) {
         return tx.execute(status -> {
             requireActive(lockProject(findEnvironment(id).projectId()));
             Environment env = findEnvironment(id);
@@ -107,11 +107,11 @@ class ProjectService {
             byte[] entropy = new byte[32];
             random.nextBytes(entropy);
             String key = "pk_" + keyId + "_" + Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
-            Instant expiry = Instant.now().plusSeconds(90L * 24 * 3600);
+            if (expiresAt != null && !expiresAt.isAfter(Instant.now())) throw badRequest("Expiry must be in the future");
             db.update("INSERT INTO service_credentials(id,environment_id,secret_hash,expires_at) VALUES (?,?,?,?)",
-                keyId, id, hash(key), java.sql.Timestamp.from(expiry));
+                keyId, id, hash(key), expiresAt == null ? null : java.sql.Timestamp.from(expiresAt));
             audit(actor, "credential.issued", keyId);
-            return new Credential(keyId, key, expiry);
+            return new Credential(keyId, key, expiresAt);
         });
     }
 
@@ -132,7 +132,8 @@ class ProjectService {
             SELECT e.*, c.secret_hash FROM service_credentials c
             JOIN environments e ON c.environment_id=e.id
             JOIN projects p ON e.project_id=p.id
-            WHERE c.id=? AND c.revoked_at IS NULL AND c.expires_at>now() AND e.state='READY' AND p.status='ACTIVE'
+            WHERE c.id=? AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>now())
+                AND e.state='READY' AND p.status='ACTIVE'
             """, (rs, row) -> {
                 if (!MessageDigest.isEqual(hash(key).getBytes(StandardCharsets.US_ASCII),
                         rs.getString("secret_hash").getBytes(StandardCharsets.US_ASCII))) throw unauthorized();

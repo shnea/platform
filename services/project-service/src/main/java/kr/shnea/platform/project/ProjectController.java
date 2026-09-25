@@ -2,7 +2,9 @@ package kr.shnea.platform.project;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -21,6 +23,7 @@ class ProjectController {
                           @NotNull List<@NotBlank String> redirectUris) {}
     record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
     record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
+    record NewCredential(@Future Instant expiresAt) {}
     @PutMapping("/api/v1/admin/projects/{id}")
     Object updateProject(@PathVariable UUID id, @Valid @RequestBody ProjectSettings request, @AuthenticationPrincipal Jwt user) {
         return service.updateProject(id, request.name(), request.status(), request.revision(), user.getSubject());
@@ -51,7 +54,9 @@ class ProjectController {
     @PostMapping("/api/v1/admin/environments/{id}/provision")
     Object provision(@PathVariable UUID id, @AuthenticationPrincipal Jwt user) { return service.provision(id, user.getSubject()); }
     @PostMapping("/api/v1/admin/environments/{id}/credentials") @ResponseStatus(HttpStatus.CREATED)
-    Object issue(@PathVariable UUID id, @AuthenticationPrincipal Jwt user) { return service.issueCredential(id, user.getSubject()); }
+    Object issue(@PathVariable UUID id, @Valid @RequestBody(required=false) NewCredential request, @AuthenticationPrincipal Jwt user) {
+        return service.issueCredential(id, request == null ? null : request.expiresAt(), user.getSubject());
+    }
     @DeleteMapping("/api/v1/admin/credentials/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@PathVariable UUID id, @AuthenticationPrincipal Jwt user) { service.revokeCredential(id, user.getSubject()); }
     @GetMapping("/api/v1/integration/context")

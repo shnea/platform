@@ -40,7 +40,7 @@ export async function api<T>(
   });
   if (!response.ok) {
     const messages: Record<number, string> = {
-      400: "입력값을 확인해 주세요. 콜백은 정확한 HTTPS 주소여야 하며, DEV는 localhost의 HTTP도 허용합니다.",
+      400: "입력값을 확인해 주세요. 콜백은 정확한 HTTPS 주소(DEV는 HTTP localhost도 허용), 만료일은 현재 이후여야 합니다.",
       401: "로그인이 만료되었습니다. 다시 로그인해 주세요.",
       403: "플랫폼 관리자 권한이 필요합니다.",
       404: "대상을 찾을 수 없습니다. 목록을 새로고침해 주세요.",

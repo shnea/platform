@@ -2,6 +2,8 @@
 import json
 import os
 import uuid
+import time
+from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
@@ -35,9 +37,23 @@ e = request('POST', purl + '/environments', dict(code='dev', kind='DEV', registr
 eurl = api + '/environments/' + e['id']
 assert e['state'] == 'READY'
 k = request('POST', eurl + '/credentials', token=admin, expected=201)
+assert 'expiresAt' in k and k['expiresAt'] is None
 listing = request('GET', eurl + '/credentials', token=admin)
+assert 'expires_at' in listing[0] and listing[0]['expires_at'] is None
 assert listing[0]['id'] == k['id'] and 'apiKey' not in listing[0] and 'secret_hash' not in listing[0]
 request('GET', base + '/api/v1/integration/context', key=k['apiKey'])
+# Optional expiry remains enforced; omitting it preserves the non-expiring default.
+request('POST', eurl + '/credentials', dict(expiresAt='2000-01-01T00:00:00Z'), admin, expected=400)
+request('POST', eurl + '/credentials', dict(expiresAt='not-a-date'), admin, expected=400)
+expiry = datetime.now(timezone.utc) + timedelta(seconds=3)
+short = request('POST', eurl + '/credentials', dict(expiresAt=expiry.isoformat()), admin, expected=201)
+assert datetime.fromisoformat(short['expiresAt'].replace('Z', '+00:00')) == expiry
+request('GET', base + '/api/v1/integration/context', key=short['apiKey'])
+time.sleep(max(0, (expiry - datetime.now(timezone.utc)).total_seconds()) + 0.2)
+request('GET', base + '/api/v1/integration/context', key=short['apiKey'], expected=401)
+request('POST', base + '/api/v1/dev/login', dict(provider='google', subject='expired'), key=short['apiKey'], expected=401)
+request('GET', base + '/api/v1/integration/context', key=k['apiKey'])
+
 settings = dict(registrationAllowed=True, redirectUris=['https://example.org/login/callback'], revision=e['revision'])
 e = request('PUT', eurl, settings, admin)
 assert e['state'] == 'READY' and e['revision'] == 1
@@ -79,4 +95,4 @@ assert request('GET', realm_url, token=provisioner)['enabled']
 request('DELETE', api + '/credentials/' + k['id'], token=admin, expected=204)
 request('GET', base + '/api/v1/integration/context', key=k['apiKey'], expected=401)
 assert request('GET', base + '/api/v1/config')['clientId'] == 'platform-admin-web'
-print('PASS lifecycle: settings, concurrent revision conflict, origins, session logout, suspend/resume, blocked keys/Mock/creation, suspended edits, credential metadata')
+print('PASS lifecycle: default non-expiring keys, optional expiry enforcement, settings, concurrent revision conflict, origins, session logout, suspend/resume, blocked keys/Mock/creation, suspended edits, credential metadata')

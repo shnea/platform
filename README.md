@@ -30,6 +30,8 @@ docker compose -f compose.yml -f compose.dev.yml --profile setup run --rm --buil
 
 Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`를 확인한다. 플랫폼 관리자 화면은 별도 계정 `admin`과 `.env`의 `PLATFORM_ADMIN_PASSWORD`로 로그인한다. 기본 바인딩은 로컬 PC 전용이다. 관리자 주소는 `PLATFORM_WEB_URL`의 정확한 origin과 일치해야 한다. 주소 변경 후 `identity-setup`을 다시 실행한다. 운영은 HTTPS 주소가 필요하다.
 
+운영 도메인은 `platform.shnea.kr`이다. TLS 배포 시 `PLATFORM_MODE=prod`, `PLATFORM_WEB_URL=https://platform.shnea.kr`, `KEYCLOAK_PUBLIC_URL=https://platform.shnea.kr/auth`로 설정하고 `identity-setup`을 실행한다. 관리자 로그인·로그아웃 콜백은 `https://platform.shnea.kr/`로 등록된다. 서비스 Nginx 진입 포트는 `30140`을 유지한다. DNS·TLS 종료 및 신뢰할 프록시의 전달 헤더 설정은 운영 배포 단계에서 적용·검증한다. 현재 로컬 개발 설정은 변경하지 않는다.
+
 ## 검증과 중지
 
 ```sh

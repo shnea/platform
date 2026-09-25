@@ -29,7 +29,7 @@ type Environment = {
 type Key = {
   id: string;
   created_at: string;
-  expires_at: string;
+  expires_at: string | null;
   revoked_at: string | null;
 };
 type Event = {
@@ -38,10 +38,13 @@ type Event = {
   target_id: string;
   created_at: string;
 };
+const keyExpired = (key: Key) =>
+  key.expires_at !== null && new Date(key.expires_at).getTime() <= Date.now();
 type Modal =
   | { type: "project" }
   | { type: "edit" | "status"; project: Project }
   | { type: "environment"; env?: Environment }
+  | { type: "issue"; environmentId: string }
   | { type: "revoke"; key: Key }
   | { type: "secret"; secret: string };
 const date = (value: string) =>
@@ -79,15 +82,17 @@ function Dialog({
   useEffect(() => {
     const opener = document.activeElement as HTMLElement;
     ref.current?.showModal();
+    return () => {
+      opener?.focus();
+    };
+  }, []);
+  useEffect(() => {
     ref.current
       ?.querySelector<HTMLElement>(
         "input:not([type=checkbox]), textarea, select",
       )
       ?.focus();
-    return () => {
-      opener?.focus();
-    };
-  }, []);
+  }, [title]);
   return (
     <dialog
       ref={ref}
@@ -250,6 +255,7 @@ function Workspace() {
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [refresh, setRefresh] = useState(0);
+  const [keyHasExpiry, setKeyHasExpiry] = useState(false);
   const previousProject = useRef<string | null>(null);
   const project = projects.find((p) => p.id === selected),
     env = envs.find((e) => e.id === envId);
@@ -332,6 +338,7 @@ function Workspace() {
     };
   }, [envId, refresh]);
   function open(value: Modal) {
+    setKeyHasExpiry(false);
     setError("");
     setNotice("");
     setModal(value);
@@ -357,6 +364,30 @@ function Workspace() {
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
+    if (modal?.type === "issue") {
+      await action(async () => {
+        const expiry = keyHasExpiry
+          ? new Date(String(data.get("expiresAt")))
+          : null;
+        if (
+          expiry &&
+          (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now())
+        )
+          throw new Error("만료일은 현재보다 이후로 선택해 주세요.");
+        const result = await api<{ apiKey: string }>(
+          `/environments/${modal.environmentId}/credentials`,
+          "POST",
+          {
+            expiresAt: expiry?.toISOString() ?? null,
+          },
+        );
+        open({ type: "secret", secret: result.apiKey });
+        setKeys(
+          await api<Key[]>(`/environments/${modal.environmentId}/credentials`),
+        );
+      }, "");
+      return;
+    }
     await action(async () => {
       if (modal?.type === "project") {
         await api("/projects", "POST", {
@@ -418,7 +449,9 @@ function Workspace() {
               : "프로젝트 재개"
             : modal?.type === "secret"
               ? "API 키가 발급되었습니다"
-              : "API 키 폐기";
+              : modal?.type === "issue"
+                ? "서버 API 키 발급"
+                : "API 키 폐기";
   return (
     <div className="shell">
       <aside>
@@ -746,8 +779,8 @@ function Workspace() {
                         <div>
                           <h3>서버 API 키</h3>
                           <p className="muted small">
-                            발급 후 90일간 유효합니다. 키 원문은 발급할 때만
-                            표시됩니다. 최근 100개를 표시합니다.
+                            새 키는 기본적으로 만료되지 않습니다. 키 원문은
+                            발급할 때만 표시됩니다. 최근 100개를 표시합니다.
                           </p>
                         </div>
                         <button
@@ -757,18 +790,7 @@ function Workspace() {
                             project.status !== "ACTIVE"
                           }
                           onClick={() =>
-                            void action(async () => {
-                              const result = await api<{ apiKey: string }>(
-                                `/environments/${env.id}/credentials`,
-                                "POST",
-                              );
-                              open({ type: "secret", secret: result.apiKey });
-                              setKeys(
-                                await api<Key[]>(
-                                  `/environments/${env.id}/credentials`,
-                                ),
-                              );
-                            }, "")
+                            open({ type: "issue", environmentId: env.id })
                           }
                         >
                           키 발급 +
@@ -785,23 +807,21 @@ function Workspace() {
                                 <p className="small muted">
                                   {key.revoked_at
                                     ? `폐기 · ${date(key.revoked_at)}`
-                                    : `만료 · ${date(key.expires_at)}`}
+                                    : key.expires_at === null
+                                      ? "만료 없음"
+                                      : `만료 · ${date(key.expires_at)}`}
                                 </p>
                               </div>
                               <button
                                 className="quiet danger"
                                 disabled={
-                                  busy ||
-                                  !!key.revoked_at ||
-                                  new Date(key.expires_at).getTime() <=
-                                    Date.now()
+                                  busy || !!key.revoked_at || keyExpired(key)
                                 }
                                 onClick={() => open({ type: "revoke", key })}
                               >
                                 {key.revoked_at
                                   ? "폐기됨"
-                                  : new Date(key.expires_at).getTime() <=
-                                      Date.now()
+                                  : keyExpired(key)
                                     ? "만료됨"
                                     : "폐기"}
                               </button>
@@ -870,6 +890,41 @@ function Workspace() {
           ) : (
             <form onSubmit={submit}>
               <fieldset disabled={busy}>
+                {modal.type === "issue" && (
+                  <>
+                    <label>
+                      만료 설정
+                      <select
+                        value={keyHasExpiry ? "date" : "never"}
+                        onChange={(e) =>
+                          setKeyHasExpiry(e.target.value === "date")
+                        }
+                      >
+                        <option value="never">만료 없음 (기본)</option>
+                        <option value="date">만료일 지정</option>
+                      </select>
+                    </label>
+                    {keyHasExpiry && (
+                      <label>
+                        만료일시
+                        <input
+                          name="expiresAt"
+                          type="datetime-local"
+                          required
+                        />
+                        <span className="hint">
+                          현재 기기 시간대(
+                          {Intl.DateTimeFormat().resolvedOptions().timeZone})
+                          기준입니다.
+                        </span>
+                      </label>
+                    )}
+                    <p className="small muted">
+                      만료일을 지정하면 해당 시점부터 키를 사용할 수 없습니다.
+                      키 원문은 발급 직후에만 표시됩니다.
+                    </p>
+                  </>
+                )}
                 {(modal.type === "project" || modal.type === "edit") && (
                   <label>
                     프로젝트 이름
@@ -1014,7 +1069,9 @@ function Workspace() {
                           : "재개하기"
                         : modal.type === "revoke"
                           ? "폐기하기"
-                          : "저장"}
+                          : modal.type === "issue"
+                            ? "발급하기"
+                            : "저장"}
                   </button>
                 </div>
               </fieldset>
