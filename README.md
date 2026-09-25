@@ -56,6 +56,8 @@ docker compose -f compose.yml -f compose.dev.yml down
 
 관리자 화면 수정 후에는 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps admin-web`을 실행한다. 이미지 빌드 과정에서 `npm ci`, TypeScript 검사와 Vite 빌드를 실행한다. 로그인·설정·모바일 수동 검수 순서는 [관리자 화면 안내](docs/ADMIN_WEB.md)에 있다.
 
+NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프록시 안내](docs/REVERSE_PROXY.md)의 헤더 신뢰·포트 접근 제한을 먼저 확인한다.
+
 ## 작업을 이어갈 때
 
 다른 PC에서는 [PC 이동·작업 인계 안내](docs/HANDOFF.md)의 복제·초기화 절차를 따른다.

@@ -164,7 +164,8 @@ services:
     image: register.shnea.kr/platform-nginx:${IMAGE_TAG:?Set IMAGE_TAG}
     environment:
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL}
-      NGINX_ENVSUBST_FILTER: ^KEYCLOAK_PUBLIC_URL$
+      NGINX_TRUSTED_PROXY: ${NGINX_TRUSTED_PROXY:-127.0.0.1}
+      NGINX_ENVSUBST_FILTER: ^(KEYCLOAK_PUBLIC_URL|NGINX_TRUSTED_PROXY)$
     mem_limit: ${NGINX_MEMORY:-64m}
     cpus: ${NGINX_CPUS:-0.5}
     networks: [app]
