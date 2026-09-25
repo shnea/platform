@@ -16,6 +16,7 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
     environment("PLATFORM_MODE", "prod")
+    environment("PLATFORM_MAIL_SECRET", "test-mail-secret-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     for (provider in listOf("NAVER", "KAKAO", "GOOGLE")) {
         environment("SOCIAL_${provider}_CLIENT_ID", "client")
         environment("SOCIAL_${provider}_CLIENT_SECRET", "secret")

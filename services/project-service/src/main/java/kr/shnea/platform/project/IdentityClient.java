@@ -22,15 +22,17 @@ class IdentityClient {
     private final String secret;
     private final String mode;
     private final String publicUrl;
+    private final EmailClient emails;
 
     IdentityClient(@Value("${platform.identity.internal-url}") String internalUrl,
                    @Value("${platform.identity.public-url}") String publicUrl,
                    @Value("${platform.identity.secret}") String secret,
-                   @Value("${platform.mode}") String mode) {
+                   @Value("${platform.mode}") String mode, EmailClient emails) {
         if (!List.of("dev", "prod").contains(mode)) throw new IllegalArgumentException("Invalid platform mode");
         this.mode = mode;
         this.secret = secret;
         this.publicUrl = publicUrl;
+        this.emails = emails;
         var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5)).build());
         factory.setReadTimeout(Duration.ofSeconds(10));
@@ -179,7 +181,7 @@ class IdentityClient {
         if (!current.passwordPolicyEditable())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Custom Keycloak password rules must be reviewed before editing");
         if ((request.verifyEmail() || request.resetPasswordAllowed()) && !current.emailActionsAvailable())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email actions require production mode, PROD environment and email configuration");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email actions require matching environment and ready email delivery");
         if (request.loginWithEmail() && Boolean.TRUE.equals(realm.get("duplicateEmailsAllowed")))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate email policy must be resolved first");
         @SuppressWarnings("unchecked")
@@ -199,12 +201,10 @@ class IdentityClient {
                 || !env.id().toString().equals(attrs.get("platform.environmentId")))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Realm ownership mismatch");
         int minimum = AuthenticationPolicy.minimum((String) realm.get("passwordPolicy"));
-        boolean configuredEmail = realm.get("smtpServer") instanceof Map<?, ?> smtp
-            && smtp.get("host") instanceof String host && !host.isBlank()
-            && smtp.get("from") instanceof String from && !from.isBlank();
+        String delivery = emails.delivery(env);
         return new AuthenticationPolicy(!Boolean.FALSE.equals(realm.get("loginWithEmailAllowed")),
             Boolean.TRUE.equals(realm.get("verifyEmail")), Boolean.TRUE.equals(realm.get("resetPasswordAllowed")),
-            minimum, minimum >= 0 && minimum <= 128, configuredEmail && activationAllowed(env),
+            minimum, minimum >= 0 && minimum <= 128, !delivery.equals("UNAVAILABLE"), delivery,
             attrs.get("platform.authPolicyRevision") instanceof String revision ? revision : "unconfigured");
     }
 

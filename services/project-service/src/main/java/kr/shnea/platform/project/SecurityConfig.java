@@ -29,6 +29,7 @@ class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**", "/error", "/api/v1/config").permitAll()
                 .requestMatchers("/api/v1/integration/context", "/api/v1/dev/login").permitAll() // Controllers validate scoped key.
+                .requestMatchers("/internal/v1/email/environments/*").permitAll() // Dedicated internal secret, never routed by Nginx.
                 .requestMatchers("/api/v1/admin/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().denyAll())
             .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))

@@ -58,9 +58,9 @@ export async function api<T>(
     }
     if (path.includes("/authentication-policy")) {
       messages[400] =
-        "비밀번호 최소 길이는 12~128자여야 합니다. 이메일 인증·복구는 발송 설정이 있는 운영 모드의 PROD 환경에서만 켤 수 있습니다.";
+        "비밀번호 최소 길이는 12~128자여야 합니다. 이메일 인증·복구는 전달 경로가 준비된 dev/DEV 또는 prod/PROD 환경에서 켤 수 있습니다.";
       messages[409] =
-        "환경이 미반영 상태이거나 정책이 변경되었습니다. 새로고침 후 확인해 주세요. 계속되면 Keycloak의 별도 비밀번호 규칙·이메일 중복 설정을 확인하세요.";
+        "환경이 미반영·중지 상태이거나 정책이 변경되었습니다. 새로고침 후 확인해 주세요. 계속되면 Keycloak의 별도 비밀번호 규칙·이메일 중복 설정을 확인하세요.";
     }
     throw new Error(
       messages[response.status] ??

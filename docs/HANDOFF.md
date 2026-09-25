@@ -34,7 +34,7 @@ docker compose -f compose.yml -f compose.dev.yml ps
 
 관리자 화면은 http://localhost:30140/ 이다. ID는 `admin`, 비밀번호는 새 PC의 `.env`에 있는 `PLATFORM_ADMIN_PASSWORD`를 사용한다. 최초 설정 후 프로젝트·환경을 생성한다. 지금까지 만든 테스트 프로젝트는 기존 PC의 DB에만 있으므로 새 PC에는 자동으로 나타나지 않는다.
 
-자체 이미지는 아직 레지스트리에 게시하지 않았다. 새 PC에서도 개발 Compose로 직접 빌드한다. 첫 빌드에는 기반 이미지·의존성 다운로드가 필요하다. Windows·Linux amd64 실기동은 아직 검증 전이며, 기존 검증은 macOS의 Linux arm64 Docker에서 수행했다.
+자체 이미지는 아직 레지스트리에 게시하지 않았다. 새 PC에서도 개발 Compose로 직접 빌드한다. 첫 빌드에는 기반 이미지·의존성 다운로드가 필요하다. macOS의 Linux arm64 Docker와 Windows의 Linux amd64 Docker에서 개발 스택을 검증했다. Linux 호스트 운영 배포·부하·백업 복원 검증은 별도다.
 
 ## Git에 들어 있는 것과 별도 항목
 
@@ -46,12 +46,12 @@ docker compose -f compose.yml -f compose.dev.yml ps
 
 우선 [작업 규칙](../AGENTS.md), [핵심 요구사항](../REQUIREMENTS.md), [현재 상태](STATUS.md)를 읽는다.
 
-환경별 회원 조회·상태 변경·세션 관리를 구현했고 새 Windows PC의 개발 DB에서 검증했다. 다음 구현 단위는 **NCP 이메일 발송 기반·Keycloak 이메일 인증/복구 연결·개발 모의 수신함**이다. 공통 콜백·공통 환경변수 설정과 SHNEA 로고·소셜 로그인 화면을 구현했다. 이전 PC에서 네이버·구글·카카오의 실제 계정 연결과 NCP 이메일·SMS 각 1건의 발송 성공을 확인했으며 이번 PC에 해당 계정 데이터는 옮기지 않았다. 현재 개발 모드(`PLATFORM_MODE=dev`), 사용자 지정 검수 주소는 https://platform.shnea.kr 이다. 상세 검증·데이터 정리 상태는 STATUS.md를 확인한다. 관리자 위임·MFA·테스트 사용자 초기화, 파일·6채널 알림·웹훅·에디터는 남아 있다.
+환경별 회원·세션 관리와 NCP 인증 이메일 전달 경로·Keycloak 이메일 인증/복구·개발 모의 수신함을 구현했다. 공개 도메인에서 모의 메일로 인증·비밀번호 변경·새 비밀번호 로그인까지 검증했다. 새 어댑터의 실제 NCP 수신 검수는 별도로 수신처·발송 승인을 확인해 진행한다. 다음 구현 단위는 **관리자 MFA와 복구 절차**, 이후 DEV 테스트 사용자 초기화다. 공통 소셜 콜백과 SHNEA 브랜드 화면을 유지한다. 이전 PC의 실제 소셜 계정·NCP 이메일/SMS 단일 발송 검수와 이번 구현 검증을 구분한다. 현재 `PLATFORM_MODE=dev`, 사용자 지정 검수 주소는 https://platform.shnea.kr 이다. 상세 결과·데이터 정리는 STATUS.md를 확인한다. 관리자 위임, 파일·6채널 일반 알림·웹훅·에디터는 계속 미완료다.
 
 작업은 작은 단위로 끝내고 변경에 필요한 검증만 수행한다. 완료 시 STATUS.md를 갱신하고 한글 커밋·푸시한다. 플랫폼과 무관한 브라우저 탭이나 검색 내역은 조회하지 않는다.
 
 새 대화에서 사용할 요청 예:
 
-> AGENTS.md, REQUIREMENTS.md, docs/STATUS.md, docs/HANDOFF.md를 읽고 현재 코드와 원격 상태를 확인해 줘. 다음 작업인 NCP 이메일 발송 기반과 Keycloak 이메일 인증·복구 연결을 작은 단위로 이어서 구현해 줘. 실제 소셜 로그인·이메일 발송 검수의 최신 상태를 확인하고, 완료한 단위마다 필요한 검증과 한글 커밋·푸시를 해 줘.
+> AGENTS.md, REQUIREMENTS.md, docs/STATUS.md, docs/HANDOFF.md를 읽고 코드와 원격 상태를 확인해 줘. 다음 작업인 관리자 MFA와 복구 절차를 작은 단위로 이어서 구현해 줘. 외부 이메일 검수와 개발 모의 검증을 구분하고, 완료한 단위마다 필요한 검증과 한글 커밋·푸시를 해 줘.
 
 공통 소셜 키·콜백은 [설정 안내](SOCIAL_LOGIN.md), NCP 연결 검사와 미완료 범위는 [알림 설정](NOTIFICATION_SETUP.md)을 따른다. 실제 키·테스트 수신처는 `.env`에만 있으며 Git으로 이동하지 않는다.

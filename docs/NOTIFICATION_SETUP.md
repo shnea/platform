@@ -1,11 +1,12 @@
 # NCP 알림 설정과 실제 연결 검사
 
-현재 NCP 키·서비스 ID를 로컬 `.env`에 등록하고 알림 컨테이너에 전달한다. 알림 서비스의 발송 API·재시도·이력·Mock 수신함 및 Keycloak 인증/복구 이메일 연결은 아직 구현하지 않았다. 아래 검사는 운영자용 단일 발송 도구이며 제품 기능 완료를 의미하지 않는다.
+NCP 키·서비스 ID는 로컬 `.env`에서 알림 컨테이너로 전달한다. Keycloak 인증·복구 메일의 NCP 전달 어댑터와 개발 모의 수신함을 구현했다. [인증 이메일](IDENTITY_EMAIL.md)에 모드 구분·설치·검수·저장 상태를 설명한다. 일반 알림 업무 API·6채널 재시도·전체 이력 UI는 미완료다. 아래 도구의 이전 단일 발송 성공은 새 어댑터의 실제 외부 수신 검수와 구분한다.
 
 ## 설정
 
 | 변수 | 용도 |
 |---|---|
+| `PLATFORM_MAIL_SECRET` | Keycloak·프로젝트·알림 서비스 사이의 인증 이메일 전용 비밀값. `init-env.py --upgrade`로 생성 |
 | `NCP_ACCESS_KEY`, `NCP_SECRET_KEY` | API Gateway 서명에 사용하는 IAM 키. 해당 Mailer·SENS 권한 필요 |
 | `NCP_MAIL_API_ENDPOINT`, `NCP_MAIL_API_PATH` | `https://mail.apigw.ntruss.com`, `/api/v1/mails` |
 | `NCP_MAIL_SENDER_ADDRESS`, `NCP_MAIL_SENDER_NAME` | 발신 이메일·표시 이름 |

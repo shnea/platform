@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "./auth";
+import { EmailInbox } from "./EmailInbox";
 
 type Policy = {
   loginWithEmail: boolean;
@@ -8,6 +9,7 @@ type Policy = {
   passwordMinLength: number;
   passwordPolicyEditable: boolean;
   emailActionsAvailable: boolean;
+  emailDelivery: "MOCK" | "NCP" | "UNAVAILABLE";
   revision: string;
 };
 
@@ -123,11 +125,12 @@ export function AuthenticationPolicyPanel({
         <>
           {!policy.emailActionsAvailable && (
             <p className="warning">
-              이메일 인증·비밀번호 재설정은 이메일 발송 설정이 있는 운영 모드의
-              PROD 환경에서 켤 수 있습니다. 개발용 이메일 모의 수신함은 아직
-              준비 중입니다.
+              이메일 전달 경로가 준비되지 않았습니다. 개발 모드의 DEV 환경은
+              모의 수신함을, 운영 모드의 PROD 환경은 NCP 발송 설정을 확인해 주세요.
             </p>
           )}
+          {policy.emailDelivery === "MOCK" && <p className="small muted">이 환경의 인증·복구 메일은 아래 개발용 수신함에만 저장하며 외부로 발송하지 않습니다.</p>}
+          {policy.emailDelivery === "NCP" && <p className="small muted">이 환경의 인증·복구 메일은 NCP로 발송합니다. 설정 준비 상태이며 실제 수신 성공을 뜻하지 않습니다.</p>}
           {!policy.passwordPolicyEditable && (
             <p className="warning">
               Keycloak에서 설정한 별도 비밀번호 규칙이 있어 이 화면에서는 수정할
@@ -202,6 +205,7 @@ export function AuthenticationPolicyPanel({
         </>
       )}
       {message && <p role="status">{message}</p>}
+      {ready && policy?.emailDelivery === "MOCK" && <EmailInbox key={environmentId} environmentId={environmentId} />}
     </section>
   );
 }

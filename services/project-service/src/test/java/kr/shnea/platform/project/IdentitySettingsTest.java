@@ -19,6 +19,7 @@ class IdentitySettingsTest {
     private final Map<String, Map<String, Object>> providers = new HashMap<>();
     private HttpServer server;
     private IdentityClient client;
+    private boolean mailReady;
     private ProjectService.Environment env;
     private boolean credentialsReady = true;
     private boolean owned = true;
@@ -74,7 +75,10 @@ class IdentitySettingsTest {
     }
 
     private IdentityClient client(String mode) {
-        return new IdentityClient("http://127.0.0.1:" + server.getAddress().getPort(), "https://platform.example/auth", "test-secret", mode);
+        var emails = org.mockito.Mockito.mock(EmailClient.class);
+        org.mockito.Mockito.when(emails.delivery(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation ->
+            mode.equals("prod") && mailReady ? "NCP" : "UNAVAILABLE");
+        return new IdentityClient("http://127.0.0.1:" + server.getAddress().getPort(), "https://platform.example/auth", "test-secret", mode, emails);
     }
     @AfterEach void stop() { server.stop(0); }
 
@@ -136,6 +140,8 @@ class IdentitySettingsTest {
         assertStatus(400, () -> client.updateAuthenticationPolicy(env,
             new ProjectController.AuthenticationSettings(true, true, true, 12, initial.revision())));
         realmSettings.put("smtpServer", Map.of("host", "mail.example.invalid", "from", "test@example.invalid", "password", "mail-secret"));
+        assertFalse(client.authenticationPolicy(env).emailActionsAvailable(), "SMTP settings alone must not enable NCP actions");
+        mailReady = true;
         var ready = client.authenticationPolicy(env);
         assertTrue(ready.emailActionsAvailable());
         assertFalse(json.writeValueAsString(ready).contains("mail-secret"));

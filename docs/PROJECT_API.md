@@ -2,7 +2,7 @@
 
 ## 현재 제공 범위
 
-프로젝트·환경 등록과 설정, Keycloak realm 생성·재시도, 프로젝트 중지·재개, 권한별 서버 API 키 발급·폐기, 감사 이력, 개발 소셜 Mock 로그인 API를 제공한다. 소셜 3종 설정·공통 콜백, 가입·복구 정책 설정과 회원 조회·상태·세션 관리를 관리자 UI에서 사용할 수 있다. 실제 이메일 인증/복구 연결·초대 가입·알림 Mock은 후속 작업이다.
+프로젝트·환경 등록과 설정, Keycloak realm 생성·재시도, 프로젝트 중지·재개, 권한별 서버 API 키 발급·폐기, 감사 이력, 개발 소셜 Mock 로그인 API를 제공한다. 소셜 3종 설정·공통 콜백, 가입·복구 정책과 회원·세션 관리, 인증 이메일의 NCP 전달 경로·개발 수신함을 연결했다. 초대 가입·일반 알림 업무 API는 후속 작업이다.
 
 ## 회원·세션 관리
 
@@ -71,6 +71,7 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 | `POST /api/v1/admin/environments/{id}/credentials` | 서버 API 키 생성, 원문 1회 응답 |
 | `GET /api/v1/admin/environments/{id}/authentication-policy` | 이메일 로그인·인증·비밀번호 재설정·비밀번호 길이 정책 조회 |
 | `PUT /api/v1/admin/environments/{id}/authentication-policy` | 환경별 가입·복구 정책 저장 |
+| `GET /api/v1/admin/environments/{id}/email-inbox` | dev 배포·DEV 환경의 최근 1시간 인증 이메일 최대 100건 |
 | `GET /api/v1/admin/environments/{id}/social-providers` | 소셜 3종의 설정 메타데이터·콜백 조회 |
 | `PUT /api/v1/admin/environments/{id}/social-providers/{provider}` | `kakao`·`naver`·`google` 설정 저장 |
 | `GET /api/v1/admin/environments/{id}/credential-scopes` | 해당 환경에서 발급 가능한 권한의 `code`·`label`·`description` 목록 |
@@ -252,7 +253,9 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 
 `loginWithEmail`은 기존 아이디 외에 이메일로도 로그인할 수 있는지다. 아이디 자체가 이메일인 계정의 아이디를 바꾸지는 않는다. `verifyEmail`을 켜면 기존 미인증 계정도 이후 로그인에서 이메일 확인을 요구받을 수 있다. `resetPasswordAllowed`는 Keycloak의 이메일 기반 자격증명 복구 흐름을 사용한다. 소셜 제공자의 비밀번호를 변경하지 않는다. 플랫폼 관리자 realm·MFA 복구 정책은 이 API의 대상이 아니다. [Keycloak 로그인·복구 설정](https://www.keycloak.org/docs/latest/server_admin/)
 
-조회는 위의 설정과 `passwordPolicyEditable`, `emailActionsAvailable`을 반환한다. 이메일 관련 두 옵션의 활성화는 운영 모드·PROD 환경·Keycloak 이메일 설정이 모두 준비되어야 하며 아니면 400이다. 현재 이메일 준비 여부는 해당 realm SMTP의 host·from 존재로 확인한다. 이 값은 발송 성공 확인이 아니며, NCP 발송 어댑터와 개발 모의 수신함은 아직 구현 전이다. 개발 환경에서 실제 이메일을 사용하게 만들지 않는다. 기존에 켜진 이메일 정책을 끄는 변경은 가능하다. 이메일 중복 허용이 수동 설정된 realm에서 이메일 로그인을 켜려 하면 409로 거부한다.
+조회는 위의 설정과 `passwordPolicyEditable`, `emailActionsAvailable`, `emailDelivery`를 반환한다. `emailDelivery`는 dev/DEV의 `MOCK`, 준비된 prod/PROD의 `NCP`, 그 외 `UNAVAILABLE`이다. 알림 서비스가 응답하지 않거나 설정이 없으면 이메일 옵션을 켤 수 없으며 400을 반환한다. 발송 준비는 실제 수신 성공과 다르다. 기존 이메일 옵션을 끄는 변경은 가능하다. 중지 프로젝트에서 이메일 옵션 활성화, 수동 이메일 중복 허용이 설정된 realm에서 이메일 로그인 활성화는 409다. SMTP host/from 존재만으로 준비 상태를 판단하지 않는다.
+
+수신함은 관리자 JWT 전용이며 API 키·일반 회원 토큰을 허용하지 않는다. 각 항목은 `id`, `recipient`, `subject`, `textBody`, `createdAt`이다. prod 배포·PROD 환경은 404, 존재하지 않는 환경은 404다. 중지한 DEV 환경의 기존 메일은 보존 시간 안에서 조회할 수 있다. 응답은 `Cache-Control: no-store`이며 화면은 HTML을 실행하지 않는다. 내부 전달 계약·중복 방지·보존 정책은 [인증 이메일](IDENTITY_EMAIL.md)에 있다.
 
 정책은 Keycloak을 원본으로 사용한다. 프로젝트 DB에는 `authentication.policy.updated` 감사 이벤트만 기록한다. Keycloak realm 속성의 `platform.authPolicyRevision`과 프로젝트 행 잠금으로 플랫폼 내 동시 수정을 검사한다. 조회한 revision으로 저장하며 성공 시 새로운 revision을 반환한다. 오래된 revision은 409다. 다른 관리자가 Keycloak을 직접 편집하는 경로와 동시에 사용하지 않는다. 502나 통신 실패가 나면 이미 반영되었을 수 있으므로 다시 조회한 뒤 저장한다.
 

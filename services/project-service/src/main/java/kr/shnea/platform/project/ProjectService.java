@@ -263,11 +263,19 @@ class ProjectService {
         return identity.authenticationPolicy(env);
     }
 
+    java.util.Map<String, Object> emailContext(UUID id) {
+        Environment env = findEnvironment(id);
+        Project project = project(env.projectId(), false);
+        return java.util.Map.of("realm", env.realm(), "kind", env.kind(), "mode", mode,
+            "active", project.status().equals("ACTIVE") && env.state().equals("READY"));
+    }
+
     AuthenticationPolicy updateAuthenticationPolicy(UUID id, ProjectController.AuthenticationSettings request, String actor) {
         return tx.execute(transaction -> {
-            lockProject(findEnvironment(id).projectId());
+            Project project = lockProject(findEnvironment(id).projectId());
             Environment env = findEnvironment(id);
             requireReady(env);
+            if (request.verifyEmail() || request.resetPasswordAllowed()) requireActive(project);
             var result = identity.updateAuthenticationPolicy(env, request);
             audit(actor, "authentication.policy.updated", id);
             return result;

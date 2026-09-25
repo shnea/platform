@@ -73,6 +73,7 @@ services:
     image: python:3.13-alpine
     networks: [app]
     environment:
+      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
       KEYCLOAK_PROVISIONER_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:?Upgrade .env first}
     volumes: ["./scripts:/checks:ro"]

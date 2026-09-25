@@ -4,7 +4,7 @@ import java.util.regex.Pattern;
 
 record AuthenticationPolicy(boolean loginWithEmail, boolean verifyEmail, boolean resetPasswordAllowed,
                             int passwordMinLength, boolean passwordPolicyEditable,
-                            boolean emailActionsAvailable, String revision) {
+                            boolean emailActionsAvailable, String emailDelivery, String revision) {
     static final String DEFAULT_PASSWORD_POLICY = "length(12) and maxLength(128)";
     private static final Pattern MANAGED_PASSWORD_POLICY = Pattern.compile("length\\((\\d{1,3})\\)(?: and maxLength\\(128\\))?");
 

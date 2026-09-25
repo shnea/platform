@@ -76,7 +76,8 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
@@ -827,3 +828,9 @@ textarea::placeholder {
     scroll-behavior: auto !important;
   }
 }
+.email-inbox { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; min-width: 0; }
+.email-inbox h4 { margin: 0; }
+.email-inbox details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.email-inbox summary { cursor: pointer; overflow-wrap: anywhere; }
+.email-inbox summary span { display: block; }
+.email-body { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; user-select: text; }

@@ -40,7 +40,7 @@ class MemberFailureTest {
         });
         server.start();
         try {
-            var client = new IdentityClient("http://127.0.0.1:" + server.getAddress().getPort(), "http://localhost/auth", "test-secret", "dev");
+            var client = new IdentityClient("http://127.0.0.1:" + server.getAddress().getPort(), "http://localhost/auth", "test-secret", "dev", org.mockito.Mockito.mock(EmailClient.class));
             var env = new ProjectService.Environment(environmentId, UUID.randomUUID(), "dev", "DEV", "test",
                 false, List.of(), "READY", "http://localhost/auth/realms/test", 0);
             assertThrows(RestClientException.class, () -> client.updateMember(env, userId, false, true));

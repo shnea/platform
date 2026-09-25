@@ -42,10 +42,10 @@ key = request('POST', eurl+'/credentials', token=admin, expected=201)
 request('GET', url, key=key['apiKey'], expected=401)
 current = request('GET', url, token=admin)
 assert current == dict(loginWithEmail=True, verifyEmail=False, resetPasswordAllowed=False,
-    passwordMinLength=12, passwordPolicyEditable=True, emailActionsAvailable=False, revision='unconfigured')
+    passwordMinLength=12, passwordPolicyEditable=True, emailActionsAvailable=True, emailDelivery='MOCK', revision='unconfigured')
 payload = dict(loginWithEmail=False, verifyEmail=False, resetPasswordAllowed=False, passwordMinLength=16, revision=current['revision'])
 for update in [dict(passwordMinLength=11), dict(passwordMinLength=129), dict(passwordMinLength=None),
-               dict(verifyEmail=True), dict(resetPasswordAllowed=True), dict(loginWithEmail=None)]:
+               dict(loginWithEmail=None)]:
     request('PUT', url, dict(payload, **update), admin, expected=400)
 assert request('GET', url, token=admin) == current, 'Invalid settings must not change policy'
 changed = request('PUT', url, payload, admin)
