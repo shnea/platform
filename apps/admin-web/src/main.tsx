@@ -126,6 +126,11 @@ function App() {
             {theme === "dark" ? "밝은 화면" : "어두운 화면"}
           </button>
           {ready && auth.authenticated && (
+            <button className="quiet" onClick={() => void auth.accountManagement()}>
+              내 계정
+            </button>
+          )}
+          {ready && auth.authenticated && (
             <button
               className="quiet"
               onClick={() =>

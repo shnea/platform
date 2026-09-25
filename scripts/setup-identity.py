@@ -1,12 +1,10 @@
 """Explicit bootstrap; master credentials never enter an application container."""
-import json
 import os
 import uuid
-from urllib.request import Request, urlopen
-from urllib.parse import urlencode, urlsplit
-from urllib.error import HTTPError
+from urllib.parse import urlsplit
+from identity_admin import connect
+from admin_security import configure
 
-base = "http://keycloak:8080/auth"
 mode = os.environ["PLATFORM_MODE"]
 assert mode in ("dev", "prod"), "PLATFORM_MODE must be dev or prod"
 web_url = os.environ.get("PLATFORM_WEB_URL", "http://localhost:30140").rstrip("/")
@@ -15,25 +13,7 @@ parsed = urlsplit(web_url)
 _ = parsed.port  # Reject malformed or out-of-range ports before any bootstrap writes.
 assert parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment and not parsed.path, "PLATFORM_WEB_URL must be an origin"
 assert parsed.scheme == "https" or (mode == "dev" and parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")), "Admin URL requires HTTPS; DEV permits HTTP loopback"
-form = urlencode({"grant_type": "password", "client_id": "admin-cli",
-                  "username": os.environ["KEYCLOAK_ADMIN"],
-                  "password": os.environ["KEYCLOAK_ADMIN_PASSWORD"]}).encode()
-with urlopen(Request(base + "/realms/master/protocol/openid-connect/token", data=form), timeout=15) as response:
-    token = json.load(response)["access_token"]
-
-def api(method, path, body=None, allowed=(200, 201, 204)):
-    data = None if body is None else json.dumps(body).encode()
-    request = Request(base + "/admin/realms" + path, data=data, method=method,
-                      headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
-    try:
-        with urlopen(request, timeout=20) as response:
-            content = response.read()
-            return json.loads(content) if content else None
-    except HTTPError as error:
-        if error.code in allowed:
-            return None
-        # Do not expose request data or tokens in error output.
-        raise SystemExit(f"Identity setup failed: {method} {path}: HTTP {error.code}")
+api = connect()
 
 realm = "platform-admin-" + mode
 if api("GET", "/" + realm, allowed=(404,)) is None:
@@ -67,6 +47,14 @@ if users and not users[0].get("firstName"):
     api("PUT", f"/{realm}/users/" + users[0]["id"], {
         "firstName": "Platform", "lastName": "Admin", "email": "platform-admin@example.invalid", "emailVerified": True})
 
+# Imported bootstrap users do not inherit normal default self-service roles.
+# These roles only manage this user's own account; no realm-management access.
+if users:
+    account_client = api("GET", f"/{realm}/clients?clientId=account")[0]
+    account_roles = [api("GET", f"/{realm}/clients/" + account_client["id"] + "/roles/" + role)
+                     for role in ("manage-account", "view-profile")]
+    api("POST", f"/{realm}/users/" + users[0]["id"] + "/role-mappings/clients/" + account_client["id"], account_roles)
+
 # This command may be repeated without resetting users or their passwords.
 client = {"clientId": "platform-admin-cli", "protocol": "openid-connect", "publicClient": True,
           "standardFlowEnabled": False, "directAccessGrantsEnabled": mode == "dev",
@@ -95,4 +83,5 @@ if not clients:
 account = api("GET", "/master/clients/" + clients[0]["id"] + "/service-account-user")
 role = api("GET", "/master/roles/create-realm")
 api("POST", "/master/users/" + account["id"] + "/role-mappings/realm", [role])
+configure(api, realm, mode == "prod")
 print("PASS identity bootstrap:", realm, "and restricted realm provisioner")

@@ -6,6 +6,8 @@
 
 계정 관리 v3는 기본 한국어 번역이 없어 `account/messages/messages_ko.properties`에서 안내·입력 오류·보안 설정을 번역한다. 이 화면의 변수는 `{{name}}` 형식이며 로그인·이메일의 `{0}` 형식과 다르다. `account/index.ftl`은 Keycloak 26.7.4 배포본(Apache-2.0)의 템플릿에서 기본 로딩 안내·접근성 이름·JavaScript 안내만 한국어로 바꾼다. 버전 갱신 시 원본과 비교해 보안·리소스 로딩 변경을 반영한다.
 
+`login/login-recovery-authn-code-config.ftl`도 같은 버전의 원본에서 복구 코드 경고의 접근성 이름·다운로드 날짜·인쇄 제목만 한국어로 바꾼다. 코드 생성·보관 확인·제출·출력 로직은 원본을 따른다.
+
 `platform`은 기본 Keycloak 로그인 화면의 브랜드·파비콘·소셜 버튼을 바꾼다. 로그인은 `keycloak.v2`, 계정은 `keycloak.v3`, 관리자는 `keycloak.v2`, 메일·환영 화면은 `keycloak`을 상속한다. 이미지 기본 테마로 적용하므로 기존·신규 realm 중 별도 테마를 지정하지 않은 화면에 반영된다. 개별 realm/클라이언트가 선택한 테마는 덮어쓰지 않는다.
 
 인증 URL·제공자 활성화·일회 클릭 처리는 Keycloak의 `p.loginUrl`과 `data-once-link`를 그대로 사용한다. 로고는 장식으로 숨기고 링크 이름은 보이는 문구로 제공한다. 세 버튼은 같은 너비·최소 높이 48px로 배치한다.
