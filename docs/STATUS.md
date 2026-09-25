@@ -163,6 +163,8 @@ API·사용법과 검사 명령은 [프로젝트·인증 API](PROJECT_API.md)에
 
 ## 재개와 실행 환경
 
+다른 PC의 복제·초기화·별도 준비 항목과 다음 대화용 요청은 [작업 인계 안내](HANDOFF.md)에 정리했다. 코드·문서는 Git으로 이동하며 실제 `.env`와 Docker DB 볼륨은 별도다. 새 PC에서 개발 DB를 새로 생성해 이어갈 수 있다. 이번 PC 이동 준비에서는 데이터 백업이나 이미지 레지스트리 게시를 수행하지 않았다.
+
 ```sh
 git status --short --branch
 git log -5 --oneline

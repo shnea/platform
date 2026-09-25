@@ -57,6 +57,8 @@ docker compose -f compose.yml -f compose.dev.yml down
 
 ## 작업을 이어갈 때
 
+다른 PC에서는 [PC 이동·작업 인계 안내](docs/HANDOFF.md)의 복제·초기화 절차를 따른다.
+
 1. [프로젝트 작업 규칙](AGENTS.md)을 읽는다.
 2. [핵심 요구사항](REQUIREMENTS.md)과 [현재 상태와 다음 작업](docs/STATUS.md)을 확인한다.
 3. [상세 요구사항](docs/REQUIREMENTS.md)의 관련 기능·완료 조건을 확인한다.
