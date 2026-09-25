@@ -201,6 +201,7 @@ function Workspace() {
     [notice, setNotice] = useState(""),
     [refresh, setRefresh] = useState(0);
   const [keyHasExpiry, setKeyHasExpiry] = useState(false);
+  const [memberRefresh, setMemberRefresh] = useState(0);
   const [scopeOptions, setScopeOptions] = useState<Scope[]>([]);
   const previousProject = useRef<string | null>(null);
   const project = projects.find((p) => p.id === selected),
@@ -510,7 +511,13 @@ function Workspace() {
                 <tbody>
                   {events.map((event) => (
                     <tr key={event.id}>
-                      <td>{event.action}</td>
+                      <td>{({
+                        "mock.user.reset.started": "테스트 계정 삭제 시작",
+                        "mock.user.deleted": "테스트 계정 삭제 완료",
+                        "mock.user.reset.failed": "테스트 계정 삭제 실패",
+                        "mock.reset.completed": "테스트 계정 초기화 완료",
+                        "mock.reset.partial": "테스트 계정 초기화 일부 실패",
+                      } as Record<string, string>)[event.action] || event.action}</td>
                       <td className="identifier">{event.target_id}
                         {event.environment_id && <div className="muted">환경: {event.environment_id}</div>}
                         {event.session_id && <div className="muted">세션: {event.session_id}</div>}
@@ -735,7 +742,7 @@ function Workspace() {
                       </button>
                     </section>
                     <MemberPanel
-                      key={`members:${env.id}:${env.state}:${project.status}`}
+                      key={`members:${env.id}:${env.state}:${project.status}:${memberRefresh}`}
                       environmentId={env.id}
                       ready={env.state === "READY"}
                       suspended={project.status !== "ACTIVE"}
@@ -754,6 +761,8 @@ function Workspace() {
                       <MockLoginPanel
                         key={`${env.id}:${env.state}:${project.status}`}
                         environmentId={env.id}
+                        environmentLabel={`${project.name} / ${env.code} (DEV)`}
+                        onReset={() => setMemberRefresh(value => value + 1)}
                         disabled={
                           project.status !== "ACTIVE" || env.state !== "READY"
                         }

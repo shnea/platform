@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "./auth";
+import { MockResetPanel } from "./MockResetPanel";
 
 type Report = {
   httpStatus: number;
@@ -22,11 +23,16 @@ const outcomes: Record<string, string> = {
 export function MockLoginPanel({
   environmentId,
   disabled,
+  environmentLabel,
+  onReset,
 }: {
   environmentId: string;
   disabled: boolean;
+  environmentLabel: string;
+  onReset: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const live = useRef(true);
@@ -87,7 +93,7 @@ export function MockLoginPanel({
           setError("");
         }}
       >
-        <fieldset disabled={busy || disabled}>
+        <fieldset disabled={busy || resetBusy || disabled}>
           <div className="form-grid">
             <label>
               로그인 제공자
@@ -174,6 +180,8 @@ export function MockLoginPanel({
           </button>
         </div>
       )}
+      <MockResetPanel environmentId={environmentId} environmentLabel={environmentLabel}
+        disabled={disabled || busy} onBusyChange={setResetBusy} onReset={() => { setReport(null); onReset(); }} />
     </section>
   );
 }

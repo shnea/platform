@@ -502,6 +502,11 @@ dd {
 .key-list p {
   margin: 6px 0 0;
 }
+.mock-reset { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 24px; }
+.mock-reset .key-list li > div,
+.mock-reset-targets li > div { min-width: 0; overflow-wrap: anywhere; }
+.mock-reset .key-list li { flex-wrap: wrap; }
+.mock-reset-targets { max-height: 32dvh; overflow-y: auto; }
 .empty {
   padding: 48px 20px;
   text-align: center;

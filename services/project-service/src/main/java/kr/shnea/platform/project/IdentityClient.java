@@ -313,7 +313,7 @@ class IdentityClient {
     @SuppressWarnings("unchecked")
     Map<String, Object> mockLogin(ProjectService.Environment env, String provider, String subject) {
         if (!mode.equals("dev") || !env.kind().equals("DEV")) throw new IllegalStateException("Mock unavailable");
-        String admin = accessToken();
+        String admin = ownedRealmToken(env);
         String path = "/admin/realms/" + env.realm();
         List<Map<String, Object>> clients = http.get().uri(path + "/clients?clientId=platform-mock")
             .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
@@ -381,6 +381,99 @@ class IdentityClient {
             http.put().uri(path + "/users/profile").headers(h -> h.setBearerAuth(admin))
                 .body(profile).retrieve().toBodilessEntity();
         }
+    }
+
+    private String mockResetToken(ProjectService.Environment env) {
+        if (!mode.equals("dev") || !env.kind().equals("DEV")
+                || !env.realm().equals("p-" + env.id().toString().replace("-", "")))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV project realm required");
+        String admin = ownedRealmToken(env);
+        // A user-editable marker is not evidence of a disposable account.
+        Map<?, ?> profile = http.get().uri("/admin/realms/{realm}/users/profile", env.realm())
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
+        if (!(profile.get("attributes") instanceof List<?> attributes))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker policy unavailable");
+        for (Object entry : attributes) {
+            if (entry instanceof Map<?, ?> attribute && "platformMock".equals(attribute.get("name"))) {
+                if (!(attribute.get("permissions") instanceof Map<?, ?> permissions)
+                        || !List.of("admin").equals(permissions.get("edit")))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker must be admin-only");
+                return admin;
+            }
+        }
+        return null; // A fresh realm has no mock marker and therefore no resettable users.
+    }
+
+    @SuppressWarnings("unchecked")
+    MockReset.Preview mockResetPreview(ProjectService.Environment env) {
+        String admin = mockResetToken(env);
+        var targets = new ArrayList<MockReset.Target>();
+        if (admin == null) return mockPreview(env, targets, false);
+        // Bound one synchronous operation; a large fixture set is reset in reviewed batches.
+        for (int offset = 0; offset < 1000; offset += 100) {
+            List<Map<String, Object>> rows = http.get()
+                .uri("/admin/realms/{realm}/users?q=platformMock:true&first={first}&max=100&briefRepresentation=false", env.realm(), offset)
+                .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+            for (var row : rows) {
+                if (disposableMock(env, row, admin)) {
+                    targets.add(new MockReset.Target(UUID.fromString((String) row.get("id")),
+                        (String) row.get("username"), (String) row.get("lastName")));
+                    if (targets.size() > MockReset.BATCH_SIZE) return mockPreview(env, targets, true);
+                }
+            }
+            if (rows.size() < 100) return mockPreview(env, targets, false);
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Too many protected mock accounts; inspect account settings");
+    }
+
+    private MockReset.Preview mockPreview(ProjectService.Environment env, List<MockReset.Target> targets, boolean more) {
+        var items = targets.stream().limit(MockReset.BATCH_SIZE)
+            .sorted(java.util.Comparator.comparing(target -> target.id().toString())).toList();
+        return new MockReset.Preview(items, more, ProjectService.hash(env.id() + ":" + items));
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean disposableMock(ProjectService.Environment env, Map<String, Object> user, String admin) {
+        if (!(user.get("attributes") instanceof Map<?, ?> attrs)
+                || !List.of("true").equals(attrs.get("platformMock"))
+                || !(user.get("username") instanceof String name) || !name.matches("mock-[a-f0-9]{64}")
+                || user.get("serviceAccountClientId") != null || user.get("federationLink") != null
+                || !"Mock".equals(user.get("firstName"))
+                || !List.of("google", "kakao", "naver").contains(java.util.Objects.toString(user.get("lastName"), ""))
+                || !(name.substring(5) + "@example.invalid").equals(user.get("email"))) return false;
+        String path = memberPath(env, UUID.fromString((String) user.get("id")));
+        for (String suffix : List.of("/groups?max=1", "/federated-identity")) {
+            List<?> links = http.get().uri(path + suffix).headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+            if (!links.isEmpty()) return false;
+        }
+        List<Map<String, Object>> roles = http.get().uri(path + "/role-mappings/realm/composite")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        var defaults = List.of("default-roles-" + env.realm(), "offline_access", "uma_authorization");
+        if (roles.stream().anyMatch(role -> !defaults.contains(role.get("name")))) return false;
+        Map<String, Object> mappings = http.get().uri(path + "/role-mappings")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
+        if (mappings.get("clientMappings") instanceof Map<?, ?> clients
+                && clients.keySet().stream().anyMatch(client -> !"account".equals(client))) return false;
+        // Effective admin roles may also be hidden inside a default/composite role.
+        List<Map<String, Object>> management = http.get().uri("/admin/realms/{realm}/clients?clientId=realm-management", env.realm())
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        if (management.size() != 1) return false;
+        List<?> adminRoles = http.get().uri(path + "/role-mappings/clients/{client}/composite", management.getFirst().get("id"))
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        return adminRoles.isEmpty();
+    }
+
+    void deleteMockUser(ProjectService.Environment env, UUID userId) {
+        String admin = mockResetToken(env);
+        if (admin == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker missing");
+        var user = readMember(env, userId, admin);
+        if (!disposableMock(env, user, admin))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock account changed; reload preview");
+        // Close login before terminating online/offline sessions. Failure stays disabled.
+        http.put().uri(memberPath(env, userId)).headers(h -> h.setBearerAuth(admin))
+            .body(Map.of("enabled", false)).retrieve().toBodilessEntity();
+        logoutMember(env, userId, admin);
+        http.delete().uri(memberPath(env, userId)).headers(h -> h.setBearerAuth(admin)).retrieve().toBodilessEntity();
     }
 
     @SuppressWarnings("unchecked")

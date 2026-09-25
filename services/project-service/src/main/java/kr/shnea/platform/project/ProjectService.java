@@ -39,6 +39,7 @@ class ProjectService {
     private static final Scope MOCK = new Scope("auth:mock", "개발용 가짜 로그인", "외부 소셜 인증 없이 테스트 사용자의 로그인 토큰을 발급합니다.");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
+    private final TransactionTemplate resetAuditTx;
     private final IdentityClient identity;
     private final String mode;
     private final JsonMapper json = new JsonMapper();
@@ -48,6 +49,8 @@ class ProjectService {
                    @Value("${platform.mode:prod}") String mode) {
         this.db = db;
         this.tx = tx;
+        this.resetAuditTx = new TransactionTemplate(tx.getTransactionManager());
+        this.resetAuditTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.identity = identity;
         this.mode = mode;
     }
@@ -193,6 +196,52 @@ class ProjectService {
             if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
             return runMock(env, provider, subject, scenario, actor);
         });
+    }
+
+    MockReset.Preview mockResetPreview(UUID id) {
+        return tx.execute(status -> identity.mockResetPreview(resetEnvironment(id)));
+    }
+
+    private Environment resetEnvironment(UUID id) {
+        requireActive(lockProject(findEnvironment(id).projectId()));
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        if (!mode.equals("dev") || !env.kind().equals("DEV"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
+        return env;
+    }
+
+    MockReset.Result resetMockUsers(UUID id, MockController.Reset request, String actor) {
+        return tx.execute(status -> {
+            Environment env = resetEnvironment(id);
+            var preview = identity.mockResetPreview(env);
+            var ids = preview.items().stream().map(MockReset.Target::id).toList();
+            if (ids.isEmpty() || !preview.revision().equals(request.revision())
+                    || request.userIds().size() != ids.size() || !new HashSet<>(request.userIds()).equals(new HashSet<>(ids)))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Reset targets changed; reload preview");
+            var results = new java.util.ArrayList<MockReset.Item>();
+            for (var target : preview.items()) {
+                // Commit intent before the external operation; a process crash leaves a trace.
+                resetAudit(actor, "mock.user.reset.started", target.id(), id);
+                boolean deleted = false;
+                try {
+                    identity.deleteMockUser(env, target.id());
+                    deleted = true;
+                } catch (org.springframework.web.client.RestClientException | ResponseStatusException error) {
+                    // Never return provider response bodies or re-enable partially processed users.
+                }
+                resetAudit(actor, deleted ? "mock.user.deleted" : "mock.user.reset.failed", target.id(), id);
+                results.add(new MockReset.Item(target.id(), target.username(), deleted ? "DELETED" : "FAILED"));
+            }
+            int deleted = (int) results.stream().filter(item -> item.status().equals("DELETED")).count();
+            resetAudit(actor, deleted == results.size() ? "mock.reset.completed" : "mock.reset.partial", id, id);
+            return new MockReset.Result(results.size(), deleted, results.size() - deleted, List.copyOf(results));
+        });
+    }
+
+    private void resetAudit(String actor, String action, UUID target, UUID environment) {
+        resetAuditTx.executeWithoutResult(status -> db.update(
+            "INSERT INTO audit_events(actor,action,target_id,environment_id) VALUES (?,?,?,?)", actor, action, target, environment));
     }
 
     private MockResult runMock(Environment env, String provider, String subject, String requestedScenario, String actor) {
