@@ -69,6 +69,8 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 
 단위 검사는 만료·브라우저/제공자 불일치·코드 교체·중지 realm·설정 변경·재사용 및 코드 교환 주소를 확인한다. 격리 통합 검사는 실제 Keycloak에서 공통 환경변수·세 제공자의 로그인 시작·두 realm의 콜백 분리·취소·직접 콜백 우회 차단을 확인한다. 실제 네이버·구글·카카오 로그인·외부 토큰 교환·운영 TLS는 별도 실제 연동 검수로 확인하며 최신 결과는 STATUS.md에 기록한다. Keycloak SPI 버전을 바꾸면 이 검사를 다시 수행한다.
 
+2026-09-26 실제 검수에서 세 제공자의 계정 연결을 확인했다. 카카오 `KOE006`은 공통 콜백을 로그인 리다이렉트에 추가해 해결했다. 이 주소를 로그아웃 리다이렉트에만 등록하면 로그인에 사용할 수 없다.
+
 ## NPM 등 외부 HTTPS 프록시
 
 NPM이 HTTPS를 종료하고 플랫폼의 HTTP 30140으로 전달한다면 공개 주소 두 값을 `https://platform.shnea.kr` 및 `https://platform.shnea.kr/auth`로 설정한다. 원격 NPM이 접근할 수 있도록 `BIND_ADDRESS`를 실제 LAN 주소 또는 `0.0.0.0`으로 지정한다. 개발 기본값 `127.0.0.1`로는 다른 장비에서 접근할 수 없다. DB는 계속 루프백 30141만 사용한다.

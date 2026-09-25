@@ -173,22 +173,27 @@ header {
   text-decoration: none;
 }
 .brand-mark {
-  font-size: 31px;
-  font-weight: 800;
-  color: var(--accent);
-  line-height: 1;
-  letter-spacing: -4px;
-  padding-right: 4px;
-}
-.brand strong {
-  font-size: 16px;
-  letter-spacing: 0.025em;
-}
-.brand strong span {
   display: block;
-  font-size: 12px;
-  font-weight: 450;
-  letter-spacing: 0.07em;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+}
+.brand-lockup {
+  display: grid;
+  gap: 5px;
+}
+.brand-wordmark {
+  width: 91px;
+  height: 24px;
+  background: var(--text);
+  mask: url("./assets/brand/shnea-wordmark.svg") left center / contain no-repeat;
+}
+.brand-descriptor {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.12em;
   color: var(--muted);
 }
 .header-actions {

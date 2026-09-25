@@ -12,4 +12,6 @@ ENV KC_HTTP_RELATIVE_PATH=/auth KC_HTTP_MANAGEMENT_RELATIVE_PATH=/
 RUN /opt/keycloak/bin/kc.sh build
 FROM quay.io/keycloak/keycloak:26.7.4
 COPY --from=build /opt/keycloak/ /opt/keycloak/
+COPY --chown=keycloak:keycloak themes/ /opt/keycloak/themes/
+ENV KC_SPI_THEME_DEFAULT=platform
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]

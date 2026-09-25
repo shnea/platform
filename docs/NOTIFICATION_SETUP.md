@@ -31,6 +31,6 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-de
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps notification-check python /checks/check-ncp-live.py sms --status REQUEST_ID
 ```
 
-2026-09-26 검수: 사용자가 지정한 수신처로 이메일·SMS 각 1건 발송. 이메일은 `allSentSuccess=true`, `sentCount=1`, SMS는 `COMPLETED`, `statusCode=0`, `statusName=success` 확인. 이는 제공자 발송 결과이며 사용자의 실제 메일함·단말 확인과 구분한다. 카카오 메시지는 채널·템플릿 미제공으로 미검증이다.
+2026-09-26 검수: 사용자가 지정한 수신처로 이메일·SMS 각 1건 발송. 이메일은 `allSentSuccess=true`, `sentCount=1`, SMS는 `COMPLETED`, `statusCode=0`, `statusName=success` 확인. 이는 제공자 발송 결과이며 사용자의 실제 메일함·단말 확인과 구분한다. 카카오 메시지는 채널·템플릿 미제공으로 미검증이다. 사용자가 채널을 아직 만들지 않았고, 준비 후 별도로 요청하기로 했으므로 실제 발송 검수는 그때 진행한다.
 
 공식 규격: [메일 발송](https://api.ncloud-docs.com/docs/ai-application-service-cloudoutboundmailer-createmailrequest), [메일 결과](https://api.ncloud-docs.com/docs/ai-application-service-cloudoutboundmailer-getmailrequeststatus), [SMS 발송](https://api.ncloud-docs.com/docs/sens-sms-send), [SMS 결과](https://api.ncloud-docs.com/docs/sens-sms-get).

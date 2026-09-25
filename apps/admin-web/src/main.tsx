@@ -8,6 +8,7 @@ import {
 } from "react";
 import { api, auth, initialize, mode } from "./auth";
 import "./style.css";
+import shneaMark from "./assets/brand/shnea-mark.svg";
 import { MockLoginPanel } from "./MockLoginPanel";
 import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
@@ -176,12 +177,11 @@ function App() {
       </a>
       <header>
         <a className="brand" href="/" aria-label="SHNEA Platform 홈">
-          <span className="brand-mark" aria-hidden="true">
-            s.
+          <img className="brand-mark" src={shneaMark} width="40" height="40" alt="" />
+          <span className="brand-lockup" aria-hidden="true">
+            <span className="brand-wordmark" />
+            <span className="brand-descriptor">Platform</span>
           </span>
-          <strong>
-            SHNEA<span>Platform</span>
-          </strong>
         </a>
         <div className="header-actions">
           <button
