@@ -1,72 +1,78 @@
 # NPM·NAS와 접속 IP
 
-## 현재 연결과 남은 확인
+다른 프로젝트로 가져갈 공통 원칙·설정 예시·검증 절차와 복사용 AGENTS.md 지침은 [실제 접속 IP 공통 지침](CLIENT_IP_GUIDE.md)에 별도로 정리했다. 이 문서는 현재 플랫폼 환경의 적용 기록이다.
 
-개발 연결은 NAS `192.168.0.93`의 Nginx Proxy Manager(NPM) → 개발 PC `192.168.0.55:30140` → 플랫폼 Nginx → Keycloak이다. 운영 시 플랫폼도 NAS로 이동하고 30140 포트는 유지할 예정이다. 사용자는 30140의 외부 포트포워딩이 없다고 확인했다.
+## 현재 적용 결과
 
-사용자가 제공한 NPM Compose는 `jc21/nginx-proxy-manager:latest`, 컨테이너 이름 `npm`, NAS 포트 `580:80`, `581:81`, `5443:443`이다. 별도 네트워크 모드는 지정하지 않았고 해당 Proxy Host의 Advanced 입력칸은 비어 있다. 이미지의 실제 실행 버전은 `latest` 표기만으로 확인할 수 없다. 기존 데이터·인증서 볼륨과 NPM 설정은 변경하지 않는다.
+2026-09-26 NAS·NPM·플랫폼 전달 설정을 수정해 새 로그인에 접속 IP가 기록되는 것을 확인했다. 사용자는 Wi-Fi를 끈 휴대폰의 LTE/5G 접속에서도 통신사 공인 IP 표시를 확인했다. 기존 Keycloak 세션의 IP는 소급 변경되지 않는다.
 
-Cloudflare는 DNS 전용이다. 이 모드에서는 HTTP 요청이 Cloudflare 프록시를 통과하지 않으므로 `CF-Connecting-IP`를 신뢰하지 않는다. 도메인 등록 기관·인증서 발급 방식과 접속 IP 전달은 별개다. [Cloudflare 설명](https://developers.cloudflare.com/dns/proxy-status/)
+| 경로 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| 개발 PC → NAS 5443 직접 연결 | NPM이 172.18.0.1 전달 | 실제 PC 주소 192.168.0.55 전달 |
+| 내부망 PC → 공개 도메인 | NPM이 172.18.0.1 전달 | 공유기를 돌아 들어오는 경로의 192.168.0.1 전달 |
+| 휴대폰 LTE/5G → 공개 도메인 | 플랫폼이 172.20.0.1로 덮어씀 | 새 로그인에서 통신사 공인 IP 표시 확인 |
+| 가짜 X-Real-IP 요청 | 호출자가 보낸 가짜 주소 수용 | 가짜 주소 무시 |
 
-2026-09-26 개발 PC에서 공개 도메인으로 보낸 health 요청을 플랫폼 Nginx에서 임시 관찰했다. 인증 정보나 요청 URL은 기록하지 않았고 진단 설정은 제거했다.
+개발 연결은 NAS `192.168.0.93`의 Nginx Proxy Manager(NPM) → 개발 PC `192.168.0.55:30140` → 플랫폼 Nginx → Keycloak이다. 운영 시 플랫폼도 NAS로 이동하고 30140은 유지할 예정이다. Cloudflare는 DNS 전용이므로 `CF-Connecting-IP`를 신뢰하지 않는다. [Cloudflare 설명](https://developers.cloudflare.com/dns/proxy-status/)
 
-| 요청 | Nginx 연결 상대 | 전달된 X-Forwarded-For | 전달된 X-Real-IP |
-| --- | --- | --- | --- |
-| 별도 IP 헤더 없음 | 172.20.0.1 | 172.18.0.1 | 172.18.0.1 |
-| 가짜 X-Forwarded-For | 172.20.0.1 | 198.51.100.99, 172.18.0.1 | 172.18.0.1 |
-| 가짜 X-Real-IP | 172.20.0.1 | 203.0.113.99 | 203.0.113.99 |
+사용자 환경은 헤놀로지·Container Manager이며 NPM Compose의 게시 포트는 `580:80`, `581:81`, `5443:443`이다. 컨테이너 `npm`은 `npm_default` 네트워크의 `172.18.0.2`, 게이트웨이는 `172.18.0.1`이다. SSH는 9022이며 에이전트 키 인증이 없어 NAS 명령은 사용자가 실행했다. NPM Compose·데이터/인증서 볼륨·다른 컨테이너 포트·공유기 설정은 변경하지 않았다. 5443을 공유기에서 새로 개방할 필요도 없다.
 
-플랫폼 앞 구간에서 이미 원래 주소가 사라지며, 호출자가 보낸 X-Real-IP가 실제 연결 주소처럼 전달된다. 따라서 현재는 `NGINX_TRUSTED_PROXY=127.0.0.1`을 유지한다. 임시 신뢰 활성화 상태의 실제 로그인에서도 가짜 주소가 기록되는 것을 확인해 즉시 비활성화했고 검사 세션을 종료했다. 실제 IP 복원 완료로 간주하지 않는다.
+## 수정한 세 구간
 
-NPM의 [현재 기본 설정](https://github.com/NginxProxyManager/nginx-proxy-manager/blob/develop/docker/rootfs/etc/nginx/nginx.conf)은 사설망을 신뢰하고 X-Real-IP를 읽는다. 위 결과와 일치하지만 설치된 NPM의 버전·실제 전체 설정은 아직 확인하지 않았다. Advanced가 비어 있어도 기본 설정은 적용된다. 공유기 외부 443의 **내부 대상 IP:포트**와 DSM 역방향 프록시 사용 여부도 아직 미확인이다. NAS의 NAT가 주소를 지우는 경우에는 마지막 플랫폼 설정만으로 원래 주소를 되살릴 수 없다. 내부망의 도메인 재접속과 LTE/5G 외부 접속도 구분해서 확인한다.
+### NAS의 기존 NPM 전달 규칙 연결
 
-추가로 개발 PC에서 `curl.exe --resolve platform.shnea.kr:5443:192.168.0.93 https://platform.shnea.kr:5443/healthz`로 공개 DNS·공유기 경로를 거치지 않고 NAS의 NPM 게시 포트에 직접 요청했다. TLS 검증을 유지한 HTTPS 200이었고, 일반 요청·가짜 X-Forwarded-For·가짜 X-Real-IP 세 경우의 전달 결과가 위 공개 도메인 검사와 각각 같았다. 총 6건의 health 요청 뒤 임시 진단 설정을 복구하고 `nginx -t`를 통과했다.
+NAT의 `DOCKER` 체인에는 5443→`172.18.0.2:443` DNAT가 있었지만 `PREROUTING`에서 그 체인으로 연결하는 규칙이 없었다. 처음에는 개발 PC 한 대에만 연결해 직접 경로의 실제 IP 복원을 확인했고, 이후 NAS의 TCP 5443 전체로 적용했다. 모든 포트에 대한 전역 연결은 추가하지 않았다. [Docker NAT 체인 설명](https://docs.docker.com/engine/network/firewall-iptables/)
 
-따라서 NAS의 게시 포트→NPM 구간만으로도 주소 손실과 가짜 X-Real-IP 수용이 재현된다. Docker의 사용자 공간 포트 프록시 또는 NAT 경로를 확인해야 하며, 정확한 NAS 내부 원인은 아직 미확정이다. 공유기 443 규칙을 새로 만드는 것으로 해결된다고 판단하지 않는다. NPM의 호스트 네트워크 전환도 게시 포트 매핑을 무시하므로 DSM의 80/443과 충돌할 수 있다. [Docker 호스트 네트워크 설명](https://docs.docker.com/engine/network/drivers/host/)
-
-NAS는 사용자가 헤놀로지·Container Manager 환경이라고 확인했다. SSH 포트는 9022이며 연결은 가능하지만 에이전트의 키 인증은 거부되어 사용자가 SSH에서 조회 명령을 실행한다. `docker inspect npm` 결과 네트워크는 `npm_default`, NPM 주소는 `172.18.0.2`, 게이트웨이는 `172.18.0.1`이다. `docker-proxy`의 5443 관련 프로세스를 찾는 명령에는 출력이 없었으나, 이것만으로 중계 프로세스가 없다고 단정하지 않는다.
-
-사용자가 제공한 NAT 규칙에는 `DOCKER` 체인의 `--dport 5443 -j DNAT --to-destination 172.18.0.2:443`이 존재하지만 `PREROUTING`에서 이 체인으로 연결하는 규칙은 보이지 않는다. 기존 목적지 변환 규칙에 요청이 도달하지 못하는 것이 유력한 원인 후보다. `DEFAULT_POSTROUTING`의 여러 다른 컨테이너 규칙은 보존한다. [Docker NAT 체인 설명](https://docs.docker.com/engine/network/firewall-iptables/)
-
-### 내부망 한정 임시 검사
-
-공유기에서 5443 외부 포트를 개방할 필요는 없다. 개발 PC에서 NAS 내부 주소의 5443은 이미 HTTPS 200을 반환한다. 아래 규칙은 개발 PC 한 대에서 NAS의 TCP 5443으로 오는 요청에만 기존 Docker 목적지 변환을 적용한다. 전체 포트에 대한 PREROUTING/OUTPUT 연결, Docker 전체 재시작, 영구 설정 변경은 하지 않는다. 사용자가 NAS에서 오류 없이 실행했고 후속 직접 연결 검사로 적용 효과를 확인했다. 현재 이 임시 규칙은 적용된 상태다.
-
-```sh
-sudo iptables -t nat -C PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
-sudo iptables -t nat -I PREROUTING 1 -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
-```
-
-검사 후 제거하거나 직접 접속이 실패하면 이번 규칙만 되돌린다.
-
-```sh
-sudo iptables -t nat -D PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
-```
-
-적용 후 같은 NAS 직접 연결 검사를 새 TCP 연결로 수행한 결과 기본 IP가 `172.18.0.1`에서 `192.168.0.55`로 바뀌었다. 가짜 X-Forwarded-For를 보내도 마지막 주소는 실제 PC 주소였지만, 가짜 X-Real-IP는 여전히 받아들였다. 공개 도메인 경로는 아직 `172.18.0.1`로 전달됐다. 공개·직접 경로의 세 요청씩 총 6건 HTTPS 200과 진단 전후 `nginx -t` 통과를 확인했다.
-
-이 결과로 NAS 직접 연결에서 PREROUTING 연결 누락에 따른 원본 주소 손실을 확인했다. 다음은 해당 도메인의 NPM Advanced에 아래 한 줄을 적용한 뒤 가짜 IP 거부를 검사하는 단계다. 서버 수준에서 신뢰 목록을 명시하면 상위 설정의 사설망 전체 목록을 상속하지 않는다. [Nginx real IP 설정 병합 구현](https://github.com/nginx/nginx/blob/master/src/http/modules/ngx_http_realip_module.c)
-
-```nginx
-set_real_ip_from 127.0.0.1;
-```
-
-사용자가 이 NPM 변경을 저장했고 새 연결 검사 6건을 통과했다. NAS 직접 경로의 기본·가짜 X-Real-IP 요청 모두 `192.168.0.55`가 전달되고 가짜 X-Forwarded-For 뒤에도 올바른 주소가 붙었다. 공개 경로에서는 세 경우 모두 마지막 주소가 `172.18.0.1`로 유지되어 위조 수용은 해소됐지만 원본 IP는 아직 복원되지 않았다.
-
-다음은 출발지 PC 제한을 풀되 NAS의 TCP 5443이라는 목적지를 유지해 도메인 경로에도 기존 Docker 목적지 변환을 적용하는 검사다. NPM HTTPS를 사용하는 다른 도메인의 접속 IP에도 영향을 줄 수 있어 사용자에게 범위를 안내했다. 아직 실행 여부는 미확인이다. 기존 PC 한정 규칙은 이 검사 결과가 확인될 때까지 보존한다.
+현재 적용된 명령은 다음과 같다. 이미 있으면 중복 추가하지 않는다.
 
 ```sh
 sudo iptables -t nat -C PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
 sudo iptables -t nat -I PREROUTING 1 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
 ```
 
-이 확대 검사만 되돌리려면 다음을 실행한다.
+NPM HTTPS를 사용하는 다른 도메인의 접속 IP에도 영향을 줄 수 있음을 안내하고 사용자가 적용했다. 초기 PC 한정 검사 규칙은 같은 포트 규칙에 포함되므로 사용자가 아래 명령으로 정리했다. 이후 제공한 조회 출력에는 `DEFAULT_PREROUTING` 이름으로 목적지 `192.168.0.93:5443`의 DOCKER 연결 규칙 하나만 남아 있었다. 정리 후 공개·직접 경로 6건을 재검사해 실제 주소 유지·가짜 헤더 무시와 Nginx 설정 복구를 확인했다.
+
+```sh
+sudo iptables -t nat -D PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+```
+
+### NPM에서 외부 IP 헤더 위조 거부
+
+기본 사설망 신뢰 설정에서는 가짜 X-Real-IP를 보내면 그 값이 접속 주소처럼 전달됐다. `platform.shnea.kr`의 Advanced에 다음을 저장해 해당 호스트의 신뢰 목록을 제한했다. SSL 옵션과 다른 Proxy Host의 설정은 유지했다. 서버 수준 목록은 상위 목록을 그대로 상속하지 않는다. [Nginx 설정 병합 구현](https://github.com/nginx/nginx/blob/master/src/http/modules/ngx_http_realip_module.c)
+
+```nginx
+set_real_ip_from 127.0.0.1;
+```
+
+### 플랫폼에서 검증된 접속 IP 전달
+
+실제 `.env`와 실행 중인 Nginx에 `NGINX_TRUSTED_PROXY=172.20.0.1`을 적용했다. 현재 Docker Desktop에서 관찰하는 직전 연결 상대 주소이며, 개발 PC의 30140 접근은 NAS로 제한했다. 플랫폼은 신뢰한 상대의 X-Forwarded-For에서 마지막 주소 하나를 선택해 Keycloak에 전달한다. 운영 NAS로 옮길 때는 연결 상대 주소와 포트 접근 제한을 다시 확인한다.
+
+검증은 각 단계마다 새 TCP 연결로 공개·직접 경로의 기본 요청/가짜 X-Forwarded-For/가짜 X-Real-IP, 총 6건을 비교했다. `output/playwright/probe-nas-ip.py`는 인증 정보 없이 health 요청만 잠시 기록하고 원래 Nginx 설정을 복구한다. 최종 도메인 브라우저의 새 로그인·가짜 IP 무시·검사 세션 로그아웃, smoke 11항목, `nginx -t`, 개발 스택 7개 healthy를 확인했다. 실제 외부 모바일 IP 표시는 사용자 확인이며 원문 IP는 문서에 보관하지 않는다.
+
+## 재부팅 후 복원
+
+현재 NAS 규칙은 실행 중인 커널에 적용한 상태다. DSM 작업 스케줄러의 **생성 → 트리거된 작업 → 사용자 정의 스크립트**에 이름 `NPM HTTPS IP Restore`, 사용자 `root`, 이벤트 **부팅**으로 아래 내용을 등록하도록 안내했고, 사용자가 등록·수동 실행 완료를 확인했다. 스크립트의 셸 문법 검사는 통과했으며 실제 NAS 재부팅 검사는 수행하지 않았다. [DSM 작업 스케줄러](https://kb.synology.com/index.php/en-ro/DSM/help/DSM/AdminCenter/system_taskscheduler?version=7)
+
+```sh
+for attempt in $(seq 1 60); do
+    if iptables -t nat -S DOCKER >/dev/null 2>&1; then
+        iptables -t nat -C PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
+        iptables -t nat -I PREROUTING 1 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+        exit $?
+    fi
+    sleep 5
+done
+exit 1
+```
+
+Docker NAT 체인을 최대 5분 기다린다. 준비되지 않거나 규칙 추가가 실패하면 실패 상태로 종료한다. NAS 부팅과 별개로 Container Manager 재시작·업데이트가 규칙을 초기화했다면 이 작업을 수동 실행하고 다시 검증한다.
+
+되돌릴 때는 먼저 부팅 작업을 비활성화하고 플랫폼의 신뢰 설정을 루프백으로 돌린 뒤 아래 NAS 규칙을 제거한다. 초기 PC 한정 규칙도 남아 있다면 위 제거 명령을 함께 사용한다. NPM의 위조 방지 설정은 복원된 원본 주소와 별개의 조치다.
 
 ```sh
 sudo iptables -t nat -D PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
 ```
-
-현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다. 공개 도메인 경로와 외부 모바일 검증, 영구 적용은 아직 남아 있다.
 
 ## 플랫폼에서 신뢰할 프록시 설정
 
@@ -80,7 +86,7 @@ Keycloak으로 전달할 때는 복원한 주소 하나로 X-Forwarded-For를 �
 
 1. 가장 바깥쪽 프록시가 진짜 접속 IP를 보고, 외부의 가짜 IP 헤더로 그 값이 바뀌지 않는지 확인한다. DSM을 거친다면 DSM에서 헤더를 덮어쓰고 NPM은 그 프록시 주소만 신뢰해야 한다.
 2. 플랫폼의 30140 접근을 직전 프록시로 제한한다. Docker Desktop이 모든 외부 연결을 하나의 게이트웨이로 바꾸는 환경은 호스트 방화벽 제한이 필수다.
-3. 상위 구간 검증 후 `.env`의 `NGINX_TRUSTED_PROXY`를 실제 연결 상대 주소로 바꾼다. 현재 개발 값의 후보는 `172.20.0.1`이며 아직 활성화하지 않는다. 운영 NAS에서는 다시 관찰한다.
+3. 상위 구간 검증 후 `.env`의 `NGINX_TRUSTED_PROXY`를 실제 연결 상대 주소로 바꾼다. 현재 개발 값은 `172.20.0.1`이며 검증 후 활성화했다. 운영 NAS에서는 다시 관찰한다.
 4. `docker compose -f compose.yml up -d --no-deps nginx`로 재생성하고 `docker compose exec nginx nginx -t`로 확인한다.
 5. 새 로그인에서 IP를 확인하고 가짜 X-Forwarded-For·X-Real-IP를 각각 보낸 요청에서도 주소가 변하지 않는지 검사한다. 이미 생성된 Keycloak 세션의 IP는 소급 수정되지 않는다.
 
