@@ -197,6 +197,7 @@ docker compose -f compose.yml -f compose.dev.yml ps
 ### 현재 실제 로그인 검수 재개
 
 - 테스트 주소: https://platform.shnea.kr/auth/realms/p-71779f4ef887522093d6b29d115146e8/account/
+- 카카오 실제 로그인에서 `KOE006` 확인: 외부 앱의 REST API 키에 `https://platform.shnea.kr/auth/social/kakao/callback` 미등록. 사용자가 기존 콜백을 유지하면서 이 주소를 추가한 뒤 새 로그인으로 재검수해야 한다. 플랫폼 코드 오류로 판단하지 않는다.
 - 사용자가 제공자별 로그인 결과를 알려주면 해당 테스트 realm의 연결 정보·세션과 오류를 확인한다. 비밀번호·인증번호는 사용자 직접 입력이다.
 - 검수 종료 후 테스트 realm의 `platform.liveCheck=true` 소유 표시를 확인해 비활성화하고 세션을 종료한다. 실제 사용자 정보가 생겼다면 임의 삭제하지 않는다.
 - 로컬 `.env`의 `PLATFORM_MODE`만 `dev`로 복구한다. HTTPS 공개 주소와 NPM용 바인딩은 유지한다. Keycloak·프로젝트·알림 컨테이너를 재생성하고 dev 관리자 설정을 재적용한다.
