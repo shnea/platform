@@ -30,7 +30,7 @@ NAS는 사용자가 헤놀로지·Container Manager 환경이라고 확인했다
 
 ### 내부망 한정 임시 검사
 
-공유기에서 5443 외부 포트를 개방할 필요는 없다. 개발 PC에서 NAS 내부 주소의 5443은 이미 HTTPS 200을 반환한다. 아래 규칙은 개발 PC 한 대에서 NAS의 TCP 5443으로 오는 요청에만 기존 Docker 목적지 변환을 적용한다. 전체 포트에 대한 PREROUTING/OUTPUT 연결, Docker 전체 재시작, 영구 설정 변경은 하지 않는다. 사용자가 NAS에서 적용 완료를 알려주기 전까지는 미실행 상태다.
+공유기에서 5443 외부 포트를 개방할 필요는 없다. 개발 PC에서 NAS 내부 주소의 5443은 이미 HTTPS 200을 반환한다. 아래 규칙은 개발 PC 한 대에서 NAS의 TCP 5443으로 오는 요청에만 기존 Docker 목적지 변환을 적용한다. 전체 포트에 대한 PREROUTING/OUTPUT 연결, Docker 전체 재시작, 영구 설정 변경은 하지 않는다. 사용자가 NAS에서 오류 없이 실행했고 후속 직접 연결 검사로 적용 효과를 확인했다. 현재 이 임시 규칙은 적용된 상태다.
 
 ```sh
 sudo iptables -t nat -C PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
@@ -43,7 +43,30 @@ sudo iptables -t nat -I PREROUTING 1 -s 192.168.0.55/32 -d 192.168.0.93/32 -p tc
 sudo iptables -t nat -D PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
 ```
 
-적용 후 같은 NAS 직접 연결 검사를 새 TCP 연결로 수행해 기본 IP가 `192.168.0.55`로 유지되는지 확인한다. 가짜 X-Real-IP 수용은 별도 문제이므로 원본 주소가 복구돼도 NPM의 신뢰 범위 검사와 수정이 필요하다. 현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다. 공개 도메인 경로와 외부 모바일 검증, 영구 적용은 임시 검사 결과 이후 진행한다.
+적용 후 같은 NAS 직접 연결 검사를 새 TCP 연결로 수행한 결과 기본 IP가 `172.18.0.1`에서 `192.168.0.55`로 바뀌었다. 가짜 X-Forwarded-For를 보내도 마지막 주소는 실제 PC 주소였지만, 가짜 X-Real-IP는 여전히 받아들였다. 공개 도메인 경로는 아직 `172.18.0.1`로 전달됐다. 공개·직접 경로의 세 요청씩 총 6건 HTTPS 200과 진단 전후 `nginx -t` 통과를 확인했다.
+
+이 결과로 NAS 직접 연결에서 PREROUTING 연결 누락에 따른 원본 주소 손실을 확인했다. 다음은 해당 도메인의 NPM Advanced에 아래 한 줄을 적용한 뒤 가짜 IP 거부를 검사하는 단계다. 서버 수준에서 신뢰 목록을 명시하면 상위 설정의 사설망 전체 목록을 상속하지 않는다. [Nginx real IP 설정 병합 구현](https://github.com/nginx/nginx/blob/master/src/http/modules/ngx_http_realip_module.c)
+
+```nginx
+set_real_ip_from 127.0.0.1;
+```
+
+사용자가 이 NPM 변경을 저장했고 새 연결 검사 6건을 통과했다. NAS 직접 경로의 기본·가짜 X-Real-IP 요청 모두 `192.168.0.55`가 전달되고 가짜 X-Forwarded-For 뒤에도 올바른 주소가 붙었다. 공개 경로에서는 세 경우 모두 마지막 주소가 `172.18.0.1`로 유지되어 위조 수용은 해소됐지만 원본 IP는 아직 복원되지 않았다.
+
+다음은 출발지 PC 제한을 풀되 NAS의 TCP 5443이라는 목적지를 유지해 도메인 경로에도 기존 Docker 목적지 변환을 적용하는 검사다. NPM HTTPS를 사용하는 다른 도메인의 접속 IP에도 영향을 줄 수 있어 사용자에게 범위를 안내했다. 아직 실행 여부는 미확인이다. 기존 PC 한정 규칙은 이 검사 결과가 확인될 때까지 보존한다.
+
+```sh
+sudo iptables -t nat -C PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
+sudo iptables -t nat -I PREROUTING 1 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+```
+
+이 확대 검사만 되돌리려면 다음을 실행한다.
+
+```sh
+sudo iptables -t nat -D PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+```
+
+현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다. 공개 도메인 경로와 외부 모바일 검증, 영구 적용은 아직 남아 있다.
 
 ## 플랫폼에서 신뢰할 프록시 설정
 
