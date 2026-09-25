@@ -95,7 +95,7 @@ def claims(value):
 
 mock_subjects = []
 for env in environments:
-    credential = request("POST", api + "/environments/" + env["id"] + "/credentials", token=admin, expected=201)
+    credential = request("POST", api + "/environments/" + env["id"] + "/credentials", {"scopes": ["auth:mock"]}, token=admin, expected=201)
     for provider in ("kakao", "naver", "google"):
         result = request("POST", base + "/api/v1/dev/login", {"provider": provider, "subject": "test-user"}, key=credential["apiKey"])
         assert result["mode"] == "mock" and result["environmentId"] == env["id"]
@@ -110,6 +110,9 @@ assert mock_subjects[0] != mock_subjects[1]
 production = request("POST", api + "/projects/" + projects[0]["id"] + "/environments",
     {"code": "prod", "kind": "PROD", "registrationAllowed": False, "redirectUris": ["https://example.test/callback"]}, admin, expected=201)
 assert production["state"] == "READY"
+prod_url = api + "/environments/" + production["id"]
+assert [scope['code'] for scope in request('GET', prod_url + '/credential-scopes', token=admin)] == ['integration:read']
+request('POST', prod_url + '/credentials', {'scopes': ['auth:mock']}, token=admin, expected=400)
 credential = request("POST", api + "/environments/" + production["id"] + "/credentials", token=admin, expected=201)
 request("POST", base + "/api/v1/dev/login", {"provider": "google", "subject": "test-user"}, key=credential["apiKey"], expected=403)
 request("DELETE", api + "/credentials/" + credential["id"], token=admin, expected=204)

@@ -38,10 +38,24 @@ eurl = api + '/environments/' + e['id']
 assert e['state'] == 'READY'
 k = request('POST', eurl + '/credentials', token=admin, expected=201)
 assert 'expiresAt' in k and k['expiresAt'] is None
+assert k['scopes'] == ['integration:read']
+request('GET', eurl + '/credential-scopes', expected=401)
+assert [scope['code'] for scope in request('GET', eurl + '/credential-scopes', token=admin)] == ['integration:read', 'auth:mock']
 listing = request('GET', eurl + '/credentials', token=admin)
 assert 'expires_at' in listing[0] and listing[0]['expires_at'] is None
 assert listing[0]['id'] == k['id'] and 'apiKey' not in listing[0] and 'secret_hash' not in listing[0]
-request('GET', base + '/api/v1/integration/context', key=k['apiKey'])
+assert listing[0]['scopes'] == k['scopes']
+assert request('GET', base + '/api/v1/integration/context', key=k['apiKey'])['scopes'] == k['scopes']
+before = request('GET', api + '/audit-events', token=admin)
+request('POST', base + '/api/v1/dev/login', dict(provider='google', subject='forbidden'), key=k['apiKey'], expected=403)
+assert request('GET', api + '/audit-events', token=admin) == before
+for scopes in ([], ['*'], ['files:write'], ['integration:read', 'integration:read'], [None], ['']):
+    request('POST', eurl + '/credentials', dict(scopes=scopes), admin, expected=400)
+only_mock = request('POST', eurl + '/credentials', dict(scopes=['auth:mock']), admin, expected=201)
+request('GET', base + '/api/v1/integration/context', key=only_mock['apiKey'], expected=403)
+request('POST', base + '/api/v1/dev/login', dict(provider='google', subject='lifecycle-check'), key=only_mock['apiKey'])
+request('DELETE', api + '/credentials/' + only_mock['id'], token=admin, expected=204)
+request('POST', base + '/api/v1/dev/login', dict(provider='google', subject='lifecycle-check'), key=only_mock['apiKey'], expected=401)
 # Optional expiry remains enforced; omitting it preserves the non-expiring default.
 request('POST', eurl + '/credentials', dict(expiresAt='2000-01-01T00:00:00Z'), admin, expected=400)
 request('POST', eurl + '/credentials', dict(expiresAt='not-a-date'), admin, expected=400)
@@ -54,6 +68,9 @@ request('GET', base + '/api/v1/integration/context', key=short['apiKey'], expect
 request('POST', base + '/api/v1/dev/login', dict(provider='google', subject='expired'), key=short['apiKey'], expected=401)
 request('GET', base + '/api/v1/integration/context', key=k['apiKey'])
 
+request('DELETE', api + '/credentials/' + k['id'], token=admin, expected=204)
+# An explicitly selected pair enables both operations for the lifecycle checks below.
+k = request('POST', eurl + '/credentials', dict(scopes=['integration:read', 'auth:mock']), admin, expected=201)
 settings = dict(registrationAllowed=True, redirectUris=['https://example.org/login/callback'], revision=e['revision'])
 e = request('PUT', eurl, settings, admin)
 assert e['state'] == 'READY' and e['revision'] == 1
@@ -95,4 +112,4 @@ assert request('GET', realm_url, token=provisioner)['enabled']
 request('DELETE', api + '/credentials/' + k['id'], token=admin, expected=204)
 request('GET', base + '/api/v1/integration/context', key=k['apiKey'], expected=401)
 assert request('GET', base + '/api/v1/config')['clientId'] == 'platform-admin-web'
-print('PASS lifecycle: default non-expiring keys, optional expiry enforcement, settings, concurrent revision conflict, origins, session logout, suspend/resume, blocked keys/Mock/creation, suspended edits, credential metadata')
+print('PASS lifecycle: scoped keys, default non-expiring keys, optional expiry enforcement, settings, concurrent revision conflict, origins, session logout, suspend/resume, blocked keys/Mock/creation, suspended edits, credential metadata')

@@ -11,7 +11,10 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.HashSet;
 import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,18 +27,28 @@ class ProjectService {
     record Project(UUID id, String code, String name, Instant createdAt, String status, long revision) {}
     record Environment(UUID id, UUID projectId, String code, String kind, String realm,
                        boolean registrationAllowed, List<String> redirectUris, String state, String issuer, long revision) {}
-    record Credential(UUID id, String apiKey, Instant expiresAt) {}
-    record Context(UUID projectId, UUID environmentId, String kind, String issuer) {}
+    record Credential(UUID id, String apiKey, Instant expiresAt, List<String> scopes) {}
+    // Keep the existing JDBC timestamp JSON format used by the credential list.
+    record CredentialMetadata(UUID id, @JsonProperty("created_at") java.sql.Timestamp createdAt,
+                              @JsonProperty("expires_at") java.sql.Timestamp expiresAt,
+                              @JsonProperty("revoked_at") java.sql.Timestamp revokedAt, List<String> scopes) {}
+    record Context(UUID projectId, UUID environmentId, String kind, String issuer, List<String> scopes) {}
+    record Scope(String code, String label, String description) {}
+    private static final Scope READ = new Scope("integration:read", "연동 정보 조회", "프로젝트·환경과 로그인 주소를 조회합니다.");
+    private static final Scope MOCK = new Scope("auth:mock", "개발용 가짜 로그인", "외부 소셜 인증 없이 테스트 사용자의 로그인 토큰을 발급합니다.");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final IdentityClient identity;
+    private final String mode;
     private final JsonMapper json = new JsonMapper();
     private final SecureRandom random = new SecureRandom();
 
-    ProjectService(JdbcTemplate db, TransactionTemplate tx, IdentityClient identity) {
+    ProjectService(JdbcTemplate db, TransactionTemplate tx, IdentityClient identity,
+                   @Value("${platform.mode:prod}") String mode) {
         this.db = db;
         this.tx = tx;
         this.identity = identity;
+        this.mode = mode;
     }
 
     List<Project> projects(int limit, int offset) {
@@ -98,20 +111,29 @@ class ProjectService {
         });
     }
 
-    Credential issueCredential(UUID id, Instant expiresAt, String actor) {
+    List<Scope> credentialScopes(UUID environmentId) {
+        Environment env = findEnvironment(environmentId);
+        return mode.equals("dev") && env.kind().equals("DEV") ? List.of(READ, MOCK) : List.of(READ);
+    }
+
+    Credential issueCredential(UUID id, Instant expiresAt, List<String> requestedScopes, String actor) {
         return tx.execute(status -> {
             requireActive(lockProject(findEnvironment(id).projectId()));
             Environment env = findEnvironment(id);
             if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+            List<String> scopes = requestedScopes == null ? List.of(READ.code()) : requestedScopes;
+            List<String> allowed = credentialScopes(id).stream().map(Scope::code).toList();
+            if (scopes.isEmpty() || scopes.size() > allowed.size() || scopes.stream().anyMatch(s -> s == null || !allowed.contains(s))
+                    || new HashSet<>(scopes).size() != scopes.size()) throw badRequest("Select supported, distinct credential scopes");
             UUID keyId = UUID.randomUUID();
             byte[] entropy = new byte[32];
             random.nextBytes(entropy);
             String key = "pk_" + keyId + "_" + Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
             if (expiresAt != null && !expiresAt.isAfter(Instant.now())) throw badRequest("Expiry must be in the future");
-            db.update("INSERT INTO service_credentials(id,environment_id,secret_hash,expires_at) VALUES (?,?,?,?)",
-                keyId, id, hash(key), expiresAt == null ? null : java.sql.Timestamp.from(expiresAt));
+            db.update("INSERT INTO service_credentials(id,environment_id,secret_hash,expires_at,scopes) VALUES (?,?,?,?,?::jsonb)",
+                keyId, id, hash(key), expiresAt == null ? null : java.sql.Timestamp.from(expiresAt), json.writeValueAsString(scopes));
             audit(actor, "credential.issued", keyId);
-            return new Credential(keyId, key, expiresAt);
+            return new Credential(keyId, key, expiresAt, List.copyOf(scopes));
         });
     }
 
@@ -123,13 +145,13 @@ class ProjectService {
         });
     }
 
-    Context context(String key) {
+    Context context(String key, String requiredScope) {
         if (key == null || key.length() > 150 || !key.startsWith("pk_")) throw unauthorized();
         UUID keyId;
         try { keyId = UUID.fromString(key.split("_", 3)[1]); }
         catch (RuntimeException error) { throw unauthorized(); }
         var rows = db.query("""
-            SELECT e.*, c.secret_hash FROM service_credentials c
+            SELECT e.*, c.secret_hash, c.scopes FROM service_credentials c
             JOIN environments e ON c.environment_id=e.id
             JOIN projects p ON e.project_id=p.id
             WHERE c.id=? AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>now())
@@ -138,9 +160,12 @@ class ProjectService {
                 if (!MessageDigest.isEqual(hash(key).getBytes(StandardCharsets.US_ASCII),
                         rs.getString("secret_hash").getBytes(StandardCharsets.US_ASCII))) throw unauthorized();
                 return new Context(rs.getObject("project_id", UUID.class), rs.getObject("id", UUID.class),
-                    rs.getString("kind"), identity.issuer(rs.getString("realm")));
+                    rs.getString("kind"), identity.issuer(rs.getString("realm")), readScopes(rs));
             }, keyId);
-        return rows.stream().findFirst().orElseThrow(ProjectService::unauthorized);
+        Context context = rows.stream().findFirst().orElseThrow(ProjectService::unauthorized);
+        if (!context.scopes().contains(requiredScope))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "API key lacks required scope");
+        return context;
     }
 
     List<java.util.Map<String, Object>> auditEvents(int limit) {
@@ -149,12 +174,12 @@ class ProjectService {
     }
 
     java.util.Map<String, Object> mockLogin(String key, String provider, String subject) {
-        Context context = context(key);
+        Context context = context(key, MOCK.code());
         if (!context.kind().equals("DEV")) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
         return tx.execute(status -> {
             // Project lock serializes lifecycle changes and mock password resets. Recheck key after waiting.
             lockProject(context.projectId());
-            context(key);
+            context(key, MOCK.code());
             Environment env = findEnvironment(context.environmentId());
             var result = identity.mockLogin(env, provider, subject);
             audit("api-key:" + env.id(), "mock.login", env.id());
@@ -190,9 +215,16 @@ class ProjectService {
         return provision(id, actor);
     }
 
-    List<java.util.Map<String, Object>> credentials(UUID id) {
+    List<CredentialMetadata> credentials(UUID id) {
         findEnvironment(id);
-        return db.queryForList("SELECT id,created_at,expires_at,revoked_at FROM service_credentials WHERE environment_id=? ORDER BY created_at DESC LIMIT 100", id);
+        return db.query("SELECT id,created_at,expires_at,revoked_at,scopes FROM service_credentials WHERE environment_id=? ORDER BY created_at DESC,id LIMIT 100",
+            (rs, row) -> new CredentialMetadata(rs.getObject("id", UUID.class), rs.getTimestamp("created_at"),
+                rs.getTimestamp("expires_at"), rs.getTimestamp("revoked_at"), readScopes(rs)), id);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> readScopes(ResultSet rs) throws SQLException {
+        return json.readValue(rs.getString("scopes"), List.class);
     }
 
     private Project lockProject(UUID id) { return project(id, true); }

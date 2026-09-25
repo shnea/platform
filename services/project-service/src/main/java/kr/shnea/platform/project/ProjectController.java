@@ -23,7 +23,7 @@ class ProjectController {
                           @NotNull List<@NotBlank String> redirectUris) {}
     record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
     record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
-    record NewCredential(@Future Instant expiresAt) {}
+    record NewCredential(@Future Instant expiresAt, @Size(min=1, max=2) List<@NotBlank String> scopes) {}
     @PutMapping("/api/v1/admin/projects/{id}")
     Object updateProject(@PathVariable UUID id, @Valid @RequestBody ProjectSettings request, @AuthenticationPrincipal Jwt user) {
         return service.updateProject(id, request.name(), request.status(), request.revision(), user.getSubject());
@@ -34,6 +34,8 @@ class ProjectController {
     }
     @GetMapping("/api/v1/admin/environments/{id}/credentials")
     Object credentials(@PathVariable UUID id) { return service.credentials(id); }
+    @GetMapping("/api/v1/admin/environments/{id}/credential-scopes")
+    Object credentialScopes(@PathVariable UUID id) { return service.credentialScopes(id); }
     private final ProjectService service;
     ProjectController(ProjectService service) { this.service = service; }
 
@@ -55,12 +57,13 @@ class ProjectController {
     Object provision(@PathVariable UUID id, @AuthenticationPrincipal Jwt user) { return service.provision(id, user.getSubject()); }
     @PostMapping("/api/v1/admin/environments/{id}/credentials") @ResponseStatus(HttpStatus.CREATED)
     Object issue(@PathVariable UUID id, @Valid @RequestBody(required=false) NewCredential request, @AuthenticationPrincipal Jwt user) {
-        return service.issueCredential(id, request == null ? null : request.expiresAt(), user.getSubject());
+        return service.issueCredential(id, request == null ? null : request.expiresAt(),
+            request == null ? null : request.scopes(), user.getSubject());
     }
     @DeleteMapping("/api/v1/admin/credentials/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(@PathVariable UUID id, @AuthenticationPrincipal Jwt user) { service.revokeCredential(id, user.getSubject()); }
     @GetMapping("/api/v1/integration/context")
-    Object context(@RequestHeader(value="X-Platform-Key", required=false) String key) { return service.context(key); }
+    Object context(@RequestHeader(value="X-Platform-Key", required=false) String key) { return service.context(key, "integration:read"); }
     @GetMapping("/api/v1/admin/audit-events")
     Object audit(@RequestParam(defaultValue="50") int limit) { return service.auditEvents(limit); }
 }

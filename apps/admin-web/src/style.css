@@ -598,6 +598,21 @@ textarea::placeholder {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.scope-options {
+  margin-bottom: 24px;
+}
+.scope-options legend {
+  font-size: 14px;
+  font-weight: 600;
+}
+.scope-option {
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+.scope-option .hint {
+  display: block;
 }
 .form-grid {
   display: grid;

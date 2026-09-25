@@ -31,7 +31,9 @@ type Key = {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
+  scopes: string[];
 };
+type Scope = { code: string; label: string; description: string };
 type Event = {
   id: number;
   action: string;
@@ -89,7 +91,7 @@ function Dialog({
   useEffect(() => {
     ref.current
       ?.querySelector<HTMLElement>(
-        "input:not([type=checkbox]), textarea, select",
+        "input:not(:disabled), textarea:not(:disabled), select:not(:disabled)",
       )
       ?.focus();
   }, [title]);
@@ -256,6 +258,7 @@ function Workspace() {
     [notice, setNotice] = useState(""),
     [refresh, setRefresh] = useState(0);
   const [keyHasExpiry, setKeyHasExpiry] = useState(false);
+  const [scopeOptions, setScopeOptions] = useState<Scope[]>([]);
   const previousProject = useRef<string | null>(null);
   const project = projects.find((p) => p.id === selected),
     env = envs.find((e) => e.id === envId);
@@ -318,14 +321,21 @@ function Workspace() {
   useEffect(() => {
     let live = true;
     setKeys([]);
+    setScopeOptions([]);
     if (!envId) {
       setKeysLoading(false);
       return;
     }
     setKeysLoading(true);
-    api<Key[]>(`/environments/${envId}/credentials`)
-      .then((rows) => {
-        if (live) setKeys(rows);
+    Promise.all([
+      api<Key[]>(`/environments/${envId}/credentials`),
+      api<Scope[]>(`/environments/${envId}/credential-scopes`),
+    ])
+      .then(([rows, scopes]) => {
+        if (live) {
+          setKeys(rows);
+          setScopeOptions(scopes);
+        }
       })
       .catch((e) => {
         if (live) setError(e.message);
@@ -366,6 +376,9 @@ function Workspace() {
     const data = new FormData(e.currentTarget);
     if (modal?.type === "issue") {
       await action(async () => {
+        const scopes = data.getAll("scopes").map(String);
+        if (!scopes.length)
+          throw new Error("사용할 권한을 하나 이상 선택해 주세요.");
         const expiry = keyHasExpiry
           ? new Date(String(data.get("expiresAt")))
           : null;
@@ -379,6 +392,7 @@ function Workspace() {
           "POST",
           {
             expiresAt: expiry?.toISOString() ?? null,
+            scopes,
           },
         );
         open({ type: "secret", secret: result.apiKey });
@@ -786,6 +800,8 @@ function Workspace() {
                         <button
                           disabled={
                             busy ||
+                            keysLoading ||
+                            scopeOptions.length === 0 ||
                             env.state !== "READY" ||
                             project.status !== "ACTIVE"
                           }
@@ -810,6 +826,17 @@ function Workspace() {
                                     : key.expires_at === null
                                       ? "만료 없음"
                                       : `만료 · ${date(key.expires_at)}`}
+                                </p>
+                                <p className="small muted">
+                                  권한 ·{" "}
+                                  {key.scopes
+                                    .map(
+                                      (scope) =>
+                                        scopeOptions.find(
+                                          (option) => option.code === scope,
+                                        )?.label ?? scope,
+                                    )
+                                    .join(", ")}
                                 </p>
                               </div>
                               <button
@@ -892,6 +919,36 @@ function Workspace() {
               <fieldset disabled={busy}>
                 {modal.type === "issue" && (
                   <>
+                    <fieldset
+                      className="scope-options"
+                      aria-describedby="scope-help"
+                    >
+                      <legend>사용 권한</legend>
+                      <p id="scope-help" className="small muted">
+                        필요한 권한만 선택하세요. 권한을 바꾸려면 새 키를
+                        발급하고 기존 키를 폐기합니다.
+                      </p>
+                      {scopeOptions.map((scope) => (
+                        <label
+                          className="checkbox scope-option"
+                          key={scope.code}
+                        >
+                          <input
+                            type="checkbox"
+                            name="scopes"
+                            value={scope.code}
+                            defaultChecked={scope.code === "integration:read"}
+                            aria-describedby={`scope-${scope.code}`}
+                          />
+                          <span>
+                            {scope.label}
+                            <span className="hint" id={`scope-${scope.code}`}>
+                              {scope.description}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
                     <label>
                       만료 설정
                       <select

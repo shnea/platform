@@ -46,6 +46,7 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 | `GET /api/v1/admin/projects/{id}/environments` | 환경·issuer·구성 상태 조회 |
 | `POST /api/v1/admin/environments/{id}/provision` | 같은 realm 이름으로 실패·중단 작업 재시도 |
 | `POST /api/v1/admin/environments/{id}/credentials` | 서버 API 키 생성, 원문 1회 응답 |
+| `GET /api/v1/admin/environments/{id}/credential-scopes` | 해당 환경에서 발급 가능한 권한의 `code`·`label`·`description` 목록 |
 | `DELETE /api/v1/admin/credentials/{id}` | API 키 즉시 폐기 |
 | `GET /api/v1/admin/audit-events?limit=50` | 최근 관리 이벤트 최대 100건 조회 |
 | `GET /api/v1/integration/context` | `X-Platform-Key`의 소속 프로젝트·환경·issuer 확인 |
@@ -74,13 +75,28 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 
 키는 환경 하나에 속하며 현재는 연동 정보 조회와 DEV Mock 로그인에만 사용한다. 관리자 화면에서 발급·목록 조회·폐기를 지원하며 파일·알림별 세부 권한은 아직 없다. 브라우저나 공개 JS에 서버 키를 넣지 않는다.
 
-발급 응답은 `{id, apiKey, expiresAt}`다. 256비트 무작위 비밀값을 사용하고 DB에는 SHA-256 해시만 보관한다. 새 키는 기본 만료 없음이며 `expiresAt: null`을 반환한다. 목록의 `expires_at: null`도 만료 없음을 뜻한다. 기존 90일 키의 만료일은 유지하며 폐기·만료된 키를 되살리지 않는다. 발급 화면에서 ‘만료일 지정’을 선택할 수 있다. API는 본문 생략·`{}`·`{"expiresAt": null}`이면 만료 없음이며, `{"expiresAt": "2027-01-01T00:00:00Z"}`처럼 미래 ISO 8601 시각을 주면 그 시점부터 거부한다. 과거·잘못된 시각은 HTTP 400이다. 화면은 현재 기기 시간대 입력을 UTC로 변환해 전송한다. 교체할 때 새 키를 발급해 서비스를 전환한 뒤 이전 키를 폐기한다. 폐기된 키는 이후 요청부터 거부하며 이미 진행 중인 요청까지 취소하지는 않는다. 발급된 이용자 JWT는 별도 만료 시점까지 유효할 수 있다.
+발급 응답은 `{id, apiKey, expiresAt, scopes}`다. 256비트 무작위 비밀값을 사용하고 DB에는 SHA-256 해시만 보관한다. 새 키는 기본 만료 없음이며 `expiresAt: null`을 반환한다. 목록의 `expires_at: null`도 만료 없음을 뜻한다. 기존 90일 키의 만료일은 유지하며 폐기·만료된 키를 되살리지 않는다. 발급 화면에서 ‘만료일 지정’을 선택할 수 있다. API는 본문 생략·`{}`·`{"expiresAt": null}`이면 만료 없음이며, `{"expiresAt": "2027-01-01T00:00:00Z"}`처럼 미래 ISO 8601 시각을 주면 그 시점부터 거부한다. 과거·잘못된 시각은 HTTP 400이다. 화면은 현재 기기 시간대 입력을 UTC로 변환해 전송한다. 교체할 때 새 키를 발급해 서비스를 전환한 뒤 이전 키를 폐기한다. 폐기된 키는 이후 요청부터 거부하며 이미 진행 중인 요청까지 취소하지는 않는다. 발급된 이용자 JWT는 별도 만료 시점까지 유효할 수 있다.
+
+### 키별 사용 권한
+
+| 권한 | 허용하는 요청 | 발급 범위 |
+|---|---|---|
+| `integration:read` | `GET /api/v1/integration/context` | 모든 환경, 새 키의 기본 권한 |
+| `auth:mock` | `POST /api/v1/dev/login` | 플랫폼 개발 모드의 DEV 환경에서만 명시적으로 선택 |
+
+```json
+{"expiresAt": null, "scopes": ["integration:read", "auth:mock"]}
+```
+
+`scopes` 생략 또는 null은 `integration:read`만 부여한다. 빈 배열·중복·알 수 없는 권한·와일드카드·PROD의 `auth:mock` 요청은 400이다. 한 가지 권한만 선택해 발급할 수도 있다. 유효한 키라도 요청에 필요한 권한이 없으면 403이며, 잘못된 키·만료·폐기·프로젝트 중지·환경 미반영은 먼저 검사해 401로 거부한다. 서버 API 키로 관리자 API를 호출할 수 없다.
+
+발급 응답·키 목록·연동 정보에는 선택한 `scopes`가 포함된다. 목록에는 키 원문·해시를 반환하지 않는다. 권한 변경은 새 키 발급 → 연결 서비스의 키 교체 → 이전 키 폐기 순서로 진행한다. V4 마이그레이션은 기존 DEV 키에 두 권한, PROD 키에 조회 권한을 지정해 이전 동작을 유지하며 기존 만료·폐기는 바꾸지 않는다. 앞으로 추가하는 파일·알림 등의 권한은 기존 키에 자동으로 부여하지 않는다.
 
 ## 개발 소셜 Mock
 
 ```text
 POST /api/v1/dev/login
-X-Platform-Key: <개발 환경 서버 키>
+X-Platform-Key: <auth:mock 권한을 선택한 개발 환경 서버 키>
 Content-Type: application/json
 ```
 
