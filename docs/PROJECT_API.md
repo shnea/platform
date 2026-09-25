@@ -51,6 +51,7 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 | `GET /api/v1/admin/audit-events?limit=50` | 최근 관리 이벤트 최대 100건 조회 |
 | `GET /api/v1/integration/context` | `X-Platform-Key`의 소속 프로젝트·환경·issuer 확인 |
 | `POST /api/v1/dev/login` | 개발 환경 API 키로 소셜 Mock 로그인 |
+| `POST /api/v1/admin/environments/{id}/mock-login` | 관리자용 DEV 로그인 검사, 토큰을 제외한 결과 반환 |
 
 코드는 영문 소문자로 시작하는 2~40자이며 영문 소문자·숫자·하이픈을 허용한다. 프로젝트 코드는 전체에서, 환경 코드는 해당 프로젝트 안에서 유일하다. 표시 이름은 120자까지다.
 
@@ -101,14 +102,27 @@ Content-Type: application/json
 ```
 
 ```json
-{"provider":"kakao","subject":"test-user"}
+{"provider":"kakao","subject":"test-user","scenario":"success"}
 ```
 
 provider는 `kakao`, `naver`, `google`, subject는 영문·숫자·밑줄·하이픈 1~80자다. 실제 제공자로 네트워크 요청을 보내지 않는다. 내부 Keycloak에 Mock 전용 사용자와 비밀 클라이언트를 만들고 Keycloak 서명 토큰을 받는다. 같은 환경·제공자·subject는 같은 테스트 사용자로 로그인하며 다른 환경은 별도 사용자다. Mock 소유 표식이 없는 계정의 비밀번호를 덮어쓰지 않는다.
 
-응답은 `accessToken`, `expiresIn`, `tokenType`, `mode: mock`, `provider`, `projectId`, `environmentId`, `issuer`다. refresh token·내부 클라이언트 비밀값·임시 비밀번호는 반환하지 않는다. 테스트 로그인 시마다 내부 임시 비밀번호를 교체하며 동시 로그인을 환경 단위로 직렬 처리한다. 대규모 동시 Mock 부하는 아직 검증하지 않았다.
+성공 응답은 `accessToken`, `expiresIn`, `tokenType`, `mode: mock`, `scenario: success`, `provider`, `projectId`, `environmentId`, `issuer`, `userId`다. refresh token·내부 클라이언트 비밀값·임시 비밀번호는 반환하지 않는다. 테스트 로그인 시마다 내부 임시 비밀번호를 교체하며 동시 로그인을 프로젝트 단위로 직렬 처리한다. 대규모 동시 Mock 부하는 아직 검증하지 않았다.
 
-서버가 `PLATFORM_MODE=dev`일 때만 Mock 컨트롤러가 등록되고, PROD 환경의 API 키로는 호출할 수 없다. 운영 관리자 API는 개발 realm 토큰도 받지 않는다. 잘못된 mode 값은 시작 시 거부한다. 개발용 프로필 선택 화면·실패 시나리오 UI·모의 발송 수신함은 미구현이다. 실제 소셜 연동이나 운영 로그인 검증을 대신하지 않는다.
+`scenario` 생략·null은 기존과 같은 성공이다. 알 수 없는 시나리오는 400으로 거부한다.
+
+| scenario | 연동 API HTTP 상태 | 동작 |
+|---|---|---|
+| `success` | 200 | 내부 Keycloak 테스트 사용자·세션 생성 및 토큰 발급 |
+| `cancelled` | 403 | 로그인 취소 재현 |
+| `access_denied` | 403 | 동의 거부 재현 |
+| `provider_unavailable` | 503 | 소셜 제공자 장애 재현 |
+
+실패 응답은 `{mode: "mock", scenario, error, provider, projectId, environmentId}`이며 `error`는 시나리오 코드와 같다. 실패 재현은 Keycloak을 호출하거나 사용자를 만들고 변경하지 않는다. 시나리오보다 키 권한·만료·폐기·프로젝트 상태를 먼저 검사하므로 실패 선택으로 인증 검사를 우회할 수 없다. 실행 결과는 `mock.login` 또는 `mock.login.시나리오` 감사 이벤트로 남긴다.
+
+관리자 화면은 동일한 본문을 `POST /api/v1/admin/environments/{id}/mock-login`으로 보낸다. 플랫폼 관리자 JWT가 필요하며 서버 API 키·최종 이용자 JWT로 실행할 수 없다. 정상적으로 검사를 수행했을 때 실제 HTTP 응답은 200이고 본문은 `{httpStatus, result}`다. `httpStatus`는 연동 API가 반환할 상태이며 `result`에는 허용된 결과 메타데이터만 포함한다. 이용자 토큰은 관리자 응답에도 포함하지 않는다. 실제 권한·입력·Keycloak 장애는 일반 4xx/5xx 응답으로 구분한다. 중지된 프로젝트·미반영 환경은 409, PROD 환경은 403이다.
+
+서버가 `PLATFORM_MODE=dev`일 때만 관리자·연동용 Mock 컨트롤러가 등록되고, PROD 환경에서는 실행할 수 없다. 운영 관리자 API는 개발 realm 토큰도 받지 않는다. 잘못된 mode 값은 시작 시 거부한다. 개발 화면·시나리오는 구현했으며 테스트 사용자 일괄 초기화·모의 발송 수신함은 미구현이다. 이 검사는 실제 소셜 리다이렉트·콜백·운영 로그인 검증을 대신하지 않는다.
 
 ## 데이터와 검증
 
@@ -116,6 +130,7 @@ provider는 `kakao`, `naver`, `google`, subject는 영문·숫자·밑줄·하�
 
 ```sh
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock.py
 ```
 
 실제 토큰·DB·Keycloak으로 검증한다. 검사 프로젝트 이름은 `check-...`이며 확인용 데이터를 개발 DB에 남긴다. 토큰·키 원문은 출력하지 않는다. 상태 코드 400은 잘못된 입력, 401은 인증 실패, 403은 권한·환경 제한, 409는 중복·준비 미완료를 의미한다.

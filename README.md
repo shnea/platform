@@ -6,6 +6,8 @@
 
 ## 개발 실행
 
+관리자 화면의 DEV 환경에서는 **개발 로그인 테스트**로 세 소셜 제공자의 성공·취소·동의 거부·장애를 재현할 수 있다. 외부 소셜 앱 자격증명 없이 실행하며 이용자 토큰은 화면에 노출하지 않는다.
+
 Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gradle·Node 빌드는 이미지 안에서 실행한다. 저장소 루트에서 실행한다. 아래 명령은 macOS 셸과 Windows PowerShell에서 사용할 수 있다.
 
 ```sh
@@ -39,6 +41,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm smoke
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm db-check
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock.py
 docker compose -f compose.yml -f compose.dev.yml ps
 docker compose -f compose.yml -f compose.dev.yml logs --tail 80 project-service
 docker compose -f compose.yml -f compose.dev.yml down

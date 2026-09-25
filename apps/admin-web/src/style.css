@@ -424,6 +424,18 @@ dd {
 .keys {
   margin-top: 32px;
 }
+.mock-panel {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.mock-panel form {
+  max-width: 680px;
+}
+.mock-result {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
 .key-list {
   list-style: none;
   margin: 0;

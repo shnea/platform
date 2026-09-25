@@ -90,7 +90,7 @@ class IdentityClient {
             .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(Map.class);
         return Map.of("accessToken", result.get("access_token"), "expiresIn", result.get("expires_in"),
             "tokenType", "Bearer", "mode", "mock", "provider", provider,
-            "projectId", env.projectId(), "environmentId", env.id(), "issuer", issuer(env.realm()));
+            "projectId", env.projectId(), "environmentId", env.id(), "issuer", issuer(env.realm()), "userId", user.get("id"));
     }
 
     @SuppressWarnings("unchecked")

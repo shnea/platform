@@ -34,6 +34,7 @@ class ProjectService {
                               @JsonProperty("revoked_at") java.sql.Timestamp revokedAt, List<String> scopes) {}
     record Context(UUID projectId, UUID environmentId, String kind, String issuer, List<String> scopes) {}
     record Scope(String code, String label, String description) {}
+    record MockResult(int httpStatus, java.util.Map<String, Object> result) {}
     private static final Scope READ = new Scope("integration:read", "연동 정보 조회", "프로젝트·환경과 로그인 주소를 조회합니다.");
     private static final Scope MOCK = new Scope("auth:mock", "개발용 가짜 로그인", "외부 소셜 인증 없이 테스트 사용자의 로그인 토큰을 발급합니다.");
     private final JdbcTemplate db;
@@ -173,7 +174,7 @@ class ProjectService {
         return db.queryForList("SELECT id,actor,action,target_id,created_at FROM audit_events ORDER BY id DESC LIMIT ?", limit);
     }
 
-    java.util.Map<String, Object> mockLogin(String key, String provider, String subject) {
+    MockResult mockLogin(String key, String provider, String subject, String scenario) {
         Context context = context(key, MOCK.code());
         if (!context.kind().equals("DEV")) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
         return tx.execute(status -> {
@@ -181,10 +182,38 @@ class ProjectService {
             lockProject(context.projectId());
             context(key, MOCK.code());
             Environment env = findEnvironment(context.environmentId());
-            var result = identity.mockLogin(env, provider, subject);
-            audit("api-key:" + env.id(), "mock.login", env.id());
-            return result;
+            return runMock(env, provider, subject, scenario, "api-key:" + env.id());
         });
+    }
+
+    MockResult previewMockLogin(UUID id, String provider, String subject, String scenario, String actor) {
+        return tx.execute(status -> {
+            requireActive(lockProject(findEnvironment(id).projectId()));
+            Environment env = findEnvironment(id);
+            if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+            return runMock(env, provider, subject, scenario, actor);
+        });
+    }
+
+    private MockResult runMock(Environment env, String provider, String subject, String requestedScenario, String actor) {
+        if (!mode.equals("dev") || !env.kind().equals("DEV"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
+        String scenario = requestedScenario == null ? "success" : requestedScenario;
+        if (scenario.equals("success")) {
+            var result = new java.util.LinkedHashMap<>(identity.mockLogin(env, provider, subject));
+            result.put("scenario", scenario);
+            audit(actor, "mock.login", env.id());
+            return new MockResult(200, result);
+        }
+        int code = switch (scenario) {
+            case "cancelled", "access_denied" -> 403;
+            case "provider_unavailable" -> 503;
+            default -> throw badRequest("Unknown mock scenario");
+        };
+        // Failed simulations never create/reset users or issue tokens, even when Keycloak is unavailable.
+        audit(actor, "mock.login." + scenario, env.id());
+        return new MockResult(code, java.util.Map.of("mode", "mock", "scenario", scenario, "error", scenario,
+            "provider", provider, "projectId", env.projectId(), "environmentId", env.id()));
     }
 
     Project updateProject(UUID id, String name, String desiredStatus, long revision, String actor) {

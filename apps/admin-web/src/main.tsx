@@ -8,6 +8,7 @@ import {
 } from "react";
 import { api, auth, initialize, mode } from "./auth";
 import "./style.css";
+import { MockLoginPanel } from "./MockLoginPanel";
 
 type Project = {
   id: string;
@@ -788,6 +789,15 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    {mode === "dev" && env.kind === "DEV" && (
+                      <MockLoginPanel
+                        key={`${env.id}:${env.state}:${project.status}`}
+                        environmentId={env.id}
+                        disabled={
+                          project.status !== "ACTIVE" || env.state !== "READY"
+                        }
+                      />
+                    )}
                     <section className="keys">
                       <div className="section-line">
                         <div>
