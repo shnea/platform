@@ -19,6 +19,18 @@ class ProjectController {
     record NewEnvironment(@Pattern(regexp="[a-z][a-z0-9-]{1,39}") @NotNull String code,
                           @NotNull String kind, @NotNull Boolean registrationAllowed,
                           @NotNull List<@NotBlank String> redirectUris) {}
+    record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
+    record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
+    @PutMapping("/api/v1/admin/projects/{id}")
+    Object updateProject(@PathVariable UUID id, @Valid @RequestBody ProjectSettings request, @AuthenticationPrincipal Jwt user) {
+        return service.updateProject(id, request.name(), request.status(), request.revision(), user.getSubject());
+    }
+    @PutMapping("/api/v1/admin/environments/{id}")
+    Object updateEnvironment(@PathVariable UUID id, @Valid @RequestBody EnvironmentSettings request, @AuthenticationPrincipal Jwt user) {
+        return service.updateEnvironment(id, request.registrationAllowed(), request.redirectUris(), request.revision(), user.getSubject());
+    }
+    @GetMapping("/api/v1/admin/environments/{id}/credentials")
+    Object credentials(@PathVariable UUID id) { return service.credentials(id); }
     private final ProjectService service;
     ProjectController(ProjectService service) { this.service = service; }
 

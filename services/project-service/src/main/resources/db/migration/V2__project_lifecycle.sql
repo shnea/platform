@@ -1,0 +1,3 @@
+ALTER TABLE projects ADD COLUMN status varchar(12) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','SUSPENDED'));
+ALTER TABLE projects ADD COLUMN revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE environments ADD COLUMN revision bigint NOT NULL DEFAULT 0;

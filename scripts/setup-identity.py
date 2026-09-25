@@ -2,12 +2,18 @@
 import json
 import os
 from urllib.request import Request, urlopen
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.error import HTTPError
 
 base = "http://keycloak:8080/auth"
 mode = os.environ["PLATFORM_MODE"]
 assert mode in ("dev", "prod"), "PLATFORM_MODE must be dev or prod"
+web_url = os.environ.get("PLATFORM_WEB_URL", "http://localhost:30140").rstrip("/")
+assert "*" not in web_url and not any(char.isspace() for char in web_url), "Admin URL must be exact and contain no whitespace"
+parsed = urlsplit(web_url)
+_ = parsed.port  # Reject malformed or out-of-range ports before any bootstrap writes.
+assert parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment and not parsed.path, "PLATFORM_WEB_URL must be an origin"
+assert parsed.scheme == "https" or (mode == "dev" and parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")), "Admin URL requires HTTPS; DEV permits HTTP loopback"
 form = urlencode({"grant_type": "password", "client_id": "admin-cli",
                   "username": os.environ["KEYCLOAK_ADMIN"],
                   "password": os.environ["KEYCLOAK_ADMIN_PASSWORD"]}).encode()
@@ -51,6 +57,14 @@ client = {"clientId": "platform-admin-cli", "protocol": "openid-connect", "publi
                   "id.token.claim": "false"}}]}
 clients = api("GET", f"/{realm}/clients?clientId=platform-admin-cli")
 api("PUT" if clients else "POST", f"/{realm}/clients" + ("/" + clients[0]["id"] if clients else ""), client)
+
+browser = {"clientId": "platform-admin-web", "protocol": "openid-connect", "publicClient": True,
+           "standardFlowEnabled": True, "directAccessGrantsEnabled": False,
+           "redirectUris": [web_url + "/"], "webOrigins": [web_url],
+           "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": web_url + "/"},
+           "protocolMappers": client["protocolMappers"]}
+clients = api("GET", f"/{realm}/clients?clientId=platform-admin-web")
+api("PUT" if clients else "POST", f"/{realm}/clients" + ("/" + clients[0]["id"] if clients else ""), browser)
 
 provisioner_id = "platform-provisioner-" + mode
 clients = api("GET", "/master/clients?clientId=" + provisioner_id)

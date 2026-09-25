@@ -29,10 +29,23 @@ services:
     mem_limit: 128m
     environment:
       PLATFORM_MODE: ${PLATFORM_MODE:-prod}
+      PLATFORM_WEB_URL: ${PLATFORM_WEB_URL:-http://localhost:30140}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Generate .env first}
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
       KEYCLOAK_PROVISIONER_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:?Upgrade .env first}
+
+  admin-web:
+    <<: *runtime
+    image: register.shnea.kr/platform-admin-web:${IMAGE_TAG:?Set IMAGE_TAG}
+    networks: [app]
+    mem_limit: ${ADMIN_WEB_MEMORY:-64m}
+    cpus: ${ADMIN_WEB_CPUS:-0.5}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   db:
     <<: *runtime

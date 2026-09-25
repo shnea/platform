@@ -27,7 +27,7 @@ class SecurityConfig {
         return http.csrf(csrf -> csrf.disable()) // Stateless bearer / explicit API-key only; no cookie auth.
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health/**", "/error").permitAll()
+                .requestMatchers("/actuator/health/**", "/error", "/api/v1/config").permitAll()
                 .requestMatchers("/api/v1/integration/context", "/api/v1/dev/login").permitAll() // Controllers validate scoped key.
                 .requestMatchers("/api/v1/admin/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().denyAll())

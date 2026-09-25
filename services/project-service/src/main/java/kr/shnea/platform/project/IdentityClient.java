@@ -118,7 +118,8 @@ class IdentityClient {
         return (String) token.get("access_token");
     }
 
-    void ensureRealm(ProjectService.Environment env) {
+    @SuppressWarnings("unchecked")
+    void ensureRealm(ProjectService.Environment env, boolean enabled) {
         String bearer = accessToken();
         Map<String, Object> existing = readRealm(env.realm(), bearer);
         if (existing == null) {
@@ -126,7 +127,7 @@ class IdentityClient {
                 "standardFlowEnabled", true, "directAccessGrantsEnabled", false,
                 "redirectUris", env.redirectUris(), "webOrigins", List.of(),
                 "attributes", Map.of("pkce.code.challenge.method", "S256"));
-            var realm = Map.of("realm", env.realm(), "enabled", true,
+            var realm = Map.of("realm", env.realm(), "enabled", false,
                 "registrationAllowed", env.registrationAllowed(), "bruteForceProtected", true,
                 "sslRequired", env.kind().equals("PROD") ? "all" : "external",
                 "accessTokenLifespan", 300, "clients", List.of(client),
@@ -144,6 +145,31 @@ class IdentityClient {
                 || !env.id().toString().equals(attrs.get("platform.environmentId"))) {
             throw new IllegalStateException("Realm ownership mismatch");
         }
+        String admin = accessToken();
+        String path = "/admin/realms/" + env.realm();
+        // Disable first; a later failure must never reopen a suspended project.
+        if (!enabled) {
+            http.put().uri(path).headers(h -> h.setBearerAuth(admin)).body(Map.of("enabled", false))
+                .retrieve().toBodilessEntity();
+            http.post().uri(path + "/logout-all").headers(h -> h.setBearerAuth(admin)).retrieve().toBodilessEntity();
+        }
+        List<Map<String, Object>> clients = http.get().uri(path + "/clients?clientId=app")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        if (clients == null || clients.size() != 1) throw new IllegalStateException("App client missing; restore before retry");
+        Map<String, Object> client = clients.getFirst();
+        client.put("redirectUris", env.redirectUris());
+        client.put("webOrigins", env.redirectUris().stream().map(java.net.URI::create)
+            .map(uri -> uri.getScheme() + "://" + uri.getRawAuthority()).distinct().toList());
+        client.put("directAccessGrantsEnabled", false);
+        client.put("standardFlowEnabled", true);
+        var attributes = new java.util.HashMap<>((Map<String, Object>) client.getOrDefault("attributes", Map.of()));
+        attributes.put("pkce.code.challenge.method", "S256");
+        client.put("attributes", attributes);
+        http.put().uri(path + "/clients/" + client.get("id")).headers(h -> h.setBearerAuth(admin))
+            .body(client).retrieve().toBodilessEntity();
+        http.put().uri(path).headers(h -> h.setBearerAuth(admin))
+            .body(Map.of("enabled", enabled, "registrationAllowed", env.registrationAllowed()))
+            .retrieve().toBodilessEntity();
     }
 
     @SuppressWarnings("unchecked")

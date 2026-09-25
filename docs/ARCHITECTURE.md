@@ -7,7 +7,8 @@
 | 서비스 | 이미지 접미사 | DB·접속 계정 | 현재 구현 |
 |---|---|---|---|
 | Nginx | nginx | 없음 | 30140 진입·상태 라우팅·Keycloak 프록시 |
-| 프로젝트 | project-service | platform_project | 프로젝트·환경·realm 연동·API 키·감사·개발 Mock 로그인 |
+| 관리자 웹 | admin-web | 없음 | React·TypeScript UI, Keycloak 브라우저 로그인, 테마·프로젝트·키·감사 관리 |
+| 프로젝트 | project-service | platform_project | 프로젝트·환경·중지·재개·설정 동기화·API 키·감사·개발 Mock 로그인 |
 | 파일 | file-service | platform_file | Spring Boot 기동·DB 상태 |
 | 알림 | notification-service | platform_notification | Spring Boot 기동·DB 상태 |
 | Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진 기동 |
@@ -32,6 +33,8 @@
 | PostgreSQL | 17.11-alpine |
 | Keycloak | 26.7.4 |
 | Nginx | 1.30.5-alpine |
+| 관리자 웹 | React 19.3.0, TypeScript 7.0.2, Vite 8.3.1, keycloak-js 26.2.4 |
+| 웹 빌더 | Node 24-alpine, npm lockfile로 패키지 고정 |
 | 환경 생성·HTTP 검증 도구 | Python 3.13-alpine, 표준 라이브러리만 사용 |
 
 Java 21은 [Spring Boot 지원 범위](https://docs.spring.io/spring-boot/system-requirements.html)에 포함된다. PostgreSQL 17은 [지원 중인 계열](https://www.postgresql.org/support/versioning/)이며 [Keycloak 지원 DB](https://www.keycloak.org/server/db)에도 포함된다. Nginx 버전은 [공식 배포 목록](https://nginx.org/en/download.html)을 확인했다. Java·Python 태그는 패치 갱신을 받을 수 있는 계열 태그이므로 바이트 단위 재현성을 보장하지 않는다. 출시 이미지에는 대상 아키텍처와 digest를 기록해야 한다.
@@ -59,3 +62,5 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 `smoke`는 4개 상태 URL, 비공개 진단 경로 차단, Keycloak discovery의 고정 issuer와 전달 헤더 위조 방지를 확인한다. `db-check`는 서비스 계정 4개의 자기 DB·스키마 접근과 다른 DB 접속 12건의 거부를 확인한다.
 
 프로젝트별 실제 사용자 분리, 키 폐기, 개발 Mock 로그인과 운영 모드 차단 검사는 [프로젝트·인증 API](PROJECT_API.md)를 참고한다. 실제 소셜 제공자·파일·알림·웹훅·에디터, 백업 복원·부하·Windows 및 Linux amd64 실기동은 아직 별도 검증 대상이다.
+
+관리자 웹은 별도 정적 웹 이미지다. Nginx 30140의 `/`와 `/assets/`에서 프록시하고 호스트 포트·DB 자격증명을 추가하지 않는다. 공개 로그인 설정은 project-service의 `/api/v1/config`에서 읽으므로 운영 주소를 바꿀 때 웹 이미지를 다시 빌드하지 않는다. `.env`의 `PLATFORM_WEB_URL`을 수정한 뒤 인증 초기화를 재실행한다. Node 이미지도 계열 태그이며 출시 시 digest 기록 대상이다.

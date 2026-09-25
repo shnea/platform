@@ -2,11 +2,11 @@
 
 여러 프로젝트가 로그인, 파일, 알림, 블록 에디터·뷰어를 선택해 사용하고 한 관리자 화면에서 운영하는 플랫폼이다. 기존 서비스 코드를 재사용하지 않고 새로 구현하며, 앞으로 추가되는 프로젝트에 적용한다.
 
-프로젝트·환경 등록, Keycloak realm 구성, 관리자 API 보호, 서버용 API 키, 개발 소셜 Mock 로그인 API를 구현했다. 통합 관리자 화면, 실제 소셜 연동, 업로드·발송, 에디터는 아직 구현하지 않았다. [프로젝트·인증 API 안내](docs/PROJECT_API.md)를 참고한다.
+프로젝트·환경 관리, 중지·재개, Keycloak 브라우저 관리자 로그인, 서버 API 키, 감사 이력과 개발 소셜 Mock 로그인 API를 구현했다. 관리자 화면은 어두운 테마가 기본이며 밝은 테마로 전환할 수 있다. 실제 소셜 연동, 업로드·발송, 에디터는 아직 구현하지 않았다. [프로젝트·인증 API 안내](docs/PROJECT_API.md)를 참고한다.
 
 ## 개발 실행
 
-Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gradle은 이미지 안에서 실행한다. 저장소 루트에서 실행한다. 아래 명령은 macOS 셸과 Windows PowerShell에서 사용할 수 있다.
+Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gradle·Node 빌드는 이미지 안에서 실행한다. 저장소 루트에서 실행한다. 아래 명령은 macOS 셸과 Windows PowerShell에서 사용할 수 있다.
 
 ```sh
 docker run --rm --mount "type=bind,source=${PWD},target=/workspace" -w /workspace python:3.13-alpine python scripts/init-env.py
@@ -21,14 +21,14 @@ docker compose -f compose.yml -f compose.dev.yml --profile setup run --rm --buil
 
 | 주소 | 현재 동작 |
 |---|---|
-| http://localhost:30140/ | 실행 기반 단계 안내 JSON |
+| http://localhost:30140/ | 플랫폼 관리자 화면 |
 | http://localhost:30140/healthz | Nginx 상태 |
 | http://localhost:30140/api/projects/health | 프로젝트 서비스와 DB 연결 상태 |
 | http://localhost:30140/api/files/health | 파일 서비스와 DB 연결 상태 |
 | http://localhost:30140/api/notifications/health | 알림 서비스와 DB 연결 상태 |
 | http://localhost:30140/auth/admin/ | Keycloak 기본 관리 화면 |
 
-Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`를 확인한다. 기본 바인딩은 로컬 PC 전용이며, 통합 관리자와 프로젝트별 realm 생성은 다음 작업이다.
+Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`를 확인한다. 플랫폼 관리자 화면은 별도 계정 `admin`과 `.env`의 `PLATFORM_ADMIN_PASSWORD`로 로그인한다. 기본 바인딩은 로컬 PC 전용이다. 관리자 주소는 `PLATFORM_WEB_URL`의 정확한 origin과 일치해야 한다. 주소 변경 후 `identity-setup`을 다시 실행한다. 운영은 HTTPS 주소가 필요하다.
 
 ## 검증과 중지
 
@@ -36,6 +36,7 @@ Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_AD
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm smoke
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm db-check
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
 docker compose -f compose.yml -f compose.dev.yml ps
 docker compose -f compose.yml -f compose.dev.yml logs --tail 80 project-service
 docker compose -f compose.yml -f compose.dev.yml down
@@ -46,6 +47,8 @@ docker compose -f compose.yml -f compose.dev.yml down
 서비스 하나만 수정했다면 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps project-service`로 다시 빌드한다. CPU·메모리 설정은 `.env`에서 바꾸고 `up -d --no-build`로 컨테이너를 재생성한다.
 
 운영용 `compose.yml`에는 빌드 경로나 소스 마운트가 없다. 운영 배포 전 이미지 게시, Linux 대상 아키텍처, TLS와 도메인, 관리자 보호, 백업·복원 검증을 완료해야 한다. 현재 개발 이미지는 운영 출시본이 아니다. 구성과 경계는 [실행 기반 문서](docs/ARCHITECTURE.md)를 참고한다.
+
+관리자 화면 수정 후에는 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps admin-web`을 실행한다. 이미지 빌드 과정에서 `npm ci`, TypeScript 검사와 Vite 빌드를 실행한다. 로그인·설정·모바일 수동 검수 순서는 [관리자 화면 안내](docs/ADMIN_WEB.md)에 있다.
 
 ## 작업을 이어갈 때
 

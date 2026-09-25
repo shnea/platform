@@ -2,7 +2,7 @@
 
 ## 현재 제공 범위
 
-프로젝트 등록·목록, 환경 등록·목록, Keycloak realm 생성·재시도, 서버 API 키 발급·폐기, 연동 환경 확인, 감사 이벤트 조회, 개발 소셜 Mock 로그인 API를 제공한다. 관리자 UI·프로젝트 중지·설정 수정·실제 소셜 제공자·초대/복구 정책·알림 Mock은 후속 작업이다.
+프로젝트 등록·목록, 환경 등록·목록, Keycloak realm 생성·재시도, 서버 API 키 발급·폐기, 연동 환경 확인, 감사 이벤트 조회, 개발 소셜 Mock 로그인 API를 제공한다. 관리자 UI, 프로젝트 중지·재개와 이름 변경, 환경 설정 수정, 키 메타데이터 목록도 제공한다. 실제 소셜 제공자·초대/복구 정책·키별 기능 권한·알림 Mock은 후속 작업이다.
 
 ## 초기 설정과 관리자 인증
 
@@ -30,7 +30,7 @@ username=admin
 password=<로컬 PLATFORM_ADMIN_PASSWORD>
 ```
 
-이 CLI는 개발 검사 도구다. 운영 초기화에서는 password grant를 비활성화한다. 운영 관리자 브라우저의 Authorization Code + PKCE 연동은 아직 구현하지 않았다.
+이 CLI는 개발 검사 도구다. 운영 초기화에서는 password grant를 비활성화한다. 관리자 브라우저는 `platform-admin-web` 공개 클라이언트의 Authorization Code + PKCE(S256)를 사용한다. 정확한 `PLATFORM_WEB_URL/`만 로그인·로그아웃 콜백으로 허용한다. 토큰은 메모리에 보관하고 API 요청 전 갱신한다. [Keycloak 공식 JavaScript 어댑터](https://www.keycloak.org/securing-apps/javascript-adapter)를 사용한다. 운영 realm 설정과 UI 코드는 준비했지만 실제 운영 TLS 배포는 아직 검증하지 않았다.
 
 관리 API는 `Authorization: Bearer <access_token>`을 요구한다. 발급자, 서명, 만료, audience `platform-admin-api`와 `platform-admin` 역할을 검사한다. 최종 이용자 토큰과 서버 API 키는 관리자 권한이 아니다. [Spring Security JWT 검증](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
 
@@ -121,3 +121,28 @@ docker stop shnea-platform-dev-failure-check
 ```
 
 두 검사는 로컬 개발 DB를 사용하며 운영 데이터를 다루지 않는다. 테스트가 실패해도 마지막 중지 명령으로 임시 컨테이너를 정리한다.
+
+## 중지·재개와 설정 변경
+
+| 메서드·경로 | 입력·응답 |
+|---|---|
+| `PUT /api/v1/admin/projects/{id}` | `{ "name": "프로젝트 이름", "status": "ACTIVE 또는 SUSPENDED", "revision": 0 }` |
+| `PUT /api/v1/admin/environments/{id}` | `{ "registrationAllowed": false, "redirectUris": ["https://example.org/callback"], "revision": 0 }` |
+| `GET /api/v1/admin/environments/{id}/credentials` | 최근 100개 키의 `id`, `created_at`, `expires_at`, `revoked_at`. 원문·해시 없음 |
+| `GET /api/v1/config` | 공개 로그인 설정 `url`, `realm`, `clientId`, `mode`. 비밀값 없음 |
+
+프로젝트 목록은 최신 생성 순서다. 프로젝트·환경 응답의 `revision`을 수정 요청에 넣는다. 오래된 revision은 HTTP 409이며 최신 목록을 다시 읽어야 한다. 코드·환경 종류·소속은 변경하지 않는다. 환경 수정 시 콜백 origin을 정확히 추출해 Keycloak CORS 허용 목록에도 반영한다. 와일드카드는 허용하지 않는다.
+
+중지·재개는 원하는 상태를 프로젝트 DB에 먼저 저장하고 각 realm에 반영한다. 중지는 프로젝트 전체 API 키와 Mock 로그인, 환경·키 신규 발급을 차단한다. Keycloak에서는 realm을 비활성화하고 사용자 세션을 종료한다. 중지 중 로그인 설정을 수정해도 realm은 비활성 상태를 유지한다. 재개는 realm 반영이 READY인 환경부터 유효한 기존 키를 다시 허용한다. 폐기·만료된 키는 되살리지 않는다.
+
+환경 상태 READY는 **현재 원하는 설정의 반영 완료**를 뜻하므로 중지된 프로젝트에서도 READY일 수 있다. PENDING·FAILED는 반영 대기·실패이며 API 키를 차단한다. `POST /api/v1/admin/environments/{id}/provision` 또는 화면의 ‘다시 반영’으로 복구한다. 중단·타임아웃 후에도 DB의 원하는 상태가 남는다. 반영은 환경별로 순차 수행하며 자동 재시도 작업자는 아직 없다. 환경 수가 많으면 HTTP 응답 전에 프록시 타임아웃이 날 수 있으므로 상태를 새로 읽고 미반영 환경만 재시도한다.
+
+이미 발급한 JWT를 외부 서비스가 공개키로 자체 검증하면 realm 중지·세션 종료만으로 즉시 무효화할 수 없다. 기본 access token 수명은 300초이며 기존 토큰은 만료까지 유효할 수 있다. Keycloak 반영 실패 중에는 실제 로그인 차단이 아직 적용되지 않을 수 있다. 즉시 차단이 필요한 서비스의 요청은 플랫폼 상태 확인을 포함해야 한다. HTTP 200만 보지 말고 프로젝트와 환경 상태를 함께 확인한다.
+
+변경·반영·Mock·키 발급은 프로젝트 행 잠금으로 순서를 맞추며 같은 프로젝트의 인증 관리 작업은 직렬 처리한다. 환경 단위 병렬 처리가 필요한 규모가 되면 잠금 전략을 다시 설계한다. API 키 검사는 잠금 대기 후 다시 검증한다. 중지 전에 이미 처리 중이던 요청의 소급 취소를 보장하지는 않는다.
+
+```sh
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
+```
+
+검사는 새 `lifecycle-...` 프로젝트에서 동시 수정 충돌, 콜백·가입 반영, 세션 종료, 중지 중 키·Mock·환경 생성 차단, 중지 중 설정 변경, 재개·폐기를 확인한다. 위의 실패 복구 검사는 Keycloak 자격증명 오류 중 중지·재개 상태 보존과 키 차단도 검증한다.

@@ -19,6 +19,14 @@ if "--db-down" in sys.argv:
     print("PASS DB outage is reflected in API readiness")
     raise SystemExit(0)
 
+with urlopen(base + "/", timeout=10) as response:
+    assert "text/html" in response.headers["Content-Type"]
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Cache-Control"] == "no-store"
+print("PASS admin HTML and security/cache headers")
+
 for path in ("/actuator/env", "/api/projects/actuator/env", "/api/files/upload", "/unknown"):
     try:
         urlopen(base + path, timeout=10)

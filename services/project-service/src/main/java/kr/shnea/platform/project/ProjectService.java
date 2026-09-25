@@ -21,9 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class ProjectService {
-    record Project(UUID id, String code, String name, Instant createdAt) {}
+    record Project(UUID id, String code, String name, Instant createdAt, String status, long revision) {}
     record Environment(UUID id, UUID projectId, String code, String kind, String realm,
-                       boolean registrationAllowed, List<String> redirectUris, String state, String issuer) {}
+                       boolean registrationAllowed, List<String> redirectUris, String state, String issuer, long revision) {}
     record Credential(UUID id, String apiKey, Instant expiresAt) {}
     record Context(UUID projectId, UUID environmentId, String kind, String issuer) {}
     private final JdbcTemplate db;
@@ -40,9 +40,9 @@ class ProjectService {
 
     List<Project> projects(int limit, int offset) {
         if (limit < 1 || limit > 100 || offset < 0) throw badRequest("Invalid pagination");
-        return db.query("SELECT * FROM projects ORDER BY created_at,id LIMIT ? OFFSET ?",
+        return db.query("SELECT * FROM projects ORDER BY created_at DESC,id LIMIT ? OFFSET ?",
             (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"),
-                rs.getString("name"), rs.getTimestamp("created_at").toInstant()), limit, offset);
+                rs.getString("name"), rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision")), limit, offset);
     }
 
     Project createProject(String code, String name, String actor) {
@@ -52,7 +52,7 @@ class ProjectService {
                 "INSERT INTO projects(id,code,name) VALUES (?,?,?) RETURNING created_at",
                 (rs, row) -> rs.getTimestamp(1).toInstant(), id, code, name.strip());
             audit(actor, "project.created", id);
-            return new Project(id, code, name.strip(), created);
+            return new Project(id, code, name.strip(), created, "ACTIVE", 0);
         });
     }
 
@@ -66,7 +66,7 @@ class ProjectService {
                                   List<String> redirects, String actor) {
         validateRedirects(kind, redirects);
         UUID id = tx.execute(status -> {
-            requireProject(projectId);
+            requireActive(lockProject(projectId));
             UUID next = UUID.randomUUID();
             String realm = "p-" + next.toString().replace("-", "");
             db.update("""
@@ -82,12 +82,12 @@ class ProjectService {
 
     Environment provision(UUID id, String actor) {
         return tx.execute(status -> {
-            Environment env = db.query("SELECT * FROM environments WHERE id=? FOR UPDATE",
-                (rs, row) -> environment(rs), id).stream().findFirst().orElseThrow(ProjectService::notFound);
+            Project project = lockProject(findEnvironment(id).projectId());
+            Environment env = findEnvironment(id);
             if (env.state().equals("READY")) return env;
             String state;
             try {
-                identity.ensureRealm(env);
+                identity.ensureRealm(env, project.status().equals("ACTIVE"));
                 state = "READY";
             } catch (org.springframework.web.client.RestClientException | IllegalStateException error) {
                 state = "FAILED"; // Never log provider response bodies or credentials.
@@ -100,6 +100,7 @@ class ProjectService {
 
     Credential issueCredential(UUID id, String actor) {
         return tx.execute(status -> {
+            requireActive(lockProject(findEnvironment(id).projectId()));
             Environment env = findEnvironment(id);
             if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
             UUID keyId = UUID.randomUUID();
@@ -130,7 +131,8 @@ class ProjectService {
         var rows = db.query("""
             SELECT e.*, c.secret_hash FROM service_credentials c
             JOIN environments e ON c.environment_id=e.id
-            WHERE c.id=? AND c.revoked_at IS NULL AND c.expires_at>now() AND e.state='READY'
+            JOIN projects p ON e.project_id=p.id
+            WHERE c.id=? AND c.revoked_at IS NULL AND c.expires_at>now() AND e.state='READY' AND p.status='ACTIVE'
             """, (rs, row) -> {
                 if (!MessageDigest.isEqual(hash(key).getBytes(StandardCharsets.US_ASCII),
                         rs.getString("secret_hash").getBytes(StandardCharsets.US_ASCII))) throw unauthorized();
@@ -149,13 +151,61 @@ class ProjectService {
         Context context = context(key);
         if (!context.kind().equals("DEV")) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
         return tx.execute(status -> {
-            // Serialize a realm's mock login/password resets; no shared password is persisted by this service.
-            Environment env = db.query("SELECT * FROM environments WHERE id=? FOR UPDATE",
-                (rs, row) -> environment(rs), context.environmentId()).getFirst();
+            // Project lock serializes lifecycle changes and mock password resets. Recheck key after waiting.
+            lockProject(context.projectId());
+            context(key);
+            Environment env = findEnvironment(context.environmentId());
             var result = identity.mockLogin(env, provider, subject);
             audit("api-key:" + env.id(), "mock.login", env.id());
             return result;
         });
+    }
+
+    Project updateProject(UUID id, String name, String desiredStatus, long revision, String actor) {
+        if (!List.of("ACTIVE", "SUSPENDED").contains(desiredStatus)) throw badRequest("Invalid project status");
+        tx.executeWithoutResult(transaction -> {
+            Project current = lockProject(id);
+            checkRevision(current.revision(), revision);
+            db.update("UPDATE projects SET name=?,status=?,revision=revision+1 WHERE id=?", name.strip(), desiredStatus, id);
+            if (!current.status().equals(desiredStatus))
+                db.update("UPDATE environments SET state='PENDING',revision=revision+1 WHERE project_id=?", id);
+            audit(actor, "project.updated." + desiredStatus.toLowerCase(), id);
+        });
+        // Desired state survives an outage/crash. Each realm can be retried independently.
+        for (Environment env : environments(id)) if (!env.state().equals("READY")) provision(env.id(), actor);
+        return project(id, false);
+    }
+
+    Environment updateEnvironment(UUID id, boolean registration, List<String> redirects, long revision, String actor) {
+        tx.executeWithoutResult(transaction -> {
+            lockProject(findEnvironment(id).projectId());
+            Environment env = findEnvironment(id);
+            checkRevision(env.revision(), revision);
+            validateRedirects(env.kind(), redirects);
+            db.update("UPDATE environments SET registration_allowed=?,redirect_uris=?::jsonb,state='PENDING',revision=revision+1 WHERE id=?",
+                registration, json.writeValueAsString(redirects), id);
+            audit(actor, "environment.updated", id);
+        });
+        return provision(id, actor);
+    }
+
+    List<java.util.Map<String, Object>> credentials(UUID id) {
+        findEnvironment(id);
+        return db.queryForList("SELECT id,created_at,expires_at,revoked_at FROM service_credentials WHERE environment_id=? ORDER BY created_at DESC LIMIT 100", id);
+    }
+
+    private Project lockProject(UUID id) { return project(id, true); }
+    private Project project(UUID id, boolean lock) {
+        return db.query("SELECT * FROM projects WHERE id=?" + (lock ? " FOR UPDATE" : ""),
+            (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("name"),
+                rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision")), id)
+            .stream().findFirst().orElseThrow(ProjectService::notFound);
+    }
+    private static void requireActive(Project project) {
+        if (!project.status().equals("ACTIVE")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Project suspended");
+    }
+    private static void checkRevision(long current, long requested) {
+        if (current != requested) throw new ResponseStatusException(HttpStatus.CONFLICT, "Settings changed; reload before saving");
     }
 
     static void validateRedirects(String kind, List<String> redirects) {
@@ -185,7 +235,7 @@ class ProjectService {
         return new Environment(rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class),
             rs.getString("code"), rs.getString("kind"), rs.getString("realm"), rs.getBoolean("registration_allowed"),
             json.readValue(rs.getString("redirect_uris"), List.class), rs.getString("state"),
-            identity.issuer(rs.getString("realm")));
+            identity.issuer(rs.getString("realm")), rs.getLong("revision"));
     }
 
     private void requireProject(UUID id) {

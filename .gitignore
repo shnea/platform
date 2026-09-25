@@ -19,3 +19,6 @@ coverage/
 runtime/
 data/
 uploads/
+
+output/playwright/
+.playwright-cli/
