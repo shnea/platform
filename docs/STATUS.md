@@ -2,6 +2,15 @@
 
 ## 현재 단계
 
+### 비동기 Job 초안 검증 후 중단 (2026-09-26)
+
+- 사용자 요청에 따라 현재 작성분의 검증까지만 진행하고 추가 구현·수정·배포는 중단했다. 아래 OpenAPI 완료 기록은 기존 배포분 기준이다. OpenAPI는 플랫폼 API 명세 형식이며 OpenAI/AI 연동 기능은 추가하지 않았다.
+- 로컬 미커밋 초안: `JobController.java`, `JobWorker.java`, `ProvisionJobs.java`, `V7__provision_jobs.sql` 신규 파일과 `ApiCode.java`, `application.properties`, `compose.yml` 변경. 환경 반영 Job 접수·조회·취소·재시도, 워커, 완료 이벤트 Outbox 기록 코드가 작성돼 있으나 기능 완료 상태는 아니다. 이 중단 기록만 커밋하며 초안은 로컬에 보존한다. 다른 PC에서 재개할 경우 초안은 원격에 없다는 점에 주의한다.
+- **실행한 검증:** `docker build --target build --build-arg SERVICE=project-service -f infra/java/Dockerfile .` 통과. Java 컴파일·기존 Gradle 테스트·JAR 생성 성공. 실행 이미지 태그 교체나 서비스 재생성 없이 빌드 단계만 실행했다. `docker compose -f compose.yml -f compose.dev.yml config --quiet`와 `git diff --check` 통과. `docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps smoke` 11개 점검 통과. 기존 실행 서비스 7개 모두 healthy였다.
+- **발견한 누락:** `JobController`의 5개 API가 `openapi.json`에 모두 빠져 있다. `OpenApiTest`의 컨트롤러 목록에도 `JobController`가 없어 기존 테스트가 이 누락을 탐지하지 못한다. 소스 경로와 JSON 명세를 대조해 5건 누락을 확인했다. 오류 코드 3개와 워커 설정의 문서 반영도 남아 있다.
+- **미검증/미완료:** V7 SQL 실제 적용, Spring 컨텍스트 기동과 Job API 인증·응답, 작업 중복 접수·동시 실행·실패 재시도·재시작 복구·이전 실행자의 상태 갱신 차단·revision 변경 취소·감사/Outbox 원자성은 이번에 실행 검증하지 않았다. 기존 테스트 통과를 새 Job 동작 검증으로 간주하면 안 된다. Outbox 전달 워커·소비자와 관리자 Job 화면은 미구현이다.
+- **다음 재개:** 로컬 초안 존재 여부부터 확인한다. 명세와 테스트 누락을 보완하고 격리된 PostgreSQL에서 Job 상태 전이·동시성·복구를 검증한 뒤에만 개발 스택 반영과 기능 커밋을 진행한다. 미완료 초안의 워커는 기본 활성 설정이므로 검증 전에 무심코 `up --build`로 반영하지 않는다. 새 상시 프로세스는 남기지 않았다.
+
 ### OpenAPI·알림 오류·서비스 간 요청 추적 완료
 
 - 관리자 전용 `GET /api/v1/admin/openapi`에 OpenAPI 3.1.1을 제공했다. DEV 외부 25개 경로/30개 작업·31개 스키마를 명시하고 PROD에서는 개발 전용 5개 작업을 제외한다. 내부 이메일·Keycloak 표준 인증 API는 명세에 섞지 않는다. Gradle 검사로 실제 컨트롤러 경로·주요 요청/응답 레코드 필드와 대조한다.
