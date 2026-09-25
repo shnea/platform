@@ -24,7 +24,26 @@ NPM의 [현재 기본 설정](https://github.com/NginxProxyManager/nginx-proxy-m
 
 따라서 NAS의 게시 포트→NPM 구간만으로도 주소 손실과 가짜 X-Real-IP 수용이 재현된다. Docker의 사용자 공간 포트 프록시 또는 NAT 경로를 확인해야 하며, 정확한 NAS 내부 원인은 아직 미확정이다. 공유기 443 규칙을 새로 만드는 것으로 해결된다고 판단하지 않는다. NPM의 호스트 네트워크 전환도 게시 포트 매핑을 무시하므로 DSM의 80/443과 충돌할 수 있다. [Docker 호스트 네트워크 설명](https://docs.docker.com/engine/network/drivers/host/)
 
-다음은 NAS의 실행 중 Docker 네트워크와 포트 프록시, `userland-proxy`·`iptables` 설정을 읽기 전용으로 확인하는 단계다. NAS에서 실행 가능한 경로가 확인되기 전에는 Docker 전체 설정 변경·재시작을 수행하지 않는다. 현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다.
+NAS는 사용자가 헤놀로지·Container Manager 환경이라고 확인했다. SSH 포트는 9022이며 연결은 가능하지만 에이전트의 키 인증은 거부되어 사용자가 SSH에서 조회 명령을 실행한다. `docker inspect npm` 결과 네트워크는 `npm_default`, NPM 주소는 `172.18.0.2`, 게이트웨이는 `172.18.0.1`이다. `docker-proxy`의 5443 관련 프로세스를 찾는 명령에는 출력이 없었으나, 이것만으로 중계 프로세스가 없다고 단정하지 않는다.
+
+사용자가 제공한 NAT 규칙에는 `DOCKER` 체인의 `--dport 5443 -j DNAT --to-destination 172.18.0.2:443`이 존재하지만 `PREROUTING`에서 이 체인으로 연결하는 규칙은 보이지 않는다. 기존 목적지 변환 규칙에 요청이 도달하지 못하는 것이 유력한 원인 후보다. `DEFAULT_POSTROUTING`의 여러 다른 컨테이너 규칙은 보존한다. [Docker NAT 체인 설명](https://docs.docker.com/engine/network/firewall-iptables/)
+
+### 내부망 한정 임시 검사
+
+공유기에서 5443 외부 포트를 개방할 필요는 없다. 개발 PC에서 NAS 내부 주소의 5443은 이미 HTTPS 200을 반환한다. 아래 규칙은 개발 PC 한 대에서 NAS의 TCP 5443으로 오는 요청에만 기존 Docker 목적지 변환을 적용한다. 전체 포트에 대한 PREROUTING/OUTPUT 연결, Docker 전체 재시작, 영구 설정 변경은 하지 않는다. 사용자가 NAS에서 적용 완료를 알려주기 전까지는 미실행 상태다.
+
+```sh
+sudo iptables -t nat -C PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
+sudo iptables -t nat -I PREROUTING 1 -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+```
+
+검사 후 제거하거나 직접 접속이 실패하면 이번 규칙만 되돌린다.
+
+```sh
+sudo iptables -t nat -D PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+```
+
+적용 후 같은 NAS 직접 연결 검사를 새 TCP 연결로 수행해 기본 IP가 `192.168.0.55`로 유지되는지 확인한다. 가짜 X-Real-IP 수용은 별도 문제이므로 원본 주소가 복구돼도 NPM의 신뢰 범위 검사와 수정이 필요하다. 현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다. 공개 도메인 경로와 외부 모바일 검증, 영구 적용은 임시 검사 결과 이후 진행한다.
 
 ## 플랫폼에서 신뢰할 프록시 설정
 
