@@ -1,6 +1,7 @@
 """Explicit bootstrap; master credentials never enter an application container."""
 import json
 import os
+import uuid
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode, urlsplit
 from urllib.error import HTTPError
@@ -42,6 +43,24 @@ if api("GET", "/" + realm, allowed=(404,)) is None:
         "users": [{"username": "admin", "enabled": True, "realmRoles": ["platform-admin"],
                    "firstName": "Platform", "lastName": "Admin", "email": "platform-admin@example.invalid", "emailVerified": True,
                    "credentials": [{"type": "password", "value": os.environ["PLATFORM_ADMIN_PASSWORD"], "temporary": False}]}]})
+
+# Only platform-owned realms; preserve users, credentials, status and other settings.
+korean = {"internationalizationEnabled": True, "supportedLocales": ["ko"], "defaultLocale": "ko"}
+localized = 0
+for candidate in api("GET", ""):
+    name = candidate["realm"]
+    owned = name in ("platform-admin-dev", "platform-admin-prod")
+    if name.startswith("p-"):
+        details = api("GET", "/" + name)
+        environment_id = details.get("attributes", {}).get("platform.environmentId", "")
+        try:
+            owned = name == "p-" + uuid.UUID(environment_id).hex
+        except (ValueError, TypeError, AttributeError):
+            owned = False
+    if owned:
+        api("PUT", "/" + name, korean)
+        localized += 1
+print("PASS Korean locale configured for platform realms:", localized)
 
 users = api("GET", f"/{realm}/users?username=admin&exact=true")
 if users and not users[0].get("firstName"):

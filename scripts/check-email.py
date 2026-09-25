@@ -83,6 +83,8 @@ def main():
         request('PUT', rurl+'/users/'+user['id']+'/send-verify-email', token=kc(), expected=204)
         inbox = request('GET', eurl+'/email-inbox', token=admin)
         assert len(inbox) == 1 and 'login-actions/action-token' in inbox[0]['textBody']
+        assert inbox[0]['subject'] == '이메일 인증 안내'
+        assert '이메일 인증' in inbox[0]['textBody'] and re.search(r'\d+(초|분|시간|일) 동안 유효합니다', inbox[0]['textBody'])
         assert set(inbox[0]) == {'id','recipient','subject','textBody','createdAt'}
         assert request('GET', base+'/environments/'+other['id']+'/email-inbox', token=admin) == []
         # Same request ID is safe under concurrent retry; changed payload is rejected.

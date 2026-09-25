@@ -445,7 +445,8 @@ class IdentityClient {
         http.put().uri(path + "/clients/" + client.get("id")).headers(h -> h.setBearerAuth(admin))
             .body(client).retrieve().toBodilessEntity();
         http.put().uri(path).headers(h -> h.setBearerAuth(admin))
-            .body(Map.of("enabled", enabled, "registrationAllowed", env.registrationAllowed()))
+            .body(Map.of("enabled", enabled, "registrationAllowed", env.registrationAllowed(),
+                "internationalizationEnabled", true, "supportedLocales", List.of("ko"), "defaultLocale", "ko"))
             .retrieve().toBodilessEntity();
     }
 
