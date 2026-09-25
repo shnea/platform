@@ -4,6 +4,8 @@
 
 개발 연결은 NAS `192.168.0.93`의 Nginx Proxy Manager(NPM) → 개발 PC `192.168.0.55:30140` → 플랫폼 Nginx → Keycloak이다. 운영 시 플랫폼도 NAS로 이동하고 30140 포트는 유지할 예정이다. 사용자는 30140의 외부 포트포워딩이 없다고 확인했다.
 
+사용자가 제공한 NPM Compose는 `jc21/nginx-proxy-manager:latest`, 컨테이너 이름 `npm`, NAS 포트 `580:80`, `581:81`, `5443:443`이다. 별도 네트워크 모드는 지정하지 않았고 해당 Proxy Host의 Advanced 입력칸은 비어 있다. 이미지의 실제 실행 버전은 `latest` 표기만으로 확인할 수 없다. 기존 데이터·인증서 볼륨과 NPM 설정은 변경하지 않는다.
+
 Cloudflare는 DNS 전용이다. 이 모드에서는 HTTP 요청이 Cloudflare 프록시를 통과하지 않으므로 `CF-Connecting-IP`를 신뢰하지 않는다. 도메인 등록 기관·인증서 발급 방식과 접속 IP 전달은 별개다. [Cloudflare 설명](https://developers.cloudflare.com/dns/proxy-status/)
 
 2026-09-26 개발 PC에서 공개 도메인으로 보낸 health 요청을 플랫폼 Nginx에서 임시 관찰했다. 인증 정보나 요청 URL은 기록하지 않았고 진단 설정은 제거했다.
@@ -16,7 +18,13 @@ Cloudflare는 DNS 전용이다. 이 모드에서는 HTTP 요청이 Cloudflare �
 
 플랫폼 앞 구간에서 이미 원래 주소가 사라지며, 호출자가 보낸 X-Real-IP가 실제 연결 주소처럼 전달된다. 따라서 현재는 `NGINX_TRUSTED_PROXY=127.0.0.1`을 유지한다. 임시 신뢰 활성화 상태의 실제 로그인에서도 가짜 주소가 기록되는 것을 확인해 즉시 비활성화했고 검사 세션을 종료했다. 실제 IP 복원 완료로 간주하지 않는다.
 
-NPM의 [현재 기본 설정](https://github.com/NginxProxyManager/nginx-proxy-manager/blob/develop/docker/rootfs/etc/nginx/nginx.conf)은 사설망을 신뢰하고 X-Real-IP를 읽는다. 위 결과와 일치하지만 설치된 NPM의 버전·실제 설정은 아직 확인하지 않았다. 공유기 외부 443의 **내부 대상 IP:포트**, DSM 역방향 프록시 사용 여부, 해당 NPM Proxy Host의 **Advanced** 설정을 먼저 확인한다. NAS의 NAT가 주소를 지우는 경우에는 마지막 플랫폼 설정만으로 원래 주소를 되살릴 수 없다. 내부망의 도메인 재접속과 LTE/5G 외부 접속도 구분해서 확인한다.
+NPM의 [현재 기본 설정](https://github.com/NginxProxyManager/nginx-proxy-manager/blob/develop/docker/rootfs/etc/nginx/nginx.conf)은 사설망을 신뢰하고 X-Real-IP를 읽는다. 위 결과와 일치하지만 설치된 NPM의 버전·실제 전체 설정은 아직 확인하지 않았다. Advanced가 비어 있어도 기본 설정은 적용된다. 공유기 외부 443의 **내부 대상 IP:포트**와 DSM 역방향 프록시 사용 여부도 아직 미확인이다. NAS의 NAT가 주소를 지우는 경우에는 마지막 플랫폼 설정만으로 원래 주소를 되살릴 수 없다. 내부망의 도메인 재접속과 LTE/5G 외부 접속도 구분해서 확인한다.
+
+추가로 개발 PC에서 `curl.exe --resolve platform.shnea.kr:5443:192.168.0.93 https://platform.shnea.kr:5443/healthz`로 공개 DNS·공유기 경로를 거치지 않고 NAS의 NPM 게시 포트에 직접 요청했다. TLS 검증을 유지한 HTTPS 200이었고, 일반 요청·가짜 X-Forwarded-For·가짜 X-Real-IP 세 경우의 전달 결과가 위 공개 도메인 검사와 각각 같았다. 총 6건의 health 요청 뒤 임시 진단 설정을 복구하고 `nginx -t`를 통과했다.
+
+따라서 NAS의 게시 포트→NPM 구간만으로도 주소 손실과 가짜 X-Real-IP 수용이 재현된다. Docker의 사용자 공간 포트 프록시 또는 NAT 경로를 확인해야 하며, 정확한 NAS 내부 원인은 아직 미확정이다. 공유기 443 규칙을 새로 만드는 것으로 해결된다고 판단하지 않는다. NPM의 호스트 네트워크 전환도 게시 포트 매핑을 무시하므로 DSM의 80/443과 충돌할 수 있다. [Docker 호스트 네트워크 설명](https://docs.docker.com/engine/network/drivers/host/)
+
+다음은 NAS의 실행 중 Docker 네트워크와 포트 프록시, `userland-proxy`·`iptables` 설정을 읽기 전용으로 확인하는 단계다. NAS에서 실행 가능한 경로가 확인되기 전에는 Docker 전체 설정 변경·재시작을 수행하지 않는다. 현재 플랫폼의 외부 IP 헤더 신뢰는 계속 비활성화한다.
 
 ## 플랫폼에서 신뢰할 프록시 설정
 
