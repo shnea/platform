@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+@org.springframework.context.annotation.Import(kr.shnea.platform.http.RequestTrace.class)
 class SecurityConfig {
     @Bean
     SecurityFilterChain security(HttpSecurity http, ApiProblems problems) throws Exception {

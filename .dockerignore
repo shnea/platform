@@ -6,6 +6,8 @@
 !scripts/setup-identity.py
 !services/
 !services/**
+!libraries/
+!libraries/**
 **/target/
 **/build/
 **/.gradle/

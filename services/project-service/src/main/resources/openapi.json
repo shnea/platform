@@ -1,0 +1,2512 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "SHNEA Platform 프로젝트 API",
+    "version": "0.1.0",
+    "description": "구현된 외부 API 명세. 관리자 JWT와 프로젝트 서버 API 키를 구분한다. 내부 이메일 API와 Keycloak OAuth/OIDC는 별도 계약. 운영 모드에서는 개발 전용 작업을 제거한다."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/config": {
+      "get": {
+        "operationId": "get_api_v1_config",
+        "summary": "공개 로그인 설정 조회",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Configuration"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/admin/openapi": {
+      "get": {
+        "operationId": "get_api_v1_admin_openapi",
+        "summary": "현재 모드의 OpenAPI 명세 조회",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/projects": {
+      "get": {
+        "operationId": "get_api_v1_admin_projects",
+        "summary": "프로젝트 목록",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Project"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post_api_v1_admin_projects",
+        "summary": "프로젝트 생성",
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewProject"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/projects/{id}": {
+      "put": {
+        "operationId": "put_api_v1_admin_projects_id",
+        "summary": "프로젝트 수정·중지·재개",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectSettings"
+              }
+            }
+          }
+        },
+        "description": "revision 불일치는 409. 중지는 기존 세션 종료·키 접근 차단을 수행하며 부분 실패 시 현재 상태를 재조회한다."
+      }
+    },
+    "/api/v1/admin/projects/{id}/environments": {
+      "get": {
+        "operationId": "get_api_v1_admin_projects_id_environments",
+        "summary": "프로젝트 환경 목록",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Environment"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post_api_v1_admin_projects_id_environments",
+        "summary": "환경 생성과 인증 영역 반영",
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewEnvironment"
+              }
+            }
+          }
+        },
+        "description": "환경 행 생성 성공은 201. 인증 서버 반영 실패는 응답 state=FAILED로 확인하고 provision으로 재시도한다."
+      }
+    },
+    "/api/v1/admin/environments/{id}": {
+      "put": {
+        "operationId": "put_api_v1_admin_environments_id",
+        "summary": "환경 가입·콜백 설정 변경",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/environments/{id}/provision": {
+      "post": {
+        "operationId": "post_api_v1_admin_environments_id_provision",
+        "summary": "환경 반영 재시도",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/credentials": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_credentials",
+        "summary": "서버 키 메타데이터 목록",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CredentialMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post_api_v1_admin_environments_id_credentials",
+        "summary": "서버 키 발급",
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Credential"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCredential"
+              }
+            }
+          }
+        },
+        "description": "본문 생략 가능. 권한 생략 시 integration:read. 새 권한을 기존 키에 자동 추가하지 않는다."
+      }
+    },
+    "/api/v1/admin/environments/{id}/credential-scopes": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_credential_scopes",
+        "summary": "발급 가능한 기능 권한",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Scope"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/credentials/{id}": {
+      "delete": {
+        "operationId": "delete_api_v1_admin_credentials_id",
+        "summary": "서버 키 폐기",
+        "responses": {
+          "204": {
+            "description": "완료"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/integration/context": {
+      "get": {
+        "operationId": "get_api_v1_integration_context",
+        "summary": "서버 키의 프로젝트·환경 조회",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Context"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "integration:read"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-events": {
+      "get": {
+        "operationId": "get_api_v1_admin_audit_events",
+        "summary": "관리 감사 이력",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEvent"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/authentication-policy": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_authentication_policy",
+        "summary": "가입·복구 정책 조회",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationPolicy"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "put_api_v1_admin_environments_id_authentication_policy",
+        "summary": "가입·복구 정책 변경",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticationPolicy"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthenticationSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/environments/{id}/social-providers": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_social_providers",
+        "summary": "소셜 제공자 설정 조회",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SocialProvider"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/social-providers/{provider}": {
+      "put": {
+        "operationId": "put_api_v1_admin_environments_id_social_providers_provider",
+        "summary": "소셜 제공자 설정 변경",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SocialProvider"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "kakao",
+                "naver",
+                "google"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SocialSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/environments/{id}/users": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_users",
+        "summary": "환경별 회원 검색",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "maximum": 1000000
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/users/{userId}": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_users_userId",
+        "summary": "환경 회원 상세",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/users/{userId}/sessions": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_users_userId_sessions",
+        "summary": "회원의 온라인 세션 목록",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete_api_v1_admin_environments_id_users_userId_sessions",
+        "summary": "회원 온라인·오프라인 세션 종료",
+        "responses": {
+          "204": {
+            "description": "완료"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/users/{userId}/state": {
+      "put": {
+        "operationId": "put_api_v1_admin_environments_id_users_userId_state",
+        "summary": "회원 로그인 허용·차단",
+        "responses": {
+          "204": {
+            "description": "완료"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberState"
+              }
+            }
+          }
+        },
+        "description": "expectedEnabled 불일치 시 409. 차단 후 세션 종료 실패 시 차단 상태는 유지되므로 재조회 후 조치한다."
+      }
+    },
+    "/api/v1/admin/environments/{id}/users/{userId}/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "delete_api_v1_admin_environments_id_users_userId_sessions_sessionId",
+        "summary": "회원 소유 온라인 세션 종료",
+        "responses": {
+          "204": {
+            "description": "완료"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/email-inbox": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_email_inbox",
+        "summary": "DEV 인증 이메일 모의 수신함",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InboxItem"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "최근 1시간 최대 100건. HTML을 실행하지 않는다. PROD 환경 조회 불가.",
+        "x-development-only": true
+      }
+    },
+    "/api/v1/admin/environments/{id}/mock-users/reset-preview": {
+      "get": {
+        "operationId": "get_api_v1_admin_environments_id_mock_users_reset_preview",
+        "summary": "DEV 테스트 계정 초기화 대상 확인",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPreview"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "x-development-only": true
+      }
+    },
+    "/api/v1/admin/environments/{id}/mock-users/reset": {
+      "post": {
+        "operationId": "post_api_v1_admin_environments_id_mock_users_reset",
+        "summary": "확인한 DEV 테스트 계정 초기화",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          }
+        },
+        "description": "보호된 계정 제외, 목록/revision 재검증. 비활성화→세션 종료→삭제. 일부 실패는 HTTP 200의 items/failed로 구분하고 무조건 반복하지 않는다.",
+        "x-development-only": true
+      }
+    },
+    "/api/v1/admin/environments/{id}/mock-login": {
+      "post": {
+        "operationId": "post_api_v1_admin_environments_id_mock_login",
+        "summary": "관리자용 DEV 로그인 시험",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockPreviewResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MockLogin"
+              }
+            }
+          }
+        },
+        "x-development-only": true
+      }
+    },
+    "/api/v1/dev/login": {
+      "post": {
+        "operationId": "post_api_v1_dev_login",
+        "summary": "서버 키로 DEV 로그인 시험",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "description": "모의 로그인 실패 또는 업무 요청 거부",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockResult"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "모의 로그인 실패 또는 업무 요청 거부",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MockResult"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MockLogin"
+              }
+            }
+          }
+        },
+        "x-development-only": true,
+        "x-required-scopes": [
+          "auth:mock"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]+$"
+          },
+          "requestId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "code",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "requestId"
+        ]
+      },
+      "Configuration": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "realm": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "dev",
+              "prod"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "realm",
+          "clientId",
+          "mode"
+        ]
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "createdAt",
+          "status",
+          "revision"
+        ]
+      },
+      "Environment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEV",
+              "PROD"
+            ]
+          },
+          "realm": {
+            "type": "string"
+          },
+          "registrationAllowed": {
+            "type": "boolean"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "description": "정확한 HTTPS 콜백. DEV만 HTTP loopback 허용. 와일드카드·userinfo·fragment 금지."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "code",
+          "kind",
+          "realm",
+          "registrationAllowed",
+          "redirectUris",
+          "state",
+          "issuer",
+          "revision"
+        ]
+      },
+      "NewProject": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ]
+      },
+      "ProjectSettings": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "revision"
+        ]
+      },
+      "NewEnvironment": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEV",
+              "PROD"
+            ]
+          },
+          "registrationAllowed": {
+            "type": "boolean"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "description": "정확한 HTTPS 콜백. DEV만 HTTP loopback 허용. 와일드카드·userinfo·fragment 금지."
+          }
+        },
+        "required": [
+          "code",
+          "kind",
+          "registrationAllowed",
+          "redirectUris"
+        ]
+      },
+      "EnvironmentSettings": {
+        "type": "object",
+        "properties": {
+          "registrationAllowed": {
+            "type": "boolean"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "description": "정확한 HTTPS 콜백. DEV만 HTTP loopback 허용. 와일드카드·userinfo·fragment 금지."
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "registrationAllowed",
+          "redirectUris",
+          "revision"
+        ]
+      },
+      "NewCredential": {
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "현재 이후. 생략/null이면 만료 없음."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "integration:read",
+                    "auth:mock"
+                  ]
+                },
+                "uniqueItems": true,
+                "minItems": 1,
+                "maxItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": []
+      },
+      "Credential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "한 번만 표시되는 서버용 비밀값. 브라우저/저장소에 보관 금지."
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "integration:read",
+                "auth:mock"
+              ]
+            },
+            "uniqueItems": true,
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "id",
+          "apiKey",
+          "expiresAt",
+          "scopes"
+        ]
+      },
+      "CredentialMetadata": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "integration:read",
+                "auth:mock"
+              ]
+            },
+            "uniqueItems": true,
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "expires_at",
+          "revoked_at",
+          "scopes"
+        ]
+      },
+      "Scope": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "integration:read",
+              "auth:mock"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "description"
+        ]
+      },
+      "Context": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEV",
+              "PROD"
+            ]
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "integration:read",
+                "auth:mock"
+              ]
+            },
+            "uniqueItems": true,
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "projectId",
+          "environmentId",
+          "kind",
+          "issuer",
+          "scopes"
+        ]
+      },
+      "AuthenticationSettings": {
+        "type": "object",
+        "properties": {
+          "loginWithEmail": {
+            "type": "boolean"
+          },
+          "verifyEmail": {
+            "type": "boolean"
+          },
+          "resetPasswordAllowed": {
+            "type": "boolean"
+          },
+          "passwordMinLength": {
+            "type": "integer",
+            "minimum": 12,
+            "maximum": 128
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "loginWithEmail",
+          "verifyEmail",
+          "resetPasswordAllowed",
+          "passwordMinLength",
+          "revision"
+        ]
+      },
+      "AuthenticationPolicy": {
+        "type": "object",
+        "properties": {
+          "loginWithEmail": {
+            "type": "boolean"
+          },
+          "verifyEmail": {
+            "type": "boolean"
+          },
+          "resetPasswordAllowed": {
+            "type": "boolean"
+          },
+          "passwordMinLength": {
+            "type": "integer"
+          },
+          "passwordPolicyEditable": {
+            "type": "boolean"
+          },
+          "emailActionsAvailable": {
+            "type": "boolean"
+          },
+          "emailDelivery": {
+            "type": "string",
+            "enum": [
+              "MOCK",
+              "NCP",
+              "UNAVAILABLE"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "loginWithEmail",
+          "verifyEmail",
+          "resetPasswordAllowed",
+          "passwordMinLength",
+          "passwordPolicyEditable",
+          "emailActionsAvailable",
+          "emailDelivery",
+          "revision"
+        ]
+      },
+      "SocialSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "enabled",
+          "revision"
+        ]
+      },
+      "SocialProvider": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "kakao",
+              "naver",
+              "google"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "credentialsConfigured": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "callbackUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "activationAllowed": {
+            "type": "boolean"
+          },
+          "sharedCallback": {
+            "type": "boolean"
+          },
+          "sharedCallbackUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "alias",
+          "configured",
+          "enabled",
+          "credentialsConfigured",
+          "revision",
+          "callbackUrl",
+          "activationAllowed",
+          "sharedCallback",
+          "sharedCallbackUrl"
+        ]
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "createdTimestamp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "email",
+          "firstName",
+          "lastName",
+          "enabled",
+          "emailVerified",
+          "createdTimestamp"
+        ]
+      },
+      "MemberPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "hasMore"
+        ]
+      },
+      "MemberDetail": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/Member"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "user",
+          "providers"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          },
+          "ipAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastAccess": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "ipAddress",
+          "start",
+          "lastAccess",
+          "clients"
+        ]
+      },
+      "MemberState": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "expectedEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "expectedEnabled"
+        ]
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "actor",
+          "action",
+          "target_id",
+          "environment_id",
+          "session_id",
+          "created_at"
+        ]
+      },
+      "InboxItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "textBody": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "recipient",
+          "subject",
+          "textBody",
+          "createdAt"
+        ]
+      },
+      "MockLogin": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "kakao",
+              "naver",
+              "google"
+            ]
+          },
+          "subject": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "cancelled",
+                  "access_denied",
+                  "provider_unavailable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "subject"
+        ]
+      },
+      "MockResult": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "mock"
+            ]
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "success",
+              "cancelled",
+              "access_denied",
+              "provider_unavailable"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "kakao",
+              "naver",
+              "google"
+            ]
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expiresIn": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "scenario",
+          "provider",
+          "projectId",
+          "environmentId"
+        ]
+      },
+      "MockPreviewResult": {
+        "type": "object",
+        "properties": {
+          "httpStatus": {
+            "type": "integer"
+          },
+          "result": {
+            "$ref": "#/components/schemas/MockResult"
+          }
+        },
+        "required": [
+          "httpStatus",
+          "result"
+        ],
+        "description": "토큰을 제외한 관리자 시험 결과. 내부 httpStatus가 실패여도 이 시험 요청 자체는 HTTP 200."
+      },
+      "ResetTarget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "kakao",
+              "naver",
+              "google"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "provider"
+        ]
+      },
+      "ResetPreview": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResetTarget"
+            },
+            "maxItems": 20
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "items",
+          "hasMore",
+          "revision"
+        ]
+      },
+      "ResetRequest": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "userIds",
+          "revision"
+        ]
+      },
+      "ResetResult": {
+        "type": "object",
+        "properties": {
+          "requested": {
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "DELETED",
+                    "FAILED"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "status"
+              ]
+            }
+          }
+        },
+        "required": [
+          "requested",
+          "deleted",
+          "failed",
+          "items"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "adminBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "platform-admin-{mode} 발급, platform-admin-api audience와 platform-admin 역할 필요."
+      },
+      "projectApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Platform-Key",
+        "description": "프로젝트·환경·권한별 서버 전용 키. 브라우저 코드에 포함 금지."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "한국어 오류. 상태/코드로 분기하고 5xx만으로 변경 요청을 자동 재시도하지 않는다.",
+        "headers": {
+          "X-Request-ID": {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "description": "본문 requestId와 동일"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  }
+}

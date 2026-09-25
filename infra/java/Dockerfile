@@ -3,6 +3,7 @@ FROM gradle:9.7.1-jdk21 AS build
 WORKDIR /workspace
 COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY services/ services/
+COPY libraries/ libraries/
 ARG SERVICE
 RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked gradle --no-daemon :services:${SERVICE}:build && cp services/${SERVICE}/build/libs/*-SNAPSHOT.jar /app.jar
 

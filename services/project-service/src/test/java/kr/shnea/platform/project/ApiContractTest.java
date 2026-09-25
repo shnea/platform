@@ -1,5 +1,7 @@
 package kr.shnea.platform.project;
 
+import kr.shnea.platform.http.RequestTrace;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;

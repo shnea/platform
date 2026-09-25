@@ -1,4 +1,4 @@
-package kr.shnea.platform.project;
+package kr.shnea.platform.http;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -17,15 +17,24 @@ import org.springframework.web.servlet.HandlerMapping;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
-class RequestTrace extends OncePerRequestFilter {
-    static final String HEADER = "X-Request-ID";
+public class RequestTrace extends OncePerRequestFilter {
+    public static final String HEADER = "X-Request-ID";
     static final String ATTRIBUTE = RequestTrace.class.getName() + ".id";
 
-    static String id(HttpServletRequest request) {
+    public static String id(HttpServletRequest request) {
         if (request.getAttribute(ATTRIBUTE) instanceof String id) return id;
         String id = UUID.randomUUID().toString().replace("-", "");
         request.setAttribute(ATTRIBUTE, id);
         return id;
+    }
+
+    // Only attach to configured internal clients, never external providers.
+    public static org.springframework.http.client.ClientHttpRequestInterceptor propagate() {
+        return (request, body, execution) -> {
+            String id = MDC.get("requestId");
+            if (id != null && id.matches("[a-f0-9]{32}")) request.getHeaders().set(HEADER, id);
+            return execution.execute(request, body);
+        };
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)

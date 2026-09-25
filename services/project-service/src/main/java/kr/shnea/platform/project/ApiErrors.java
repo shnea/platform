@@ -1,5 +1,7 @@
 package kr.shnea.platform.project;
 
+import kr.shnea.platform.http.RequestTrace;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import java.util.List;
 import java.util.Map;

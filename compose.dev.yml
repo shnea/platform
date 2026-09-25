@@ -79,6 +79,18 @@ services:
     volumes: ["./scripts:/checks:ro"]
     command: [python, /checks/check-projects.py]
 
+  api-check:
+    profiles: [test]
+    image: register.shnea.kr/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    build: ./infra/contract-check
+    networks: [app]
+    environment:
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
+      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
+    volumes:
+      - ./scripts:/checks:ro
+      - ./services/project-service/src/main/resources/openapi.json:/contracts/project.json:ro
+
   db-check:
     profiles: [test]
     image: register.shnea.kr/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}

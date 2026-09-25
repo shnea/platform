@@ -20,7 +20,8 @@ class EmailClient {
         this.mode = mode;
         var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
         factory.setReadTimeout(Duration.ofSeconds(5));
-        http = RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("X-Platform-Mail-Key", secret).build();
+        http = RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("X-Platform-Mail-Key", secret)
+            .requestInterceptor(kr.shnea.platform.http.RequestTrace.propagate()).build();
     }
     String delivery(ProjectService.Environment env) {
         if (!(mode.equals("dev") && env.kind().equals("DEV")) && !(mode.equals("prod") && env.kind().equals("PROD"))) return "UNAVAILABLE";

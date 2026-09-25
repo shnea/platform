@@ -2,9 +2,11 @@
 
 ## 적용 범위
 
-첫 적용 단위는 프로젝트 서비스의 관리자·연동 API와 해당 서비스 내부 API다. 성공 응답 구조와 HTTP 상태, 관리자 JWT·서버 API 키의 권한 경계는 유지한다. 관리자 화면에서는 서버의 한국어 오류 안내와 요청 ID를 확인한다.
+프로젝트 서비스의 관리자·연동/내부 API와 알림 서비스의 내부 이메일 API에 적용했다. 성공 응답 구조와 HTTP 상태, 관리자 JWT·서버 API 키의 권한 경계는 유지한다. 관리자 화면에서는 서버의 한국어 오류 안내와 요청 ID를 확인한다.
 
-파일 업무 API, 알림 서비스 자체 내부 오류, 서비스 간 요청 ID 전달, Nginx 자체 413/502/504 오류 본문 통일은 후속 범위다. 현재 Nginx는 `/api/v1/` 응답에 ID를 제공하지만 프록시 자체 오류 본문은 HTML일 수 있다. 관리자 웹은 표준 본문이 없을 때 한국어 기본 안내를 표시한다. 전체 F-15 완료를 뜻하지 않는다. 개발자 센터 화면·전체 OpenAPI 명세도 후속 작업이다.
+Nginx의 `/api/v1/`에서 자체 생성한 413/502/503/504도 표준 본문을 반환한다. 업스트림 서비스가 반환한 오류 본문은 유지한다. `/auth/`의 표준 인증 오류와 프록시의 다른 경로는 바꾸지 않는다. 관리자 웹은 표준 본문이 없는 응답에도 한국어 기본 안내를 제공한다. 아직 업무 API가 없는 파일 서비스와 향후 API는 구현 시 같은 계약을 적용한다. 개발자 센터 화면은 후속 작업이다.
+
+현재 외부 API의 [OpenAPI 3.1.1 명세](../services/project-service/src/main/resources/openapi.json)는 관리자 JWT로 `GET /api/v1/admin/openapi`에서 조회한다. DEV 25개 경로/30개 작업을 문서화하며 PROD에서는 개발 전용 5개 작업/경로를 제거한다. 내부 이메일 API와 Keycloak OAuth/OIDC는 노출하지 않는다. 인증·본문·응답·필드 조건·부분 실패와 재시도 주의점을 명시했고 Gradle 검사에서 경로/모델 변경을 대조한다. [OpenAPI 공식 규격](https://spec.openapis.org/oas/v3.1.1.html)을 기준으로 검증한다.
 
 Keycloak OAuth/OIDC 오류와 `/api/v1/dev/login`의 의도된 모의 로그인 결과는 기존 계약을 유지한다. 관리자 모의 로그인은 HTTP 200 안에 `httpStatus`와 `result`를 반환하며 업무 API 예외와 구분한다.
 
@@ -60,7 +62,9 @@ Nginx가 `/api/v1/` 요청마다 `$request_id`를 생성해 호출자의 `X-Requ
 
 프로젝트 서비스는 ID를 요청 속성과 MDC에 설정하고 응답 헤더·오류 본문·ECS 로그에 포함한다. `api_request` 로그에는 메서드·매핑된 라우트 템플릿·상태·소요 시간(ms)을 남기고 종료 후 MDC를 복원한다. 알 수 없는 경로는 `unmatched`로 기록한다. 쿼리·원문 경로·본문·토큰·비밀번호·API 키는 이 로그에 기록하지 않는다. 예상하지 못한 예외는 메시지/원인/스택 없이 클래스만 기록한다.
 
-요청 ID는 상관관계를 찾는 값이며 인증 정보·멱등성 키가 아니다. 현재는 Nginx→프로젝트 서비스 구간에 적용했다. 감사 DB·Keycloak·알림·비동기 작업의 연계는 후속 범위다. API 이외의 Nginx 접근 로그 정책과 실제 IP 신뢰 설정은 변경하지 않는다.
+요청 ID는 상관관계를 찾는 값이며 인증 정보·멱등성 키가 아니다. Nginx→프로젝트와 프로젝트↔알림 내부 호출에 적용했다. 외부 NCP에는 내부 ID를 전송하지 않는다. 감사 DB·Keycloak·비동기 작업의 연계는 후속 범위다. 오류 직렬화·요청 ID 필터/전달은 `libraries:http`를 두 서비스가 공유하며 업무 코드·인증 정책·DB 소유권은 각 서비스에 남긴다.
+
+Nginx API 경로는 쿼리가 포함될 수 있는 일반 프록시 오류 로그를 억제하고 구조화 서비스 로그와 응답 ID로 진단한다. Nginx API 이외의 경로·실제 IP 신뢰 설정은 유지한다. 프록시 자체 오류를 지표로 집계하는 기능은 모니터링 단계에서 연결한다.
 
 ## 검증
 
@@ -68,9 +72,15 @@ Nginx가 `/api/v1/` 요청마다 `$request_id`를 생성해 호출자의 `X-Requ
 docker compose -f compose.yml -f compose.dev.yml build project-service
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm admin-check npm test
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-api-contract.py
+docker compose -f compose.yml -f compose.dev.yml --profile test run --build --rm api-check
+docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint sh register.shnea.kr/platform-nginx:0.1.0-dev /checks/check-gateway-errors.sh
 ```
 
 서버 빌드는 기존 단위 검사와 오류 계약 검사를 실행한다. 통합 검사는 개발 모드의 실제 Nginx·인증·업무 API를 사용하며 프로젝트/회원 데이터는 변경하지 않는다. 자체 관리자 세션은 종료한다. 잘못된 입력·인증·권한·404·405·415·외부 요청 ID 덮어쓰기와 OAuth 오류 보존을 확인한다. 409·502·500의 원문 배제와 MDC 정리는 단위 검사로 확인한다.
+
+`api-check`는 개발 전용 일회성 검사 이미지다. `openapi-spec-validator`로 명세를 검증하고 실제 조회 결과를 JSON Schema로 대조한다. 기존 READY DEV 환경이 하나 필요하며 발송/회원 변경을 하지 않는다. 없는 환경으로 이메일 컨텍스트 조회를 실패시켜 외부 발송 전에 차단되는 역방향 호출도 검증한다. 게이트웨이 검사는 격리 컨테이너 안에서 실제 413·연결 실패 502·무응답 504와 서비스 자체 503 본문 보존을 확인한다.
+
+알림 전용 코드: `INVALID_EMAIL_REQUEST`(400), `EMAIL_ACCESS_DENIED`(403), `EMAIL_REQUEST_CONFLICT`(409), `EMAIL_RATE_LIMITED`(429), `EMAIL_CONTEXT_UNAVAILABLE`(503), `EMAIL_DELIVERY_UNCONFIRMED`(503). 전달 결과 불명확 시 자동 재발송 금지는 유지한다. 게이트웨이는 공통 코드 외 `UPSTREAM_TIMEOUT`(504)을 사용한다.
 
 ## 오류 코드 목록
 

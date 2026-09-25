@@ -41,7 +41,8 @@ class EmailController {
         this.db = db; this.tx = tx; this.ncp = ncp; this.mode = mode;
         var factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
         factory.setReadTimeout(Duration.ofSeconds(5));
-        projects = RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("X-Platform-Mail-Key", secret).build();
+        projects = RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("X-Platform-Mail-Key", secret)
+            .requestInterceptor(kr.shnea.platform.http.RequestTrace.propagate()).build();
     }
     @GetMapping("/readiness") Map<String, Object> readiness() {
         return Map.of("mode", mode, "ready", mode.equals("dev") || ncp.ready());

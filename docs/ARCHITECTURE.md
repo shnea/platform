@@ -10,7 +10,7 @@
 | 관리자 웹 | admin-web | 없음 | React·TypeScript UI, Keycloak 브라우저 로그인, 테마·프로젝트·키·감사 관리 |
 | 프로젝트 | project-service | platform_project | 프로젝트·환경·중지·재개·설정 동기화·API 키·감사·개발 Mock 로그인 |
 | 파일 | file-service | platform_file | Spring Boot 기동·DB 상태 |
-| 알림 | notification-service | platform_notification | Spring Boot 기동·DB 상태 |
+| 알림 | notification-service | platform_notification | 인증 메일 모의 수신함·NCP 전달·상태/보존 관리, 내부 오류/요청 추적 |
 | Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진·프로젝트 realm·소셜 브로커 |
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
 | 인증 초기화 도구 | tools | DB 직접 접근 없음 | setup 프로필로만 실행, 관리자 realm·서비스 계정 설정 |
@@ -21,7 +21,7 @@
 
 `app` 네트워크는 프록시·API·Keycloak이 사용하고, `database`는 외부 경로가 없는 내부 네트워크다. 운영 구성에서 DB는 후자에만 연결한다. 개발용 Compose는 DB에 `db-access` 브리지를 추가해 호스트 포트 30141을 127.0.0.1에 연다. API와 Keycloak에는 호스트 포트가 없다.
 
-각 API는 개별 Gradle 하위 프로젝트, 프로세스, 이미지다. Kotlin DSL로 빌드하고 Gradle은 Docker 이미지에 고정한다. 공통 런타임 모듈이나 서비스 간 DB 조인은 없다. 프로젝트 관리 API는 별도 관리자 realm의 JWT·audience·역할로 보호하며, 연동·Mock API는 환경별 서버 키를 검증한다. 파일·알림은 아직 health만 구현했다. 새 업무 API에도 인증·프로젝트 권한 검증을 함께 구현해야 한다.
+각 API는 개별 Gradle 하위 프로젝트, 프로세스, 이미지다. Kotlin DSL로 빌드하고 Gradle은 Docker 이미지에 고정한다. `libraries:http`는 프로젝트·알림의 오류 직렬화·요청 ID만 공유하는 라이브러리이며 별도 프로세스나 DB를 만들지 않는다. 서비스 간 DB 조인은 없다. 프로젝트 관리 API는 별도 관리자 realm의 JWT·audience·역할로 보호하며, 연동·Mock API는 환경별 서버 키를 검증한다. 파일은 아직 health 기반만 구현했다. 새 업무 API에도 인증·프로젝트 권한 검증을 함께 구현해야 한다.
 
 ## 버전 선택
 
