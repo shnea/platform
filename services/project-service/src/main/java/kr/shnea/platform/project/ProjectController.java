@@ -37,6 +37,30 @@ class ProjectController {
         return service.updateAuthenticationPolicy(id, request, user.getSubject());
     }
     record SocialSettings(@NotNull Boolean enabled, @NotBlank @Size(max=64) String revision) {}
+    record MemberState(@NotNull Boolean enabled, @NotNull Boolean expectedEnabled) {}
+    @GetMapping("/api/v1/admin/environments/{id}/users")
+    Object members(@PathVariable UUID id, @RequestParam(defaultValue="") String search,
+                   @RequestParam(defaultValue="20") int limit, @RequestParam(defaultValue="0") int offset) {
+        return service.members(id, search, limit, offset);
+    }
+    @GetMapping("/api/v1/admin/environments/{id}/users/{userId}")
+    Object member(@PathVariable UUID id, @PathVariable UUID userId) { return service.member(id, userId); }
+    @GetMapping("/api/v1/admin/environments/{id}/users/{userId}/sessions")
+    Object memberSessions(@PathVariable UUID id, @PathVariable UUID userId) { return service.memberSessions(id, userId); }
+    @PutMapping("/api/v1/admin/environments/{id}/users/{userId}/state") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void memberState(@PathVariable UUID id, @PathVariable UUID userId, @Valid @RequestBody MemberState request,
+                     @AuthenticationPrincipal Jwt actor) {
+        service.updateMember(id, userId, request, actor.getSubject());
+    }
+    @DeleteMapping("/api/v1/admin/environments/{id}/users/{userId}/sessions") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void endSessions(@PathVariable UUID id, @PathVariable UUID userId, @AuthenticationPrincipal Jwt actor) {
+        service.endMemberSessions(id, userId, null, actor.getSubject());
+    }
+    @DeleteMapping("/api/v1/admin/environments/{id}/users/{userId}/sessions/{sessionId}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    void endSession(@PathVariable UUID id, @PathVariable UUID userId, @PathVariable String sessionId,
+                    @AuthenticationPrincipal Jwt actor) {
+        service.endMemberSessions(id, userId, sessionId, actor.getSubject());
+    }
     @GetMapping("/api/v1/admin/environments/{id}/social-providers")
     Object socialProviders(@PathVariable UUID id) { return service.socialProviders(id); }
     @PutMapping("/api/v1/admin/environments/{id}/social-providers/{provider}")

@@ -430,6 +430,7 @@ dd {
   margin-top: 32px;
 }
 .mock-panel,
+.member-panel,
 .social-panel,
 .policy-panel {
   margin-top: 32px;
@@ -464,6 +465,25 @@ dd {
   margin-top: 24px;
   padding-top: 24px;
   border-top: 1px solid var(--line);
+}
+.member-search {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  max-width: 680px;
+  margin-bottom: 24px;
+}
+.member-search label { flex: 1; margin: 0; min-width: 0; }
+.member-search button { min-height: 48px; }
+.member-panel h4 { margin: 0; font-size: 15px; }
+.member-panel .pagination { align-items: center; }
+.member-detail dd { overflow-wrap: anywhere; }
+.member-sessions button { flex-shrink: 0; }
+.member-sessions > li > div { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .member-detail .section-line { flex-wrap: wrap; }
+  .member-panel .project-row { flex-wrap: wrap; }
+  .member-panel .project-label { flex-basis: 65%; }
 }
 .key-list {
   list-style: none;

@@ -171,7 +171,7 @@ class ProjectService {
 
     List<java.util.Map<String, Object>> auditEvents(int limit) {
         if (limit < 1 || limit > 100) throw badRequest("Invalid limit");
-        return db.queryForList("SELECT id,actor,action,target_id,created_at FROM audit_events ORDER BY id DESC LIMIT ?", limit);
+        return db.queryForList("SELECT id,actor,action,target_id,environment_id,session_id,created_at FROM audit_events ORDER BY id DESC LIMIT ?", limit);
     }
 
     MockResult mockLogin(String key, String provider, String subject, String scenario) {
@@ -289,6 +289,55 @@ class ProjectService {
     private static void requireReady(Environment env) {
         if (!env.state().equals("READY"))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+    }
+
+    Member.Page members(UUID id, String search, int limit, int offset) {
+        if (limit < 1 || limit > 100 || offset < 0 || offset > 1_000_000 || search.length() > 200
+                || search.chars().anyMatch(Character::isISOControl)) throw badRequest("Invalid user search or pagination");
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        return identity.members(env, search.strip(), limit, offset);
+    }
+
+    Member.Detail member(UUID id, UUID userId) {
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        return identity.member(env, userId);
+    }
+
+    List<Member.Session> memberSessions(UUID id, UUID userId) {
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        return identity.memberSessions(env, userId);
+    }
+
+    void updateMember(UUID id, UUID userId, ProjectController.MemberState request, String actor) {
+        memberAction(id, userId, null, actor, request.enabled() ? "user.enabled" : "user.disabled", env ->
+            identity.updateMember(env, userId, request.enabled(), request.expectedEnabled()), request.enabled());
+    }
+
+    void endMemberSessions(UUID id, UUID userId, String sessionId, String actor) {
+        if (sessionId != null && !sessionId.matches("[A-Za-z0-9_-]{1,128}")) throw badRequest("Invalid session ID");
+        memberAction(id, userId, sessionId, actor, sessionId == null ? "user.sessions.ended" : "user.session.ended",
+            env -> identity.endMemberSessions(env, userId, sessionId), false);
+    }
+
+    private void memberAction(UUID id, UUID userId, String sessionId, String actor, String action,
+                              java.util.function.Consumer<Environment> operation, boolean requireActiveProject) {
+        RuntimeException failure = tx.execute(transaction -> {
+            Project project = lockProject(findEnvironment(id).projectId());
+            Environment env = findEnvironment(id);
+            requireReady(env);
+            if (requireActiveProject) requireActive(project);
+            RuntimeException error = null;
+            try { operation.accept(env); }
+            catch (org.springframework.web.client.RestClientException | ResponseStatusException e) { error = e; }
+            // Keycloak changes cannot roll back with our DB. Persist failed/partial attempts, too.
+            db.update("INSERT INTO audit_events(actor,action,target_id,environment_id,session_id) VALUES (?,?,?,?,?)",
+                actor, action + (error == null ? "" : ".failed"), userId, id, sessionId);
+            return error;
+        });
+        if (failure != null) throw failure;
     }
 
     @SuppressWarnings("unchecked")

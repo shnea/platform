@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type ReactNode,
 } from "react";
 import { api, auth, initialize, mode } from "./auth";
 import "./style.css";
@@ -12,6 +11,8 @@ import shneaMark from "./assets/brand/shnea-mark.svg";
 import { MockLoginPanel } from "./MockLoginPanel";
 import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
+import { MemberPanel } from "./MemberPanel";
+import { Dialog } from "./Dialog";
 
 type Project = {
   id: string;
@@ -42,6 +43,8 @@ type Event = {
   id: number;
   action: string;
   target_id: string;
+  environment_id: string | null;
+  session_id: string | null;
   created_at: string;
 };
 const keyExpired = (key: Key) =>
@@ -71,74 +74,6 @@ function State({ value }: { value: string }) {
       <span aria-hidden="true" />
       {stateName[value] ?? value}
     </span>
-  );
-}
-function Dialog({
-  title,
-  children,
-  close,
-  busy,
-}: {
-  title: string;
-  children: ReactNode;
-  close: () => void;
-  busy: boolean;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement;
-    ref.current?.showModal();
-    return () => {
-      opener?.focus();
-    };
-  }, []);
-  useEffect(() => {
-    ref.current
-      ?.querySelector<HTMLElement>(
-        "input:not(:disabled), textarea:not(:disabled), select:not(:disabled)",
-      )
-      ?.focus();
-  }, [title]);
-  return (
-    <dialog
-      ref={ref}
-      aria-labelledby="dialog-title"
-      onKeyDown={(e) => {
-        if (e.key !== "Tab") return;
-        const controls = [
-          ...e.currentTarget.querySelectorAll<HTMLElement>(
-            "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)",
-          ),
-        ];
-        const first = controls[0],
-          last = controls[controls.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        }
-        if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }}
-      onCancel={(e) => {
-        e.preventDefault();
-        if (!busy) close();
-      }}
-    >
-      <div className="dialog-heading">
-        <h2 id="dialog-title">{title}</h2>
-        <button
-          className="quiet"
-          aria-label="닫기"
-          disabled={busy}
-          onClick={close}
-        >
-          닫기
-        </button>
-      </div>
-      {children}
-    </dialog>
   );
 }
 function App() {
@@ -571,7 +506,10 @@ function Workspace() {
                   {events.map((event) => (
                     <tr key={event.id}>
                       <td>{event.action}</td>
-                      <td className="identifier">{event.target_id}</td>
+                      <td className="identifier">{event.target_id}
+                        {event.environment_id && <div className="muted">환경: {event.environment_id}</div>}
+                        {event.session_id && <div className="muted">세션: {event.session_id}</div>}
+                      </td>
                       <td>{date(event.created_at)}</td>
                     </tr>
                   ))}
@@ -791,6 +729,12 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    <MemberPanel
+                      key={`members:${env.id}:${env.state}:${project.status}`}
+                      environmentId={env.id}
+                      ready={env.state === "READY"}
+                      suspended={project.status !== "ACTIVE"}
+                    />
                     <AuthenticationPolicyPanel
                       key={`policy:${env.id}:${env.state}`}
                       environmentId={env.id}

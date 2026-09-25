@@ -2,7 +2,7 @@
 
 여러 프로젝트가 로그인, 파일, 알림, 블록 에디터·뷰어를 선택해 사용하고 한 관리자 화면에서 운영하는 플랫폼이다. 기존 서비스 코드를 재사용하지 않고 새로 구현하며, 앞으로 추가되는 프로젝트에 적용한다.
 
-프로젝트·환경 관리, 중지·재개, Keycloak 브라우저 관리자 로그인, 서버 API 키, 감사 이력과 개발 소셜 Mock 로그인 API를 구현했다. 환경별 이메일 로그인·인증·복구와 비밀번호 길이 정책을 관리할 수 있다. 이메일 발송·실제 복구 검수는 후속 작업이다. 관리자 화면은 어두운 테마가 기본이며 밝은 테마로 전환할 수 있다. 구글·카카오·네이버 설정 관리와 연결 코드를 추가했으며 실제 소셜 로그인 검수는 인증 정보 보강 후 진행한다. 업로드·발송과 에디터는 아직 구현하지 않았다. [프로젝트·인증 API 안내](docs/PROJECT_API.md)를 참고한다.
+프로젝트·환경 관리, 중지·재개, Keycloak 브라우저 관리자 로그인, 서버 API 키, 감사 이력과 개발 소셜 Mock 로그인 API를 구현했다. 환경별 회원 목록·검색·상세, 계정 활성화·비활성화, 로그인 세션 조회·종료를 관리할 수 있다. 이메일 로그인·인증·복구와 비밀번호 길이 정책 설정도 제공하며, 이메일 발송 업무 기능·실제 복구 검수는 후속 작업이다. 관리자 화면은 어두운 테마가 기본이며 밝은 테마로 전환할 수 있다. 구글·카카오·네이버 설정 관리·연결 코드와 세 제공자의 실제 계정 연결을 검수했다. 업로드·발송과 에디터는 아직 구현하지 않았다. [프로젝트·인증 API 안내](docs/PROJECT_API.md)를 참고한다.
 
 ## 개발 실행
 
@@ -42,6 +42,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm db-chec
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock.py
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-members.py
 docker compose -f compose.yml -f compose.dev.yml ps
 docker compose -f compose.yml -f compose.dev.yml logs --tail 80 project-service
 docker compose -f compose.yml -f compose.dev.yml down

@@ -39,6 +39,132 @@ class IdentityClient {
 
     String issuer(String realm) { return publicUrl + "/realms/" + realm; }
 
+    @SuppressWarnings("unchecked")
+    Member.Page members(ProjectService.Environment env, String search, int limit, int offset) {
+        String admin = ownedRealmToken(env);
+        List<Map<String, Object>> rows = http.get().uri(builder -> builder
+            .path("/admin/realms/{realm}/users").queryParam("search", "{search}")
+            .queryParam("first", offset).queryParam("max", limit + 1).queryParam("briefRepresentation", false)
+            .build(env.realm(), search.isEmpty() ? "" : "*" + search + "*")).headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        return new Member.Page(rows.stream().limit(limit).map(Member::from).toList(), rows.size() > limit);
+    }
+
+    @SuppressWarnings("unchecked")
+    Member.Detail member(ProjectService.Environment env, UUID userId) {
+        String admin = ownedRealmToken(env);
+        var user = readMember(env, userId, admin);
+        List<Map<String, Object>> links = http.get().uri(memberPath(env, userId) + "/federated-identity")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        return new Member.Detail(Member.from(user), links.stream().map(link -> (String) link.get("identityProvider")).toList());
+    }
+
+    List<Member.Session> memberSessions(ProjectService.Environment env, UUID userId) {
+        String admin = ownedRealmToken(env);
+        readMember(env, userId, admin);
+        return readSessions(env, userId, admin);
+    }
+
+    void updateMember(ProjectService.Environment env, UUID userId, boolean enabled, boolean expectedEnabled) {
+        String admin = ownedRealmToken(env);
+        var current = readMember(env, userId, admin);
+        if (Boolean.TRUE.equals(current.get("enabled")) != expectedEnabled)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "User state changed; reload before saving");
+        http.put().uri(memberPath(env, userId)).headers(h -> h.setBearerAuth(admin))
+            .body(Map.of("enabled", enabled)).retrieve().toBodilessEntity();
+        // Disable first: logout failure must never re-enable the account. Safe to retry.
+        if (!enabled) logoutMember(env, userId, admin);
+    }
+
+    void endMemberSessions(ProjectService.Environment env, UUID userId, String sessionId) {
+        String admin = ownedRealmToken(env);
+        readMember(env, userId, admin);
+        if (sessionId == null) {
+            logoutMember(env, userId, admin);
+        } else {
+            if (readSessions(env, userId, admin).stream().noneMatch(session -> sessionId.equals(session.id())))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found for this user");
+            try {
+                http.delete().uri("/admin/realms/" + env.realm() + "/sessions/" + sessionId + "?isOffline=false")
+                    .headers(h -> h.setBearerAuth(admin)).retrieve().toBodilessEntity();
+            } catch (RestClientResponseException error) {
+                // A session can expire between ownership verification and deletion.
+                if (error.getStatusCode().value() != 404) throw error;
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void logoutMember(ProjectService.Environment env, UUID userId, String admin) {
+        http.post().uri(memberPath(env, userId) + "/logout").headers(h -> h.setBearerAuth(admin))
+            .retrieve().toBodilessEntity();
+        // Keycloak logout only removes online sessions. Discover this user's offline grants
+        // and delete their sessions explicitly, preserving the user's consent settings.
+        List<Map<String, Object>> consents = http.get().uri(memberPath(env, userId) + "/consents")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        var offlineIds = new java.util.HashSet<String>();
+        for (var consent : consents) {
+            var grants = (List<Map<String, String>>) consent.getOrDefault("additionalGrants", List.of());
+            for (var grant : grants) {
+                if (!"Offline Token".equals(grant.get("key"))) continue;
+                List<Map<String, Object>> sessions = http.get()
+                    .uri(memberPath(env, userId) + "/offline-sessions/{clientId}", grant.get("client"))
+                    .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+                sessions.forEach(session -> offlineIds.add((String) session.get("id")));
+            }
+        }
+        for (String sessionId : offlineIds) {
+            try {
+                http.delete().uri("/admin/realms/{realm}/sessions/{session}?isOffline=true", env.realm(), sessionId)
+                    .headers(h -> h.setBearerAuth(admin)).retrieve().toBodilessEntity();
+            } catch (RestClientResponseException error) {
+                if (error.getStatusCode().value() != 404) throw error;
+            }
+        }
+    }
+
+    private String memberPath(ProjectService.Environment env, UUID userId) {
+        return "/admin/realms/" + env.realm() + "/users/" + userId;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readMember(ProjectService.Environment env, UUID userId, String admin) {
+        try {
+            Map<String, Object> user = http.get().uri(memberPath(env, userId))
+                .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
+            if (user == null || user.get("serviceAccountClientId") != null)
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+            // GET /users/{id} omits the service-account link in Keycloak 26.7.
+            // General search excludes service accounts; exact username lookup does not.
+            boolean member = false;
+            for (int offset = 0; !member; offset += 100) {
+                final int first = offset;
+                List<Map<String, Object>> matches = http.get().uri(builder -> builder
+                    .path("/admin/realms/{realm}/users").queryParam("search", "{search}")
+                    .queryParam("exact", true).queryParam("first", first).queryParam("max", 100)
+                    .build(env.realm(), "\"" + user.get("username") + "\""))
+                    .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+                member = matches.stream().anyMatch(row -> userId.toString().equals(row.get("id")));
+                if (!member && matches.size() < 100)
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+            }
+            return user;
+        } catch (RestClientResponseException error) {
+            if (error.getStatusCode().value() == 404)
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+            throw error;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Member.Session> readSessions(ProjectService.Environment env, UUID userId, String admin) {
+        List<Map<String, Object>> sessions = http.get().uri(memberPath(env, userId) + "/sessions")
+            .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
+        return sessions.stream().map(session -> new Member.Session((String) session.get("id"),
+            (String) session.get("ipAddress"), ((Number) session.get("start")).longValue(),
+            ((Number) session.get("lastAccess")).longValue(),
+            List.copyOf(((Map<String, String>) session.get("clients")).values()))).toList();
+    }
+
     AuthenticationPolicy authenticationPolicy(ProjectService.Environment env) {
         String admin = ownedRealmToken(env);
         return policyMetadata(env, readRealm(env.realm(), admin));
@@ -222,6 +348,8 @@ class IdentityClient {
         if (!(user.get("attributes") instanceof Map<?, ?> userAttrs)
                 || !List.of("true").equals(userAttrs.get("platformMock")))
             throw new IllegalStateException("Mock user ownership mismatch");
+        if (!Boolean.TRUE.equals(user.get("enabled")))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Mock user is disabled");
         // Meet every managed minimum (12..128) without exceeding maxLength(128).
         String password = ProjectService.hash(UUID.randomUUID().toString()) + ProjectService.hash(UUID.randomUUID().toString());
         http.put().uri(path + "/users/" + user.get("id") + "/reset-password")

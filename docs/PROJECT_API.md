@@ -2,7 +2,30 @@
 
 ## 현재 제공 범위
 
-프로젝트 등록·목록, 환경 등록·목록, Keycloak realm 생성·재시도, 서버 API 키 발급·폐기, 연동 환경 확인, 감사 이벤트 조회, 개발 소셜 Mock 로그인 API를 제공한다. 관리자 UI, 프로젝트 중지·재개와 이름 변경, 환경 설정 수정, 키 메타데이터 목록도 제공한다. 실제 소셜 제공자·초대/복구 정책·키별 기능 권한·알림 Mock은 후속 작업이다.
+프로젝트·환경 등록과 설정, Keycloak realm 생성·재시도, 프로젝트 중지·재개, 권한별 서버 API 키 발급·폐기, 감사 이력, 개발 소셜 Mock 로그인 API를 제공한다. 소셜 3종 설정·공통 콜백, 가입·복구 정책 설정과 회원 조회·상태·세션 관리를 관리자 UI에서 사용할 수 있다. 실제 이메일 인증/복구 연결·초대 가입·알림 Mock은 후속 작업이다.
+
+## 회원·세션 관리
+
+플랫폼 관리자 JWT 전용이며 환경 ID로 저장된 realm과 소유 표식을 확인한다. Keycloak 관리 API를 이용하며 회원 원본을 플랫폼 DB에 복제하지 않는다. 회원 ID는 현재 지원하는 Keycloak 로컬 계정의 UUID, 세션 ID는 최대 128자의 영문·숫자·밑줄·하이픈 문자열이다. 서비스 계정은 회원 조작 대상에서 제외한다.
+
+| 메서드 | `/api/v1/admin` 이후 경로 | 동작 |
+|---|---|---|
+| GET | `/environments/{id}/users?search=&limit=20&offset=0` | 아이디·이름·이메일 검색, `{items, hasMore}` 반환 |
+| GET | `/environments/{id}/users/{userId}` | `{user, providers}` 반환. 제공자 별칭만 공개 |
+| GET | `/environments/{id}/users/{userId}/sessions` | 온라인 세션 ID·IP·로그인/최근 접근 시간(ms)·클라이언트 이름 |
+| PUT | `/environments/{id}/users/{userId}/state` | `{enabled, expectedEnabled}` 필수. 성공 204 |
+| DELETE | `/environments/{id}/users/{userId}/sessions/{sessionId}` | 해당 회원 소유 온라인 세션 한 개 종료, 성공 204 |
+| DELETE | `/environments/{id}/users/{userId}/sessions` | 온라인·오프라인 세션 종료, 성공 204 |
+
+`limit`은 1~100, `offset`은 0~1,000,000, 검색어는 제어문자 없이 200자 이하다. 부분 검색은 Keycloak의 검색 규칙을 사용하며 목록 한 페이지 외에 다음 행 하나만 조회한다. 목록에서는 소셜 연결·세션을 회원마다 조회하지 않는다. 비밀번호·토큰·임의 속성·소셜 계정의 외부 ID는 응답하지 않는다.
+
+조회한 `enabled`를 `expectedEnabled`로 전송한다. 현재 값이 다르면 409이며 새로고침 후 재판단한다. 회원 상태와 프로젝트 중지/재개·개발 Mock 요청은 같은 프로젝트 잠금으로 직렬화한다. 중지된 프로젝트는 회원 활성화를 차단하고 조회·비활성화·세션 종료는 허용한다. 미반영 환경은 409, 해당 환경에 없는 회원이나 해당 회원 소유가 아닌 세션은 404다. 조회 뒤 자연 만료된 세션의 삭제는 성공으로 처리한다.
+
+비활성화는 먼저 계정을 막은 뒤 세션을 종료한다. 세션 종료만 실패하면 계정은 비활성 상태로 유지되고 502를 반환하므로 상세를 새로고침한 다음 전체 세션 종료를 재시도한다. 전체 종료는 Keycloak 로그아웃과 해당 회원의 오프라인 세션 명시적 삭제를 사용하며 동의 설정을 취소하지 않는다. [Keycloak 관리 API](https://www.keycloak.org/docs-api/latest/rest-api/index.html)의 회원·세션 API를 사용한다.
+
+감사 이벤트는 `user.enabled`, `user.disabled`, `user.session.ended`, `user.sessions.ended`다. 인증 서버 작업 중 거부·실패는 `.failed`로 기록한다. 기존 감사 응답에 nullable `environment_id`, `session_id`를 추가했으며 `target_id`는 회원 ID다. 입력 검증·인증 실패 등 작업 진입 전 거부는 회원 관리 이벤트를 생성하지 않는다. DB 기록 실패·프로세스 중단과 Keycloak 변경을 하나의 트랜잭션으로 보장하지 않는다. 기존 접근 토큰을 자체 검증하는 서비스는 만료까지 허용할 수 있으며 별도 즉시 차단 정책이 필요하다.
+
+검사: `docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-members.py`. 새 전용 프로젝트만 만들며 기본 종료 시 키 폐기·프로젝트 중지, 계정 보존을 수행한다. `--keep-active`는 성공한 검수 데이터를 화면 확인용으로 유지하므로 확인 후 해당 프로젝트를 중지한다.
 
 ## 초기 설정과 관리자 인증
 
