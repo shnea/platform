@@ -7,11 +7,12 @@
 | 서비스 | 이미지 접미사 | DB·접속 계정 | 현재 구현 |
 |---|---|---|---|
 | Nginx | nginx | 없음 | 30140 진입·상태 라우팅·Keycloak 프록시 |
-| 프로젝트 | project-service | platform_project | Spring Boot 기동·DB 상태 |
+| 프로젝트 | project-service | platform_project | 프로젝트·환경·realm 연동·API 키·감사·개발 Mock 로그인 |
 | 파일 | file-service | platform_file | Spring Boot 기동·DB 상태 |
 | 알림 | notification-service | platform_notification | Spring Boot 기동·DB 상태 |
 | Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진 기동 |
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
+| 인증 초기화 도구 | tools | DB 직접 접근 없음 | setup 프로필로만 실행, 관리자 realm·서비스 계정 설정 |
 
 이미지는 모두 `register.shnea.kr/platform-접미사:IMAGE_TAG`로 빌드한다. 현재 로컬 태그는 `0.1.0-dev`다. 레지스트리에 게시한 상태는 아니다.
 
@@ -19,7 +20,7 @@
 
 `app` 네트워크는 프록시·API·Keycloak이 사용하고, `database`는 외부 경로가 없는 내부 네트워크다. 운영 구성에서 DB는 후자에만 연결한다. 개발용 Compose는 DB에 `db-access` 브리지를 추가해 호스트 포트 30141을 127.0.0.1에 연다. API와 Keycloak에는 호스트 포트가 없다.
 
-각 API는 개별 Gradle 하위 프로젝트, 프로세스, 이미지다. Kotlin DSL로 빌드하고 Gradle은 Docker 이미지에 고정한다. 공통 런타임 모듈이나 서비스 간 DB 조인은 없다. 현재 컨트롤러는 없고 Actuator의 health만 활성화했다. 업무 API를 추가할 때 인증·프로젝트 권한 검증을 함께 구현해야 한다.
+각 API는 개별 Gradle 하위 프로젝트, 프로세스, 이미지다. Kotlin DSL로 빌드하고 Gradle은 Docker 이미지에 고정한다. 공통 런타임 모듈이나 서비스 간 DB 조인은 없다. 프로젝트 관리 API는 별도 관리자 realm의 JWT·audience·역할로 보호하며, 연동·Mock API는 환경별 서버 키를 검증한다. 파일·알림은 아직 health만 구현했다. 새 업무 API에도 인증·프로젝트 권한 검증을 함께 구현해야 한다.
 
 ## 버전 선택
 
@@ -57,4 +58,4 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 
 `smoke`는 4개 상태 URL, 비공개 진단 경로 차단, Keycloak discovery의 고정 issuer와 전달 헤더 위조 방지를 확인한다. `db-check`는 서비스 계정 4개의 자기 DB·스키마 접근과 다른 DB 접속 12건의 거부를 확인한다.
 
-이는 기반 검증이다. 프로젝트별 사용자 분리, Mock 운영 격리, 실제 로그인·파일·알림·웹훅·에디터 기능, 백업 복원·부하·Windows 및 Linux amd64 실기동은 별도 검증 대상이다.
+프로젝트별 실제 사용자 분리, 키 폐기, 개발 Mock 로그인과 운영 모드 차단 검사는 [프로젝트·인증 API](PROJECT_API.md)를 참고한다. 실제 소셜 제공자·파일·알림·웹훅·에디터, 백업 복원·부하·Windows 및 Linux amd64 실기동은 아직 별도 검증 대상이다.

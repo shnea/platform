@@ -2,7 +2,7 @@
 
 여러 프로젝트가 로그인, 파일, 알림, 블록 에디터·뷰어를 선택해 사용하고 한 관리자 화면에서 운영하는 플랫폼이다. 기존 서비스 코드를 재사용하지 않고 새로 구현하며, 앞으로 추가되는 프로젝트에 적용한다.
 
-현재는 MSA 실행 기반 단계다. 프로젝트·파일·알림 서비스의 상태 점검과 Keycloak을 실행할 수 있다. 업무 API, 관리자 화면, 업로드·발송, 에디터는 아직 구현하지 않았다.
+프로젝트·환경 등록, Keycloak realm 구성, 관리자 API 보호, 서버용 API 키, 개발 소셜 Mock 로그인 API를 구현했다. 통합 관리자 화면, 실제 소셜 연동, 업로드·발송, 에디터는 아직 구현하지 않았다. [프로젝트·인증 API 안내](docs/PROJECT_API.md)를 참고한다.
 
 ## 개발 실행
 
@@ -12,9 +12,12 @@ Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gra
 docker run --rm --mount "type=bind,source=${PWD},target=/workspace" -w /workspace python:3.13-alpine python scripts/init-env.py
 docker compose -f compose.yml -f compose.dev.yml config --quiet
 docker compose -f compose.yml -f compose.dev.yml up -d --build --wait --wait-timeout 300
+docker compose -f compose.yml -f compose.dev.yml --profile setup run --rm --build identity-setup
 ```
 
 첫 명령은 서로 다른 무작위 개발 비밀번호로 `.env`를 만든다. 기존 파일이 있으면 덮어쓰지 않고 종료하므로, 재실행 때는 첫 명령을 생략한다. `.env`는 커밋하지 않는다.
+
+이전 실행 기반에서 업데이트했다면 첫 명령의 끝에 `--upgrade`를 붙여 새 환경변수만 추가한 뒤 나머지 명령을 실행한다. 기존 DB·관리자 비밀번호는 보존한다. `identity-setup`은 플랫폼 관리자 realm과 제한된 서비스 계정을 설정하며 기존 사용자 비밀번호를 재설정하지 않는다.
 
 | 주소 | 현재 동작 |
 |---|---|
@@ -32,6 +35,7 @@ Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_AD
 ```sh
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm smoke
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm db-check
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
 docker compose -f compose.yml -f compose.dev.yml ps
 docker compose -f compose.yml -f compose.dev.yml logs --tail 80 project-service
 docker compose -f compose.yml -f compose.dev.yml down

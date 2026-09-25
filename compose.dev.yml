@@ -39,6 +39,22 @@ services:
     volumes: ["./scripts:/checks:ro"]
     command: [python, /checks/smoke.py]
 
+  identity-setup:
+    build:
+      context: .
+      dockerfile: infra/tools/Dockerfile
+    pull_policy: build
+
+  project-check:
+    profiles: [test]
+    image: python:3.13-alpine
+    networks: [app]
+    environment:
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
+      KEYCLOAK_PROVISIONER_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:?Upgrade .env first}
+    volumes: ["./scripts:/checks:ro"]
+    command: [python, /checks/check-projects.py]
+
   db-check:
     profiles: [test]
     image: register.shnea.kr/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
