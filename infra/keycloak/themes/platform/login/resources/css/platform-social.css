@@ -76,12 +76,12 @@
   background: center / contain no-repeat;
 }
 .platform-social-icon--naver {
-  /* Scale the official icon proportionally: its N stays larger than the 19px label. */
-  flex-basis: 26px;
-  width: 26px;
-  height: 26px;
+  /* Keep the official N near the other 20px symbols, just above the 19px label. */
+  flex-basis: 22px;
+  width: 22px;
+  height: 22px;
   background-image: url("../img/naver.png");
-  background-size: 64px 64px;
+  background-size: 52px 52px;
 }
 .platform-social-icon--google { background-image: url("../img/google.png"); }
 .platform-social-icon--kakao { background-image: url("../img/kakao.svg"); }
