@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -36,6 +38,106 @@ class IdentityClient {
     }
 
     String issuer(String realm) { return publicUrl + "/realms/" + realm; }
+
+    List<SocialProvider.Metadata> socialProviders(ProjectService.Environment env) {
+        String admin = ownedRealmToken(env);
+        return SocialProvider.ALL.stream().map(provider -> socialMetadata(env, provider, readSocial(env, provider, admin))).toList();
+    }
+
+    SocialProvider.Metadata updateSocialProvider(ProjectService.Environment env, SocialProvider provider,
+                                                 ProjectController.SocialSettings request) {
+        if (request.enabled() && !activationAllowed(env))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Real social login requires production mode and a PROD environment");
+        String admin = ownedRealmToken(env);
+        Map<String, Object> current = readSocial(env, provider, admin);
+        var metadata = socialMetadata(env, provider, current);
+        if (!metadata.revision().equals(request.revision()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Social settings changed; reload before saving");
+        Map<?, ?> previous = current == null ? Map.of() : (Map<?, ?>) current.get("config");
+        String clientId = request.clientId().strip();
+        String clientSecret = request.clientSecret();
+        if (clientSecret == null || clientSecret.isBlank()) {
+            if (!metadata.secretConfigured() || !clientId.equals(metadata.clientId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A new client ID requires its client secret");
+            // Keycloak returns a masked secret and explicitly preserves it on PUT.
+            clientSecret = (String) previous.get("clientSecret");
+        }
+        var config = provider.config();
+        config.put("clientId", clientId);
+        config.put("clientSecret", clientSecret);
+        config.put("platform.environmentId", env.id().toString());
+        config.put("platform.revision", UUID.randomUUID().toString());
+        var representation = new java.util.HashMap<String, Object>();
+        representation.put("alias", provider.alias());
+        representation.put("displayName", provider.label());
+        representation.put("providerId", provider.providerId());
+        representation.put("enabled", request.enabled());
+        representation.put("trustEmail", false);
+        representation.put("storeToken", false);
+        representation.put("addReadTokenRoleOnCreate", false);
+        representation.put("linkOnly", false);
+        representation.put("firstBrokerLoginFlowAlias", "first broker login");
+        representation.put("config", config);
+        String path = socialPath(env);
+        if (current == null) {
+            try {
+                http.post().uri(path).headers(h -> h.setBearerAuth(admin)).body(representation).retrieve().toBodilessEntity();
+            } catch (RestClientResponseException error) {
+                if (error.getStatusCode().value() == 409)
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Social provider already exists; reload");
+                throw error;
+            }
+        } else {
+            representation.put("internalId", current.get("internalId"));
+            http.put().uri(path + "/" + provider.alias()).headers(h -> h.setBearerAuth(admin))
+                .body(representation).retrieve().toBodilessEntity();
+        }
+        return socialMetadata(env, provider, readSocial(env, provider, admin));
+    }
+
+    private boolean activationAllowed(ProjectService.Environment env) {
+        return mode.equals("prod") && env.kind().equals("PROD");
+    }
+
+    private String ownedRealmToken(ProjectService.Environment env) {
+        String admin = accessToken();
+        Map<String, Object> realm = readRealm(env.realm(), admin);
+        if (realm == null || !(realm.get("attributes") instanceof Map<?, ?> attrs)
+                || !env.id().toString().equals(attrs.get("platform.environmentId")))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Realm ownership mismatch");
+        return admin;
+    }
+
+    private String socialPath(ProjectService.Environment env) {
+        return "/admin/realms/" + env.realm() + "/identity-provider/instances";
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readSocial(ProjectService.Environment env, SocialProvider provider, String admin) {
+        try {
+            Map<String, Object> result = http.get().uri(socialPath(env) + "/" + provider.alias())
+                .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
+            if (result == null || !(result.get("config") instanceof Map<?, ?> config)
+                    || !env.id().toString().equals(config.get("platform.environmentId"))
+                    || !provider.providerId().equals(result.get("providerId"))
+                    || !(config.get("platform.revision") instanceof String revision) || revision.isBlank())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Unmanaged social provider; inspect Keycloak settings");
+            return result;
+        } catch (RestClientResponseException error) {
+            if (error.getStatusCode().value() == 404) return null;
+            throw error;
+        }
+    }
+
+    private SocialProvider.Metadata socialMetadata(ProjectService.Environment env, SocialProvider provider, Map<String, Object> data) {
+        Map<?, ?> config = data == null ? Map.of() : (Map<?, ?>) data.get("config");
+        return new SocialProvider.Metadata(provider.code(), provider.label(), provider.alias(), data != null,
+            data != null && Boolean.TRUE.equals(data.get("enabled")),
+            config.get("clientId") instanceof String id ? id : "",
+            config.get("clientSecret") instanceof String secret && !secret.isBlank(),
+            config.get("platform.revision") instanceof String revision ? revision : "unconfigured",
+            issuer(env.realm()) + "/broker/" + provider.alias() + "/endpoint", activationAllowed(env));
+    }
 
     @SuppressWarnings("unchecked")
     Map<String, Object> mockLogin(ProjectService.Environment env, String provider, String subject) {

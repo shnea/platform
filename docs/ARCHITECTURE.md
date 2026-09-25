@@ -11,7 +11,7 @@
 | 프로젝트 | project-service | platform_project | 프로젝트·환경·중지·재개·설정 동기화·API 키·감사·개발 Mock 로그인 |
 | 파일 | file-service | platform_file | Spring Boot 기동·DB 상태 |
 | 알림 | notification-service | platform_notification | Spring Boot 기동·DB 상태 |
-| Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진 기동 |
+| Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진·프로젝트 realm·소셜 브로커 |
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
 | 인증 초기화 도구 | tools | DB 직접 접근 없음 | setup 프로필로만 실행, 관리자 realm·서비스 계정 설정 |
 
@@ -64,3 +64,13 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 프로젝트별 실제 사용자 분리, 키 폐기, 개발 Mock 로그인과 운영 모드 차단 검사는 [프로젝트·인증 API](PROJECT_API.md)를 참고한다. 실제 소셜 제공자·파일·알림·웹훅·에디터, 백업 복원·부하·Windows 및 Linux amd64 실기동은 아직 별도 검증 대상이다.
 
 관리자 웹은 별도 정적 웹 이미지다. Nginx 30140의 `/`와 `/assets/`에서 프록시하고 호스트 포트·DB 자격증명을 추가하지 않는다. 공개 로그인 설정은 project-service의 `/api/v1/config`에서 읽으므로 운영 주소를 바꿀 때 웹 이미지를 다시 빌드하지 않는다. `.env`의 `PLATFORM_WEB_URL`을 수정한 뒤 인증 초기화를 재실행한다. Node 이미지도 계열 태그이며 출시 시 digest 기록 대상이다.
+
+## 소셜 제공자 확장
+
+구글은 Keycloak 기본 Google 제공자, 카카오는 기본 OIDC 제공자, 네이버는 `infra/keycloak/provider`의 OAuth2 확장을 사용한다. 카카오 서명·issuer 검증과 고정 JWKS 주소를 적용하고 범위는 `openid`로 둔다. 실제 제공 프로필·동의 항목은 앱 설정에 따라 달라진다. [카카오 OIDC 메타데이터](https://kauth.kakao.com/.well-known/openid-configuration)
+
+네이버 확장은 Keycloak이 OAuth 요청·state·코드 교환을 처리하게 하고, 고정된 네이버 프로필 API의 `resultcode`와 `response.id`를 검증해 사용자 식별자로 변환한다. Keycloak이 검증한 콜백의 state를 네이버 토큰 교환 요청에도 전달한다. 사용자명은 외부 ID의 SHA-256으로 만들며 변경 가능한 이메일로 식별하지 않는다. 이메일 미제공 시 Keycloak의 기본 첫 로그인 프로필 입력 정책을 따른다. [네이버 로그인 개발 가이드](https://developers.naver.com/docs/login/devguide/devguide.md)
+
+확장은 별도 서비스가 아닌 Keycloak 이미지 안의 SPI JAR다. Docker 내부의 독립 Gradle Kotlin DSL 빌드로 단위 검사 후 JAR만 복사한다. Java 21·Gradle 9.7.1·Keycloak 의존성 26.7.4를 사용하며, Keycloak 이미지 버전을 바꾸면 확장 의존성·컴파일·기동·실제 로그인 호환성도 함께 검수한다. 추가 포트·DB·운영 소스 마운트는 없다. 표준 프로토콜 구현을 새로 복제하지 않는다.
+
+소셜 설정 원본은 Keycloak 관리 API로 관리한다. 플랫폼 DB에는 감사 이벤트만 기록한다. Keycloak 비밀값을 프론트엔드 응답·로그에 포함하지 않는다. 현재는 설정 관리·확장 빌드·로컬 구성을 검증한 상태이며, 실제 제공자 로그인은 인증 정보를 받은 이후 검수한다.

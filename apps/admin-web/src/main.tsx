@@ -9,6 +9,7 @@ import {
 import { api, auth, initialize, mode } from "./auth";
 import "./style.css";
 import { MockLoginPanel } from "./MockLoginPanel";
+import { SocialProviderPanel } from "./SocialProviderPanel";
 
 type Project = {
   id: string;
@@ -789,6 +790,11 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    <SocialProviderPanel
+                      key={`social:${env.id}:${env.state}`}
+                      environmentId={env.id}
+                      ready={env.state === "READY"}
+                    />
                     {mode === "dev" && env.kind === "DEV" && (
                       <MockLoginPanel
                         key={`${env.id}:${env.state}:${project.status}`}

@@ -46,6 +46,8 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 | `GET /api/v1/admin/projects/{id}/environments` | 환경·issuer·구성 상태 조회 |
 | `POST /api/v1/admin/environments/{id}/provision` | 같은 realm 이름으로 실패·중단 작업 재시도 |
 | `POST /api/v1/admin/environments/{id}/credentials` | 서버 API 키 생성, 원문 1회 응답 |
+| `GET /api/v1/admin/environments/{id}/social-providers` | 소셜 3종의 설정 메타데이터·콜백 조회 |
+| `PUT /api/v1/admin/environments/{id}/social-providers/{provider}` | `kakao`·`naver`·`google` 설정 저장 |
 | `GET /api/v1/admin/environments/{id}/credential-scopes` | 해당 환경에서 발급 가능한 권한의 `code`·`label`·`description` 목록 |
 | `DELETE /api/v1/admin/credentials/{id}` | API 키 즉시 폐기 |
 | `GET /api/v1/admin/audit-events?limit=50` | 최근 관리 이벤트 최대 100건 조회 |
@@ -177,3 +179,38 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 ```
 
 검사는 새 `lifecycle-...` 프로젝트에서 동시 수정 충돌, 콜백·가입 반영, 세션 종료, 중지 중 키·Mock·환경 생성 차단, 중지 중 설정 변경, 재개·폐기를 확인한다. 위의 실패 복구 검사는 Keycloak 자격증명 오류 중 중지·재개 상태 보존과 키 차단도 검증한다.
+
+## 소셜 설정 API
+
+플랫폼 관리자 JWT가 필요하다. 서버 API 키와 최종 이용자 토큰으로는 사용할 수 없다. 환경이 READY여야 하며, 중지된 프로젝트도 설정은 수정할 수 있지만 realm 비활성화는 그대로 유지한다.
+
+조회 결과는 제공자별 `code`, `label`, `alias`, `configured`, `enabled`, `clientId`, `secretConfigured`, `revision`, `callbackUrl`, `activationAllowed`다. 비밀키·Keycloak 비밀키 마스크·관리 토큰은 반환하지 않는다. 미설정 revision은 `unconfigured`다. 조회·저장은 외부 소셜 인증 요청을 실행하지 않는다.
+
+```json
+{
+  "clientId": "<해당 소셜 앱의 클라이언트 ID 또는 REST API 키>",
+  "clientSecret": "<해당 앱의 비밀키>",
+  "enabled": false,
+  "revision": "unconfigured"
+}
+```
+
+- `clientId`: 공백 제외 필수, 최대 512자. `clientSecret`: 최대 4096자. 처음 저장하거나 clientId가 바뀌면 비밀키가 필요하다. 기존 clientId를 유지하면서 비밀키를 생략/null/빈 문자열로 보내면 기존 비밀키를 유지한다. 새 비밀키를 보내면 교체한다.
+- `enabled`와 `revision`은 필수다. 실제 로그인 활성화는 `PLATFORM_MODE=prod`이면서 PROD 환경일 때만 가능하다. 개발 환경에서는 비활성 설정만 보관할 수 있다. 설정 저장을 연결 성공으로 해석하지 않는다.
+- 같은 환경·제공자의 조회 revision으로 저장한다. 프로젝트 행 잠금과 Keycloak 설정 안의 revision을 함께 사용한다. 동시 저장 중 한 건만 성공하고 나머지는 409다. 플랫폼 외부의 Keycloak 직접 편집은 이 충돌 검사의 대상이 아니므로 관리 경로를 혼용하지 않는다.
+- 소셜 설정·비밀키의 원본은 Keycloak이다. 프로젝트 DB에 복제하지 않는다. 키 유지 시 Keycloak 관리 API가 반환한 비밀키 마스크를 그대로 PUT해 원본을 보존한다. 관리 API는 명시적으로 이 동작을 지원한다. [Keycloak 26.7.4 구현](https://github.com/keycloak/keycloak/blob/26.7.4/services/src/main/java/org/keycloak/services/resources/admin/IdentityProviderResource.java)
+- 별칭은 `platform-kakao`, `platform-naver`, `platform-google`로 고정한다. 같은 별칭에 플랫폼 소유 표식이 없는 설정이 있으면 409로 거부하며 덮어쓰지 않는다. 임의 제공자·외부 엔드포인트 URL은 받지 않는다.
+- 잘못된 입력·개발 활성화 400, 권한 없음 401/403, 없는 환경 404, 미반영·revision/소유권 충돌 409, Keycloak 요청 실패 502다. 외부 반영 이후 응답 손실이나 DB 감사 기록 실패가 생길 수 있으므로 실패 후에는 조회부터 다시 하고 최신 revision으로 저장한다.
+- 감사 이벤트는 `social.updated.kakao/naver/google`와 환경 ID만 기록한다. 요청의 키·비밀키는 기록하지 않는다. Keycloak DB·백업 접근은 비밀정보 접근으로 관리해야 한다. 저장 암호화가 자동 제공된다고 가정하지 않는다.
+
+Keycloak의 기본 `first broker login` 흐름과 `trustEmail=false`, `storeToken=false`를 사용한다. 동일 이메일만으로 기존 계정을 자동 연결하지 않는다. Keycloak의 관리자 직접 변경으로 기본 흐름을 완화하면 플랫폼 밖의 변경이므로 운영 설정 검수 대상이다.
+
+소셜 앱에 등록할 콜백은 `{issuer}/broker/{alias}/endpoint`다. 연결 서비스는 기존 realm의 공개 클라이언트 `app`과 Authorization Code + PKCE(S256)를 사용한다. `kc_idp_hint=platform-kakao`처럼 제공자 별칭을 지정하면 해당 제공자로 진입할 수 있다. 이는 실제 활성화 이후의 사용법이며 이번 작업에서는 외부 로그인으로 검증하지 않았다. 서비스 콜백은 환경의 `redirectUris`에 별도로 등록해야 한다. [Keycloak identity brokering](https://www.keycloak.org/docs/latest/server_admin/)
+
+로컬 설정 검증 명령(가짜 키·비활성 제공자만 사용, 외부 소셜 로그인 없음):
+
+```sh
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-social-settings.py
+```
+
+검사 후 가짜 소셜 설정과 검사 API 키를 제거/폐기하고 `social-settings-...` 프로젝트를 중지 상태로 남긴다.

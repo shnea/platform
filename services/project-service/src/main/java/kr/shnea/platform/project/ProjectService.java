@@ -251,6 +251,29 @@ class ProjectService {
                 rs.getTimestamp("expires_at"), rs.getTimestamp("revoked_at"), readScopes(rs)), id);
     }
 
+    List<SocialProvider.Metadata> socialProviders(UUID id) {
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        return identity.socialProviders(env);
+    }
+
+    SocialProvider.Metadata updateSocialProvider(UUID id, String code, ProjectController.SocialSettings request, String actor) {
+        SocialProvider provider = SocialProvider.find(code);
+        return tx.execute(transaction -> {
+            lockProject(findEnvironment(id).projectId());
+            Environment env = findEnvironment(id);
+            requireReady(env);
+            var result = identity.updateSocialProvider(env, provider, request);
+            audit(actor, "social.updated." + provider.code(), id);
+            return result;
+        });
+    }
+
+    private static void requireReady(Environment env) {
+        if (!env.state().equals("READY"))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> readScopes(ResultSet rs) throws SQLException {
         return json.readValue(rs.getString("scopes"), List.class);

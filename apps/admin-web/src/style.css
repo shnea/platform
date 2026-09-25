@@ -424,12 +424,20 @@ dd {
 .keys {
   margin-top: 32px;
 }
-.mock-panel {
+.mock-panel,
+.social-panel {
   margin-top: 32px;
   border-top: 1px solid var(--line);
 }
-.mock-panel form {
+.mock-panel form,
+.social-panel form {
   max-width: 680px;
+}
+.social-panel > label {
+  max-width: 680px;
+}
+.social-callback {
+  user-select: all;
 }
 .mock-result {
   margin-top: 24px;

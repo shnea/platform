@@ -24,6 +24,17 @@ class ProjectController {
     record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
     record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
     record NewCredential(@Future Instant expiresAt, @Size(min=1, max=2) List<@NotBlank String> scopes) {}
+    record SocialSettings(@NotBlank @Size(max=512) String clientId, @Size(max=4096) String clientSecret,
+                          @NotNull Boolean enabled, @NotBlank @Size(max=64) String revision) {
+        @Override public String toString() { return "SocialSettings[redacted]"; }
+    }
+    @GetMapping("/api/v1/admin/environments/{id}/social-providers")
+    Object socialProviders(@PathVariable UUID id) { return service.socialProviders(id); }
+    @PutMapping("/api/v1/admin/environments/{id}/social-providers/{provider}")
+    Object updateSocialProvider(@PathVariable UUID id, @PathVariable String provider,
+                                @Valid @RequestBody SocialSettings request, @AuthenticationPrincipal Jwt user) {
+        return service.updateSocialProvider(id, provider, request, user.getSubject());
+    }
     @PutMapping("/api/v1/admin/projects/{id}")
     Object updateProject(@PathVariable UUID id, @Valid @RequestBody ProjectSettings request, @AuthenticationPrincipal Jwt user) {
         return service.updateProject(id, request.name(), request.status(), request.revision(), user.getSubject());
