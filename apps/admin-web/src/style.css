@@ -438,8 +438,22 @@ dd {
 .social-panel > label {
   max-width: 680px;
 }
+.social-provider-form {
+  max-width: 680px;
+}
+.social-steps {
+  padding-left: 24px;
+  margin-block: 16px;
+}
+.social-steps li + li {
+  margin-top: 8px;
+}
+.social-guide-links {
+  margin-bottom: 16px;
+}
 .social-callback {
-  user-select: all;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
 }
 .mock-result {
   margin-top: 24px;

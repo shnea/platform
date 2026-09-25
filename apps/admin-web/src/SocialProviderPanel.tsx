@@ -7,29 +7,36 @@ type Provider = {
   alias: string;
   configured: boolean;
   enabled: boolean;
-  clientId: string;
-  secretConfigured: boolean;
+  credentialsConfigured: boolean;
   revision: string;
   callbackUrl: string;
   activationAllowed: boolean;
+  sharedCallback: boolean;
+  sharedCallbackUrl: string;
 };
 const guides: Record<
   string,
-  { url: string; text: string; clientLabel: string }
+  { url: string; consoleUrl: string; text: string; callbackLabel: string; clientLabel: string }
 > = {
   kakao: {
     url: "https://developers.kakao.com/docs/ko/kakaologin/prerequisite",
-    text: "카카오 로그인의 OpenID Connect를 켜고 REST API 키와 활성화한 Client Secret을 입력합니다.",
+    consoleUrl: "https://developers.kakao.com/console/app",
+    text: "서비스에 해당하는 앱에서 카카오 로그인과 OpenID Connect를 켭니다. REST API 키와 활성화된 Client Secret을 준비합니다.",
+    callbackLabel: "리다이렉트 URI",
     clientLabel: "REST API 키",
   },
   naver: {
     url: "https://developers.naver.com/docs/login/devguide/devguide.md",
-    text: "네이버 로그인 앱의 Client ID와 Client Secret을 입력합니다. 제공 정보와 검수 상태는 네이버 개발자 센터에서 관리합니다.",
+    consoleUrl: "https://developers.naver.com/apps/#/list",
+    text: "네이버 로그인 애플리케이션에서 서비스 URL·제공 정보·검수 상태를 확인하고 Client ID와 Client Secret을 준비합니다.",
+    callbackLabel: "Callback URL",
     clientLabel: "Client ID",
   },
   google: {
     url: "https://developers.google.com/identity/openid-connect/openid-connect",
-    text: "웹 애플리케이션 유형의 OAuth 클라이언트 ID와 보안 비밀번호를 입력합니다. 승인된 리디렉션 URI에 아래 주소를 추가합니다.",
+    consoleUrl: "https://console.cloud.google.com/auth/clients",
+    text: "Google Auth Platform에서 동의 화면·대상 사용자를 설정하고 웹 애플리케이션 유형의 OAuth 클라이언트를 준비합니다.",
+    callbackLabel: "승인된 리디렉션 URI",
     clientLabel: "클라이언트 ID",
   },
 };
@@ -96,8 +103,9 @@ export function SocialProviderPanel({
         </button>
       </div>
       <p className="small muted">
-        환경마다 별도로 설정합니다. 설정 저장은 실제 로그인 성공을 보장하지
-        않습니다.
+        제공자별 공통 콜백 하나로 모든 프로젝트를 연결합니다. 같은 소셜 앱에
+        주소를 한 번 등록하면 프로젝트가 늘어나도 콜백을 추가하지 않습니다.
+        앱 키는 운영자가 한 번 등록하고, 회원과 로그인 세션은 프로젝트·환경별로 분리합니다.
       </p>
       {!ready ? (
         <p className="warning">
@@ -180,11 +188,11 @@ function ProviderForm({
   onEdit: () => void;
   onSaved: (provider: Provider) => void;
 }) {
-  const [clientId, setClientId] = useState(provider.clientId);
-  const [secret, setSecret] = useState("");
   const [enabled, setEnabled] = useState(provider.enabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const callbackInput = useRef<HTMLTextAreaElement>(null);
   const live = useRef(true);
   useEffect(() => {
     live.current = true;
@@ -193,22 +201,28 @@ function ProviderForm({
     };
   }, []);
   const guide = guides[provider.code];
-  const requiresSecret =
-    !provider.secretConfigured || clientId.trim() !== provider.clientId;
+  async function copyCallback() {
+    setCopyMessage("");
+    try {
+      await navigator.clipboard.writeText(provider.sharedCallbackUrl);
+      if (live.current) setCopyMessage("콜백 URL을 복사했습니다.");
+    } catch {
+      if (!live.current) return;
+      callbackInput.current?.focus();
+      callbackInput.current?.select();
+      setCopyMessage("자동 복사를 사용할 수 없습니다. 선택된 주소를 직접 복사하세요.");
+    }
+  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     onBusy(true);
     setError("");
-    const clientSecret = secret;
-    setSecret("");
     try {
       const result = await api<Provider>(
         `/environments/${environmentId}/social-providers/${provider.code}`,
         "PUT",
         {
-          clientId: clientId.trim(),
-          clientSecret: clientSecret || null,
           enabled,
           revision: provider.revision,
         },
@@ -225,23 +239,46 @@ function ProviderForm({
     }
   }
   return (
-    <div>
-      <p className="small muted">
-        {guide.text}{" "}
-        <a href={guide.url} target="_blank" rel="noreferrer">
-          {provider.label} 설정 안내 ↗
-        </a>
+    <div className="social-provider-form">
+      <ol className="social-steps small">
+        <li>{guide.text}</li>
+        <li>아래 주소를 복사해 외부 콘솔의 <strong>{guide.callbackLabel}</strong>에 그대로 등록합니다.</li>
+        <li>공통 키를 등록한 뒤, 이 프로젝트의 사용 여부를 선택하고 소셜 설정을 저장합니다.</li>
+      </ol>
+      <div className="actions small social-guide-links">
+        <a href={guide.consoleUrl} target="_blank" rel="noreferrer">{provider.label} 개발자 콘솔 (새 탭)</a>
+        <a href={guide.url} target="_blank" rel="noreferrer">{provider.label} 공식 설정 안내 (새 탭)</a>
+      </div>
+      <label>
+        소셜 앱에 등록할 공통 콜백 URL
+        <textarea
+          ref={callbackInput}
+          className="social-callback"
+          readOnly
+          rows={3}
+          value={provider.sharedCallbackUrl}
+          onFocus={(event) => event.currentTarget.select()}
+          aria-describedby="social-callback-hint"
+        />
+      </label>
+      <button type="button" className="secondary" onClick={() => void copyCallback()}>콜백 URL 복사</button>
+      <p role="status" className="small">{copyMessage}</p>
+      <p id="social-callback-hint" className="hint">
+        모든 프로젝트가 함께 사용하는 제공자별 주소입니다. 외부 콘솔에 자동 등록되지는 않습니다.
+        주소 중간을 *로 바꾸지 마세요. 위쪽 로그인 설정의 서비스 콜백과는 별개입니다.
       </p>
-      <dl>
-        <div>
-          <dt>소셜 앱에 등록할 콜백 URL</dt>
-          <dd className="url social-callback">{provider.callbackUrl}</dd>
-        </div>
-      </dl>
       <p className="hint">
-        위 주소를 소셜 앱의 콜백 목록에 추가하세요. 기존 서비스의 콜백 주소는
-        유지합니다. 위쪽 로그인 설정의 서비스 콜백과는 별개입니다.
+        인증 도메인이 바뀌면 새 주소를 등록해야 합니다. 다른 소셜 앱을 사용하면 그 앱에도 같은 주소를 등록하세요.
+        기존 앱 재사용은 제공자의 서비스 범위·정책을 확인하고, 기존 콜백은 유지하세요.
+        카카오는 서비스별 앱을 사용합니다.
       </p>
+      {provider.configured && !provider.sharedCallback && (
+        <p className="warning">
+          이 설정은 아직 기존 개별 콜백을 사용합니다. 외부 콘솔에 위 공통 주소를
+          먼저 등록하세요. 소셜 설정을 저장하면 공통 콜백으로 전환됩니다.
+          기존 주소: <span className="url">{provider.callbackUrl}</span>
+        </p>
+      )}
       {!provider.activationAllowed && (
         <p className="warning">
           개발 모드·DEV 환경은 Mock 로그인을 사용합니다. 실제 소셜 로그인은 운영
@@ -250,41 +287,16 @@ function ProviderForm({
       )}
       <form onSubmit={save} onChange={onEdit}>
         <fieldset disabled={busy}>
-          <label>
-            {guide.clientLabel}
-            <input
-              name="social-client-id"
-              autoComplete="off"
-              required
-              maxLength={512}
-              value={clientId}
-              onChange={(event) => setClientId(event.target.value)}
-            />
-          </label>
-          <label>
-            Client Secret
-            <input
-              type="password"
-              name="social-client-secret"
-              autoComplete="new-password"
-              required={requiresSecret}
-              maxLength={4096}
-              value={secret}
-              onChange={(event) => setSecret(event.target.value)}
-              aria-describedby="social-secret-hint"
-            />
-          </label>
-          <p id="social-secret-hint" className="hint">
-            {requiresSecret
-              ? "처음 저장하거나 앱 키를 바꾸면 해당 앱의 비밀키를 입력해야 합니다."
-              : "비밀키가 등록되어 있습니다. 비워 두면 유지하고, 새 값을 입력하면 교체합니다."}{" "}
-            저장 후 비밀키는 조회할 수 없습니다.
+          <p className={provider.credentialsConfigured ? "small" : "warning"}>
+            {provider.credentialsConfigured
+              ? "공통 소셜 키가 등록되어 있습니다. 프로젝트에서는 사용 여부만 설정하세요."
+              : "공통 소셜 키가 미등록 상태입니다. 운영자가 공통 키를 등록한 뒤 설정을 새로고침하세요."}
           </p>
           <label className="checkbox">
             <input
               type="checkbox"
               checked={enabled}
-              disabled={!provider.activationAllowed && !enabled}
+              disabled={(!provider.activationAllowed || !provider.credentialsConfigured) && !enabled}
               onChange={(event) => setEnabled(event.target.checked)}
             />
             실제 로그인에서 사용
@@ -294,8 +306,7 @@ function ProviderForm({
       </form>
       {error && (
         <p role="alert" className="alert">
-          {error} 저장 결과가 불확실하면 설정을 새로고침해 확인하세요. 비밀키
-          입력은 비웠습니다.
+          {error} 저장 결과가 불확실하면 설정을 새로고침해 확인하세요.
         </p>
       )}
     </div>

@@ -43,30 +43,29 @@ request('GET', api+'/environments/'+str(uuid.uuid4())+'/social-providers', token
 items = request('GET', url, token=admin)
 assert {item['code'] for item in items} == {'kakao','naver','google'}
 assert all(not item['configured'] and not item['activationAllowed'] for item in items)
-allowed = {'code','label','alias','configured','enabled','clientId','secretConfigured','revision','callbackUrl','activationAllowed'}
+allowed = {'code','label','alias','configured','enabled','credentialsConfigured','revision','callbackUrl','activationAllowed','sharedCallback','sharedCallbackUrl'}
 latest = {}
 for item in items:
     provider_url = url+'/'+item['code']
-    payload = dict(clientId='dummy-client', clientSecret='dummy-secret-not-a-real-key', enabled=False, revision=item['revision'])
+    payload = dict(enabled=False, revision=item['revision'])
     request('PUT', provider_url, payload, expected=401)
-    request('PUT', provider_url, dict(payload, clientSecret=None), admin, expected=400)
     request('PUT', provider_url, dict(payload, enabled=True), admin, expected=400)
-    request('PUT', provider_url, dict(payload, clientId=' '), admin, expected=400)
+    request('PUT', provider_url, dict(payload, enabled=None), admin, expected=400)
     first = request('PUT', provider_url, payload, admin)
     assert set(first) == allowed
-    assert first['configured'] and first['secretConfigured'] and not first['enabled']
-    assert first['callbackUrl'] == env['issuer']+'/broker/'+item['alias']+'/endpoint'
+    assert first['configured'] and not first['enabled']
+    assert first['callbackUrl'] == env['issuer'].split('/realms/')[0]+'/social/'+item['code']+'/callback'
+    assert first['sharedCallback']
     assert 'dummy-secret' not in json.dumps(first)
     request('PUT', provider_url, payload, admin, expected=409)
-    request('PUT', provider_url, dict(payload, clientId='changed', clientSecret=None, revision=first['revision']), admin, expected=400)
-    second = request('PUT', provider_url, dict(payload, clientSecret=None, revision=first['revision']), admin)
-    assert second['secretConfigured'] and second['revision'] != first['revision']
+    second = request('PUT', provider_url, dict(payload, revision=first['revision']), admin)
+    assert second['revision'] != first['revision']
     latest[item['code']] = second
 request('PUT', url+'/unknown', payload, admin, expected=400)
 
 # An update race uses the same revision; exactly one writer wins.
 provider_url = url+'/google'
-payload = dict(clientId='dummy-client', clientSecret=None, enabled=False, revision=latest['google']['revision'])
+payload = dict(enabled=False, revision=latest['google']['revision'])
 def race(_):
     data = json.dumps(payload).encode()
     headers = {'Authorization':'Bearer '+admin, 'Content-Type':'application/json'}
@@ -82,13 +81,30 @@ provisioner = request('POST', identity+'/realms/master/protocol/openid-connect/t
 instances = identity+'/admin/realms/'+env['realm']+'/identity-provider/instances'
 for item in items:
     stored = request('GET', instances+'/'+item['alias'], token=provisioner)
-    assert stored['providerId'] == {'kakao':'oidc','naver':'platform-naver','google':'google'}[item['code']]
+    assert stored['providerId'] == 'platform-'+item['code']
     assert not stored['enabled'] and not stored['trustEmail'] and not stored['storeToken']
     assert stored['firstBrokerLoginFlowAlias'] == 'first broker login'
     assert stored['config']['platform.environmentId'] == env['id']
-    assert stored['config']['clientSecret'] and stored['config']['clientSecret'] != 'dummy-secret-not-a-real-key'
+    assert not stored['config'].get('clientSecret') and not stored['config'].get('clientId')
+    assert stored['config']['platform.callbackMode'] == 'shared-v1'
     if item['code'] == 'kakao':
         assert stored['config']['validateSignature'] == 'true' and stored['config']['useJwksUrl'] == 'true'
+
+# A previously managed built-in Google provider can switch without changing its alias/internal ID.
+legacy = request('GET', instances+'/platform-google', token=provisioner)
+legacy['providerId'] = 'google'
+legacy['config'].pop('platform.callbackMode')
+legacy['config'].update(clientId='legacy-dummy-client', clientSecret='legacy-dummy-secret')
+request('PUT', instances+'/platform-google', legacy, provisioner, expected=204)
+metadata = next(item for item in request('GET', url, token=admin) if item['code']=='google')
+assert not metadata['sharedCallback'] and '/broker/' in metadata['callbackUrl']
+assert '/social/google/callback' in metadata['sharedCallbackUrl']
+assert 'legacy-dummy' not in json.dumps(metadata)
+converted = request('PUT', url+'/google', dict(enabled=False, revision=metadata['revision']), admin)
+assert converted['sharedCallback']
+stored = request('GET', instances+'/platform-google', token=provisioner)
+assert stored['internalId'] == legacy['internalId'] and stored['providerId'] == 'platform-google'
+assert not stored['config'].get('clientId') and not stored['config'].get('clientSecret')
 
 before = request('GET', url, token=admin)
 request('POST', eurl+'/provision', token=admin)
@@ -101,5 +117,5 @@ assert {'social.updated.kakao','social.updated.naver','social.updated.google'} <
 assert 'dummy-secret' not in json.dumps(events)
 # Remove dummy settings; leave only the suspended development project for traceability.
 for item in items: request('DELETE', instances+'/'+item['alias'], token=provisioner, expected=204)
-print('PASS local social settings: authorization, validation, secret masking/retention, callback isolation, revisions, race, provider registration, lifecycle preservation, audit')
+print('PASS local social settings: authorization, validation, common credential readiness/non-disclosure, shared callbacks, revisions, race, provider registration, lifecycle preservation, audit')
 print('No external social login attempted. Suspended test project:', p['code'])

@@ -12,6 +12,8 @@ public final class NaverIdentityProviderFactory extends AbstractIdentityProvider
     @Override public String getId() { return "platform-naver"; }
     @Override public OAuth2IdentityProviderConfig createConfig() { return new OAuth2IdentityProviderConfig(); }
     @Override public NaverIdentityProvider create(KeycloakSession session, IdentityProviderModel model) {
-        return new NaverIdentityProvider(session, new OAuth2IdentityProviderConfig(model));
+        var config = new OAuth2IdentityProviderConfig(model);
+        SocialCredentials.apply(config, "naver");
+        return new NaverIdentityProvider(session, config);
     }
 }

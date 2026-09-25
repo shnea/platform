@@ -36,10 +36,7 @@ class ProjectController {
                                        @AuthenticationPrincipal Jwt user) {
         return service.updateAuthenticationPolicy(id, request, user.getSubject());
     }
-    record SocialSettings(@NotBlank @Size(max=512) String clientId, @Size(max=4096) String clientSecret,
-                          @NotNull Boolean enabled, @NotBlank @Size(max=64) String revision) {
-        @Override public String toString() { return "SocialSettings[redacted]"; }
-    }
+    record SocialSettings(@NotNull Boolean enabled, @NotBlank @Size(max=64) String revision) {}
     @GetMapping("/api/v1/admin/environments/{id}/social-providers")
     Object socialProviders(@PathVariable UUID id) { return service.socialProviders(id); }
     @PutMapping("/api/v1/admin/environments/{id}/social-providers/{provider}")

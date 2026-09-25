@@ -14,6 +14,8 @@ import org.keycloak.http.simple.SimpleHttp;
 import org.keycloak.http.simple.SimpleHttpResponse;
 import org.keycloak.http.simple.SimpleHttpRequest;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.broker.provider.AuthenticationRequest;
+import jakarta.ws.rs.core.Response;
 
 public final class NaverIdentityProvider extends AbstractOAuth2IdentityProvider implements SocialIdentityProvider {
     private static final String PROFILE_URL = "https://openapi.naver.com/v1/nid/me";
@@ -27,7 +29,12 @@ public final class NaverIdentityProvider extends AbstractOAuth2IdentityProvider 
 
     @Override protected String getDefaultScopes() { return ""; }
 
+    @Override public Response performLogin(AuthenticationRequest request) {
+        return SharedSocialCallback.begin(session, getConfig(), "naver", request, super.performLogin(request));
+    }
+
     @Override public SimpleHttpRequest authenticateTokenRequest(SimpleHttpRequest request) {
+        SharedSocialCallback.tokenRequest(session, getConfig(), "naver", request);
         // The inherited callback verifies state before requesting a token. Naver also
         // requires that value in the code exchange; refresh requests have no state.
         String state = session.getContext().getUri().getQueryParameters().getFirst("state");

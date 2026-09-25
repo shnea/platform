@@ -8,9 +8,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 record SocialProvider(String code, String label, String providerId) {
     static final List<SocialProvider> ALL = List.of(
-        new SocialProvider("kakao", "카카오", "oidc"),
+        new SocialProvider("kakao", "카카오", "platform-kakao"),
         new SocialProvider("naver", "네이버", "platform-naver"),
-        new SocialProvider("google", "구글", "google"));
+        new SocialProvider("google", "구글", "platform-google"));
 
     static SocialProvider find(String code) {
         return ALL.stream().filter(p -> p.code.equals(code)).findFirst()
@@ -23,6 +23,7 @@ record SocialProvider(String code, String label, String providerId) {
         var config = new HashMap<String, String>();
         config.put("syncMode", "IMPORT");
         config.put("clientAuthMethod", "client_secret_post");
+        config.put("platform.callbackMode", "shared-v1");
         if (code.equals("kakao")) {
             config.put("authorizationUrl", "https://kauth.kakao.com/oauth/authorize");
             config.put("tokenUrl", "https://kauth.kakao.com/oauth/token");
@@ -38,7 +39,12 @@ record SocialProvider(String code, String label, String providerId) {
         return config;
     }
 
+    boolean acceptsProviderId(Object id) {
+        return providerId.equals(id) || (code.equals("kakao") && "oidc".equals(id))
+            || (code.equals("google") && "google".equals(id));
+    }
+
     record Metadata(String code, String label, String alias, boolean configured, boolean enabled,
-                    String clientId, boolean secretConfigured, String revision, String callbackUrl,
-                    boolean activationAllowed) {}
+                    boolean credentialsConfigured, String revision, String callbackUrl,
+                    boolean activationAllowed, boolean sharedCallback, String sharedCallbackUrl) {}
 }

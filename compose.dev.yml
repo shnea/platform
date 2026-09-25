@@ -1,4 +1,18 @@
 services:
+  notification-check:
+    profiles: [test]
+    image: python:3.13-alpine
+    environment:
+      NCP_ACCESS_KEY: ${NCP_ACCESS_KEY:-}
+      NCP_SECRET_KEY: ${NCP_SECRET_KEY:-}
+      NCP_SMS_SERVICE_ID: ${NCP_SMS_SERVICE_ID:-}
+      NCP_MAIL_SENDER_ADDRESS: ${NCP_MAIL_SENDER_ADDRESS:-}
+      NCP_MAIL_SENDER_NAME: ${NCP_MAIL_SENDER_NAME:-SHNEA}
+      NCP_SMS_SENDER_NUMBER: ${NCP_SMS_SENDER_NUMBER:-}
+      NCP_TEST_EMAIL: ${NCP_TEST_EMAIL:-}
+      NCP_TEST_PHONE: ${NCP_TEST_PHONE:-}
+    volumes: ["./scripts:/checks:ro"]
+    command: [python, /checks/check-ncp-live.py, --help]
   admin-web:
     build: ./apps/admin-web
     pull_policy: build

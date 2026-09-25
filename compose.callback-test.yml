@@ -1,0 +1,34 @@
+# Isolated test realm/database and dummy credentials; no host ports or production volumes.
+services:
+  callback-keycloak:
+    image: register.shnea.kr/platform-keycloak:${IMAGE_TAG:-0.1.0-dev}
+    command: [start-dev, --db=dev-mem]
+    mem_limit: 1024m
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: callback-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: callback-test-only
+      KC_HOSTNAME: http://callback-keycloak:8080/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      KC_HEALTH_ENABLED: "true"
+      PLATFORM_MODE: prod
+      SOCIAL_NAVER_CLIENT_ID: callback-test-client
+      SOCIAL_NAVER_CLIENT_SECRET: callback-test-secret
+      SOCIAL_KAKAO_CLIENT_ID: callback-test-client
+      SOCIAL_KAKAO_CLIENT_SECRET: callback-test-secret
+      SOCIAL_GOOGLE_CLIENT_ID: callback-test-client
+      SOCIAL_GOOGLE_CLIENT_SECRET: callback-test-secret
+    healthcheck:
+      test: [CMD, bash, -ec, "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 5s
+      retries: 30
+      start_period: 90s
+  callback-check:
+    image: python:3.13-alpine
+    depends_on:
+      callback-keycloak: {condition: service_healthy}
+    volumes: ["./scripts:/checks:ro"]
+    command: [python, /checks/check-shared-callback.py]
+networks:
+  default:
+    internal: true

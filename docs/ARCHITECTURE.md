@@ -67,12 +67,14 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 
 ## 소셜 제공자 확장
 
-구글은 Keycloak 기본 Google 제공자, 카카오는 기본 OIDC 제공자, 네이버는 `infra/keycloak/provider`의 OAuth2 확장을 사용한다. 카카오 서명·issuer 검증과 고정 JWKS 주소를 적용하고 범위는 `openid`로 둔다. 실제 제공 프로필·동의 항목은 앱 설정에 따라 달라진다. [카카오 OIDC 메타데이터](https://kauth.kakao.com/.well-known/openid-configuration)
+외부 소셜 콜백은 `/auth/social/{naver|kakao|google}/callback`으로 고정한다. Nginx는 이를 기존 master realm의 `platform-social` REST 확장으로 전달한다. master는 라우팅 리소스를 호스팅할 뿐 회원·소셜 연결·로그인 세션을 저장하는 공통 broker가 아니다. 사용자 인증은 원래 프로젝트 realm에서 완료한다. 자세한 실행·검증 방법은 [공통 소셜 로그인](SOCIAL_LOGIN.md)을 따른다.
+
+구글·카카오는 각각 Keycloak 기본 Google·OIDC 구현을 상속한 `platform-google`·`platform-kakao`, 네이버는 `platform-naver` OAuth2 확장을 사용한다. 공통 콜백·토큰 교환 주소만 보완하고 기본 프로필·서명 검증을 재사용한다. 카카오 서명·issuer 검증과 고정 JWKS 주소를 적용하고 범위는 `openid`로 둔다. 실제 제공 프로필·동의 항목은 앱 설정에 따라 달라진다. [카카오 OIDC 메타데이터](https://kauth.kakao.com/.well-known/openid-configuration)
 
 네이버 확장은 Keycloak이 OAuth 요청·state·코드 교환을 처리하게 하고, 고정된 네이버 프로필 API의 `resultcode`와 `response.id`를 검증해 사용자 식별자로 변환한다. Keycloak이 검증한 콜백의 state를 네이버 토큰 교환 요청에도 전달한다. 사용자명은 외부 ID의 SHA-256으로 만들며 변경 가능한 이메일로 식별하지 않는다. 이메일 미제공 시 Keycloak의 기본 첫 로그인 프로필 입력 정책을 따른다. [네이버 로그인 개발 가이드](https://developers.naver.com/docs/login/devguide/devguide.md)
 
 확장은 별도 서비스가 아닌 Keycloak 이미지 안의 SPI JAR다. Docker 내부의 독립 Gradle Kotlin DSL 빌드로 단위 검사 후 JAR만 복사한다. Java 21·Gradle 9.7.1·Keycloak 의존성 26.7.4를 사용하며, Keycloak 이미지 버전을 바꾸면 확장 의존성·컴파일·기동·실제 로그인 호환성도 함께 검수한다. 추가 포트·DB·운영 소스 마운트는 없다. 표준 프로토콜 구현을 새로 복제하지 않는다.
 
-소셜 설정 원본은 Keycloak 관리 API로 관리한다. 플랫폼 DB에는 감사 이벤트만 기록한다. Keycloak 비밀값을 프론트엔드 응답·로그에 포함하지 않는다. 현재는 설정 관리·확장 빌드·로컬 구성을 검증한 상태이며, 실제 제공자 로그인은 인증 정보를 받은 이후 검수한다.
+소셜 제공자 사용 설정은 Keycloak 관리 API로 관리한다. 공통 Client ID·Secret 원본은 `.env`이며 Keycloak 컨테이너 환경변수에서 읽는다. 새 공통 설정에는 키를 realm DB에 복제하지 않는다. 프로젝트 서비스는 내부 REST 확장에서 값 없는 준비 여부만 읽는다. 플랫폼 DB에는 감사 이벤트만 기록한다. 비밀값을 프론트엔드 응답·로그에 포함하지 않는다. 현재는 설정 관리·확장 빌드·로컬 구성을 검증한 상태이며, 실제 제공자 로그인은 인증 정보를 받은 이후 검수한다.
 
 가입·복구 정책도 Keycloak realm을 원본으로 사용하며 플랫폼에는 감사 이력만 저장한다. 일반 가입·콜백은 기존 프로젝트 DB 소유를 유지한다. 두 설정 변경 모두 같은 프로젝트 잠금으로 직렬화한다. 기존 realm에는 새 비밀번호 기본값을 소급 적용하지 않는다. NCP 이메일 발송과 개발 모의 수신함은 후속 구현 대상이다.

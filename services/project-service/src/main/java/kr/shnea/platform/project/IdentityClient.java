@@ -84,7 +84,8 @@ class IdentityClient {
 
     List<SocialProvider.Metadata> socialProviders(ProjectService.Environment env) {
         String admin = ownedRealmToken(env);
-        return SocialProvider.ALL.stream().map(provider -> socialMetadata(env, provider, readSocial(env, provider, admin))).toList();
+        var readiness = socialReadiness();
+        return SocialProvider.ALL.stream().map(provider -> socialMetadata(env, provider, readSocial(env, provider, admin), readiness)).toList();
     }
 
     SocialProvider.Metadata updateSocialProvider(ProjectService.Environment env, SocialProvider provider,
@@ -93,22 +94,15 @@ class IdentityClient {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Real social login requires production mode and a PROD environment");
         String admin = ownedRealmToken(env);
         Map<String, Object> current = readSocial(env, provider, admin);
-        var metadata = socialMetadata(env, provider, current);
+        var readiness = socialReadiness();
+        var metadata = socialMetadata(env, provider, current, readiness);
         if (!metadata.revision().equals(request.revision()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Social settings changed; reload before saving");
-        Map<?, ?> previous = current == null ? Map.of() : (Map<?, ?>) current.get("config");
-        String clientId = request.clientId().strip();
-        String clientSecret = request.clientSecret();
-        if (clientSecret == null || clientSecret.isBlank()) {
-            if (!metadata.secretConfigured() || !clientId.equals(metadata.clientId()))
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A new client ID requires its client secret");
-            // Keycloak returns a masked secret and explicitly preserves it on PUT.
-            clientSecret = (String) previous.get("clientSecret");
-        }
+        if (request.enabled() && !metadata.credentialsConfigured())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Common social credentials are not configured");
         var config = provider.config();
-        config.put("clientId", clientId);
-        config.put("clientSecret", clientSecret);
         config.put("platform.environmentId", env.id().toString());
+        config.put("platform.environmentKind", env.kind());
         config.put("platform.revision", UUID.randomUUID().toString());
         var representation = new java.util.HashMap<String, Object>();
         representation.put("alias", provider.alias());
@@ -135,7 +129,7 @@ class IdentityClient {
             http.put().uri(path + "/" + provider.alias()).headers(h -> h.setBearerAuth(admin))
                 .body(representation).retrieve().toBodilessEntity();
         }
-        return socialMetadata(env, provider, readSocial(env, provider, admin));
+        return socialMetadata(env, provider, readSocial(env, provider, admin), readiness);
     }
 
     private boolean activationAllowed(ProjectService.Environment env) {
@@ -162,7 +156,7 @@ class IdentityClient {
                 .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
             if (result == null || !(result.get("config") instanceof Map<?, ?> config)
                     || !env.id().toString().equals(config.get("platform.environmentId"))
-                    || !provider.providerId().equals(result.get("providerId"))
+                    || !provider.acceptsProviderId(result.get("providerId"))
                     || !(config.get("platform.revision") instanceof String revision) || revision.isBlank())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Unmanaged social provider; inspect Keycloak settings");
             return result;
@@ -172,14 +166,22 @@ class IdentityClient {
         }
     }
 
-    private SocialProvider.Metadata socialMetadata(ProjectService.Environment env, SocialProvider provider, Map<String, Object> data) {
+    @SuppressWarnings("unchecked")
+    private Map<String, Boolean> socialReadiness() {
+        return http.get().uri("/realms/master/platform-social/configuration").retrieve().body(Map.class);
+    }
+
+    private SocialProvider.Metadata socialMetadata(ProjectService.Environment env, SocialProvider provider, Map<String, Object> data,
+                                                    Map<String, Boolean> readiness) {
         Map<?, ?> config = data == null ? Map.of() : (Map<?, ?>) data.get("config");
+        boolean shared = data == null || "shared-v1".equals(config.get("platform.callbackMode"));
         return new SocialProvider.Metadata(provider.code(), provider.label(), provider.alias(), data != null,
             data != null && Boolean.TRUE.equals(data.get("enabled")),
-            config.get("clientId") instanceof String id ? id : "",
-            config.get("clientSecret") instanceof String secret && !secret.isBlank(),
+            readiness != null && Boolean.TRUE.equals(readiness.get(provider.code())),
             config.get("platform.revision") instanceof String revision ? revision : "unconfigured",
-            issuer(env.realm()) + "/broker/" + provider.alias() + "/endpoint", activationAllowed(env));
+            shared ? publicUrl + "/social/" + provider.code() + "/callback"
+                : issuer(env.realm()) + "/broker/" + provider.alias() + "/endpoint", activationAllowed(env), shared,
+            publicUrl + "/social/" + provider.code() + "/callback");
     }
 
     @SuppressWarnings("unchecked")
