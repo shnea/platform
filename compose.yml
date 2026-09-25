@@ -1,0 +1,133 @@
+name: ${COMPOSE_PROJECT_NAME:-shnea-platform}
+
+x-runtime: &runtime
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  stop_grace_period: 30s
+
+x-api: &api
+  <<: *runtime
+  networks: [app, database]
+  depends_on:
+    db: {condition: service_healthy}
+  healthcheck:
+    test: [CMD, curl, -fsS, --max-time, "4", "http://localhost:8080/actuator/health/readiness"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 60s
+
+services:
+  db:
+    <<: *runtime
+    image: register.shnea.kr/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
+    mem_limit: ${DB_MEMORY:-512m}
+    cpus: ${DB_CPUS:-1.0}
+    networks: [database]
+    environment:
+      POSTGRES_USER: platform_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env first}
+      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
+      FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Generate .env first}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Generate .env first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  keycloak:
+    <<: *runtime
+    image: register.shnea.kr/platform-keycloak:${IMAGE_TAG:?Set IMAGE_TAG}
+    command: [start, --optimized]
+    mem_limit: ${KEYCLOAK_MEMORY:-1024m}
+    cpus: ${KEYCLOAK_CPUS:-2.0}
+    networks: [app, database]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/platform_identity
+      KC_DB_USERNAME: platform_identity
+      KC_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Generate .env first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Generate .env first}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      KC_PROXY_HEADERS: xforwarded
+      KC_DB_POOL_INITIAL_SIZE: "1"
+      KC_DB_POOL_MIN_SIZE: "1"
+      KC_DB_POOL_MAX_SIZE: "5"
+      JAVA_OPTS_KC_HEAP: -XX:MaxRAMPercentage=60
+    healthcheck:
+      test: [CMD, bash, -ec, "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+
+  project-service:
+    <<: *api
+    image: register.shnea.kr/platform-project-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    mem_limit: ${PROJECT_MEMORY:-512m}
+    cpus: ${PROJECT_CPUS:-1.0}
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/platform_project
+      DB_USERNAME: platform_project
+      DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError}
+
+  file-service:
+    <<: *api
+    image: register.shnea.kr/platform-file-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    mem_limit: ${FILE_MEMORY:-512m}
+    cpus: ${FILE_CPUS:-1.0}
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/platform_file
+      DB_USERNAME: platform_file
+      DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError}
+
+  notification-service:
+    <<: *api
+    image: register.shnea.kr/platform-notification-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    mem_limit: ${NOTIFICATION_MEMORY:-512m}
+    cpus: ${NOTIFICATION_CPUS:-1.0}
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/platform_notification
+      DB_USERNAME: platform_notification
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Generate .env first}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError}
+
+  nginx:
+    <<: *runtime
+    image: register.shnea.kr/platform-nginx:${IMAGE_TAG:?Set IMAGE_TAG}
+    mem_limit: ${NGINX_MEMORY:-64m}
+    cpus: ${NGINX_CPUS:-0.5}
+    networks: [app]
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-30140}:8080"
+    healthcheck:
+      test: [CMD, wget, -q, --spider, "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app:
+  database:
+    internal: true
+
+volumes:
+  postgres-data:

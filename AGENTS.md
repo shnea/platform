@@ -11,6 +11,7 @@
 ## 변경 범위
 
 - 주요 합의: Keycloak, 프로젝트별 계정 분리, MSA, Docker·Compose, 새 프로젝트 전용 적용.
+- 백엔드 빌드는 Gradle(Kotlin DSL)을 사용한다.
 - 기존 login·file-service·notify 코드를 복사하지 않는다. 기존 서비스·데이터·설정을 임의로 변경하지 않는다.
 - 기본 외부 진입은 Nginx 30140이다. DB 외부 포트는 30141, 추가 외부 포트는 30142부터 순차 배정한다. 내부 전용 서비스는 Docker 네트워크로 통신한다.
 - 자체 이미지는 `register.shnea.kr/platform-이미지명:태그`로 관리한다. 운영은 이미지와 Compose·환경변수 중심으로 배포한다.

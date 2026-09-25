@@ -433,6 +433,7 @@ NCP의 SENS·Cloud Outbound Mailer 통합 안내를 기준으로 사용 중인 �
 
 - 개발과 운영은 Docker 기반으로 구성한다.
 - 운영 배포는 빌드된 이미지와 Compose 설정을 사용한다.
+- 백엔드 빌드 도구는 Gradle을 사용한다. 빌드는 Docker 내부에서 실행한다.
 - 인증 엔진은 Keycloak을 사용한다. 자체 인증 서버를 별도로 개발하는 안은 채택하지 않는다.
 - 내부 서비스는 MSA 방식으로 개발·배포한다.
 - 에디터는 React·Vue용 패키지와 JSP·일반 HTML/JavaScript용 버전별 JS·CSS로 제공한다.
@@ -448,15 +449,15 @@ NCP의 SENS·Cloud Outbound Mailer 통합 안내를 기준으로 사용 중인 �
 
 ### 기술 구성 — 확정 사항과 후보
 
-Keycloak·MSA·Docker Compose·에디터 배포 방식은 확정이다. 아래 언어·프레임워크·DB 및 세부 서비스 경계는 이 제약에 맞춘 설계 후보이며 버전을 포함해 구현 착수 시 구체화한다.
+Keycloak·MSA·Docker Compose·Gradle·에디터 배포 방식은 확정이다. 첫 실행 기반에는 Java 21·Spring Boot 4.1.1·Gradle 9.7.1·PostgreSQL 17.11을 적용했다. 실제 이미지와 서비스 경계는 [실행 기반 문서](ARCHITECTURE.md)를 따른다. 프론트엔드·에디터 등 아직 구현하지 않은 영역은 아래 후보를 검토한다.
 
 | 영역 | 추천 | 선택 이유·조건 |
 |---|---|---|
 | 관리자 웹 | React + TypeScript + Vite | 관리 기능 중심의 웹 앱 구성; 서버 렌더링 요구는 현재 없음 |
 | 에디터·뷰어 | 공통 TypeScript 코어·UI + React·Vue·일반 JS 연결 | Tiptap/ProseMirror 우선 검토; 독립 배포와 문서 형식 호환 필요 |
-| 서비스별 API | Java + Spring Boot | 프로젝트 관리·파일·알림을 독립 서비스로 구성 |
+| 서비스별 API | Java + Spring Boot + Gradle — 적용 | 프로젝트 관리·파일·알림을 독립 서비스로 구성 |
 | 인증 엔진 | Keycloak — 확정 | 프로젝트별 인증 영역과 표준 로그인·계정 관리 |
-| DB | PostgreSQL | 서비스별 DB·접속 계정 분리; 초기에는 하나의 DB 서버에 별도 DB를 두는 안 검토 |
+| DB | PostgreSQL — 적용 | 하나의 DB 서버에 서비스별 DB·접속 계정을 분리 |
 | 파일 저장 | 초기에는 Docker 영속 볼륨 | 단일 운영 서버 전제의 간단한 구성; 다중 서버·대규모 파일이면 오브젝트 스토리지 재검토 |
 | 알림 작업 | DB에 저장한 작업을 백그라운드 처리 | 접수 데이터와 재시도 상태를 영속화; 초기에는 별도 메시지 브로커 없이 시작 |
 | 로그 | 구조화된 컨테이너 로그 + DB 감사 기록 | 회전·용량 제한과 조회 범위를 정하고 플랫폼 진단에 집중 |

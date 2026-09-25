@@ -1,0 +1,57 @@
+services:
+  db:
+    build: ./infra/postgres
+    pull_policy: build
+    networks: [database, db-access]
+    ports:
+      - "127.0.0.1:${DB_PORT:-30141}:5432"
+  keycloak:
+    build: ./infra/keycloak
+    pull_policy: build
+  nginx:
+    build: ./infra/nginx
+    pull_policy: build
+  project-service:
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: project-service}
+    pull_policy: build
+  file-service:
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: file-service}
+    pull_policy: build
+  notification-service:
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: notification-service}
+    pull_policy: build
+
+  smoke:
+    profiles: [test]
+    image: python:3.13-alpine
+    networks: [app]
+    environment:
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL}
+    volumes: ["./scripts:/checks:ro"]
+    command: [python, /checks/smoke.py]
+
+  db-check:
+    profiles: [test]
+    image: register.shnea.kr/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
+    pull_policy: never
+    networks: [database]
+    environment:
+      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
+      FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Generate .env first}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Generate .env first}
+    volumes: ["./scripts:/checks:ro"]
+    entrypoint: [sh, /checks/check-db.sh]
+
+networks:
+  # A separate bridge enables localhost publishing while runtime DB stays internal.
+  db-access:
