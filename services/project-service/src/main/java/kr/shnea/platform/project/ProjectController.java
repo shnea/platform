@@ -9,6 +9,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,6 +26,16 @@ class ProjectController {
     record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
     record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
     record NewCredential(@Future Instant expiresAt, @Size(min=1, max=2) List<@NotBlank String> scopes) {}
+    record AuthenticationSettings(@NotNull Boolean loginWithEmail, @NotNull Boolean verifyEmail,
+                                  @NotNull Boolean resetPasswordAllowed, @NotNull @Min(12) @Max(128) Integer passwordMinLength,
+                                  @NotBlank @Size(max=64) String revision) {}
+    @GetMapping("/api/v1/admin/environments/{id}/authentication-policy")
+    Object authenticationPolicy(@PathVariable UUID id) { return service.authenticationPolicy(id); }
+    @PutMapping("/api/v1/admin/environments/{id}/authentication-policy")
+    Object updateAuthenticationPolicy(@PathVariable UUID id, @Valid @RequestBody AuthenticationSettings request,
+                                       @AuthenticationPrincipal Jwt user) {
+        return service.updateAuthenticationPolicy(id, request, user.getSubject());
+    }
     record SocialSettings(@NotBlank @Size(max=512) String clientId, @Size(max=4096) String clientSecret,
                           @NotNull Boolean enabled, @NotBlank @Size(max=64) String revision) {
         @Override public String toString() { return "SocialSettings[redacted]"; }

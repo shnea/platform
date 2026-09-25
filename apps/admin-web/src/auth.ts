@@ -52,6 +52,12 @@ export async function api<T>(
       messages[409] =
         "환경이 미반영 상태이거나 소셜 설정이 변경되었습니다. 새로고침 후 확인해 주세요. 계속되면 Keycloak의 동일 별칭 설정을 확인하세요.";
     }
+    if (path.includes("/authentication-policy")) {
+      messages[400] =
+        "비밀번호 최소 길이는 12~128자여야 합니다. 이메일 인증·복구는 발송 설정이 있는 운영 모드의 PROD 환경에서만 켤 수 있습니다.";
+      messages[409] =
+        "환경이 미반영 상태이거나 정책이 변경되었습니다. 새로고침 후 확인해 주세요. 계속되면 Keycloak의 별도 비밀번호 규칙·이메일 중복 설정을 확인하세요.";
+    }
     throw new Error(
       messages[response.status] ??
         "서버에서 처리하지 못했습니다. 상태를 새로고침한 뒤 다시 시도해 주세요.",

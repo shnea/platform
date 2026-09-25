@@ -10,6 +10,7 @@ import { api, auth, initialize, mode } from "./auth";
 import "./style.css";
 import { MockLoginPanel } from "./MockLoginPanel";
 import { SocialProviderPanel } from "./SocialProviderPanel";
+import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 
 type Project = {
   id: string;
@@ -790,6 +791,11 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    <AuthenticationPolicyPanel
+                      key={`policy:${env.id}:${env.state}`}
+                      environmentId={env.id}
+                      ready={env.state === "READY"}
+                    />
                     <SocialProviderPanel
                       key={`social:${env.id}:${env.state}`}
                       environmentId={env.id}

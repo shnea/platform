@@ -46,6 +46,8 @@ password=<로컬 PLATFORM_ADMIN_PASSWORD>
 | `GET /api/v1/admin/projects/{id}/environments` | 환경·issuer·구성 상태 조회 |
 | `POST /api/v1/admin/environments/{id}/provision` | 같은 realm 이름으로 실패·중단 작업 재시도 |
 | `POST /api/v1/admin/environments/{id}/credentials` | 서버 API 키 생성, 원문 1회 응답 |
+| `GET /api/v1/admin/environments/{id}/authentication-policy` | 이메일 로그인·인증·비밀번호 재설정·비밀번호 길이 정책 조회 |
+| `PUT /api/v1/admin/environments/{id}/authentication-policy` | 환경별 가입·복구 정책 저장 |
 | `GET /api/v1/admin/environments/{id}/social-providers` | 소셜 3종의 설정 메타데이터·콜백 조회 |
 | `PUT /api/v1/admin/environments/{id}/social-providers/{provider}` | `kakao`·`naver`·`google` 설정 저장 |
 | `GET /api/v1/admin/environments/{id}/credential-scopes` | 해당 환경에서 발급 가능한 권한의 `code`·`label`·`description` 목록 |
@@ -214,3 +216,33 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 ```
 
 검사 후 가짜 소셜 설정과 검사 API 키를 제거/폐기하고 `social-settings-...` 프로젝트를 중지 상태로 남긴다.
+
+## 가입·계정 복구 정책
+
+기존 `registrationAllowed`는 일반 자체 가입 허용 여부이며 환경 생성·설정 API에서 계속 관리한다. 소셜 가입 허용이나 초대 가입을 의미하지 않는다. 추가 정책은 `/api/v1/admin/environments/{id}/authentication-policy`에서 관리한다. 관리자 JWT와 READY 환경이 필요하다. 프로젝트 중지 중에도 정책은 수정할 수 있지만 로그인 realm을 활성화하지 않는다.
+
+```json
+{
+  "loginWithEmail": true,
+  "verifyEmail": false,
+  "resetPasswordAllowed": false,
+  "passwordMinLength": 12,
+  "revision": "unconfigured"
+}
+```
+
+모든 필드는 필수다. `passwordMinLength`는 12~128의 정수이며 최대 길이는 항상 128자로 설정한다. 새 환경은 `length(12) and maxLength(128)`을 사용한다. 기존 환경은 자동 변경하지 않으며, 최소 길이가 없으면 GET의 `passwordMinLength`는 0이다. UI의 제안 값 12를 저장해야 반영된다. 별도 규칙이 있으면 -1과 `passwordPolicyEditable=false`를 반환하고 저장은 409로 거부한다. 관리 가능한 규칙은 비어 있는 정책, `length(n)`, `length(n) and maxLength(128)`이며 그 외 Keycloak 수동 설정을 약화하거나 삭제하지 않는다.
+
+`loginWithEmail`은 기존 아이디 외에 이메일로도 로그인할 수 있는지다. 아이디 자체가 이메일인 계정의 아이디를 바꾸지는 않는다. `verifyEmail`을 켜면 기존 미인증 계정도 이후 로그인에서 이메일 확인을 요구받을 수 있다. `resetPasswordAllowed`는 Keycloak의 이메일 기반 자격증명 복구 흐름을 사용한다. 소셜 제공자의 비밀번호를 변경하지 않는다. 플랫폼 관리자 realm·MFA 복구 정책은 이 API의 대상이 아니다. [Keycloak 로그인·복구 설정](https://www.keycloak.org/docs/latest/server_admin/)
+
+조회는 위의 설정과 `passwordPolicyEditable`, `emailActionsAvailable`을 반환한다. 이메일 관련 두 옵션의 활성화는 운영 모드·PROD 환경·Keycloak 이메일 설정이 모두 준비되어야 하며 아니면 400이다. 현재 이메일 준비 여부는 해당 realm SMTP의 host·from 존재로 확인한다. 이 값은 발송 성공 확인이 아니며, NCP 발송 어댑터와 개발 모의 수신함은 아직 구현 전이다. 개발 환경에서 실제 이메일을 사용하게 만들지 않는다. 기존에 켜진 이메일 정책을 끄는 변경은 가능하다. 이메일 중복 허용이 수동 설정된 realm에서 이메일 로그인을 켜려 하면 409로 거부한다.
+
+정책은 Keycloak을 원본으로 사용한다. 프로젝트 DB에는 `authentication.policy.updated` 감사 이벤트만 기록한다. Keycloak realm 속성의 `platform.authPolicyRevision`과 프로젝트 행 잠금으로 플랫폼 내 동시 수정을 검사한다. 조회한 revision으로 저장하며 성공 시 새로운 revision을 반환한다. 오래된 revision은 409다. 다른 관리자가 Keycloak을 직접 편집하는 경로와 동시에 사용하지 않는다. 502나 통신 실패가 나면 이미 반영되었을 수 있으므로 다시 조회한 뒤 저장한다.
+
+기존 일반 가입·콜백 변경, 프로젝트 중지·재개와 realm 재반영은 추가 정책을 보존한다. 기존 비밀번호·사용자별 별도 필수 작업·현재 세션은 변경하지 않는다. 비밀번호 길이 규칙은 새 가입·비밀번호 변경/재설정부터 적용한다. 정책을 저장해도 사용자 이메일 발송이나 실제 로그인 검사를 실행하지 않는다.
+
+```sh
+docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-authentication-policy.py
+```
+
+검사는 가짜 로컬 계정에 대한 비밀번호 설정으로 길이 제한을 확인한 뒤 계정을 삭제한다. 이메일·외부 소셜 로그인은 실행하지 않으며 검사 API 키는 폐기하고 프로젝트는 중지 상태로 남긴다.

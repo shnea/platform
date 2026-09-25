@@ -39,6 +39,49 @@ class IdentityClient {
 
     String issuer(String realm) { return publicUrl + "/realms/" + realm; }
 
+    AuthenticationPolicy authenticationPolicy(ProjectService.Environment env) {
+        String admin = ownedRealmToken(env);
+        return policyMetadata(env, readRealm(env.realm(), admin));
+    }
+
+    AuthenticationPolicy updateAuthenticationPolicy(ProjectService.Environment env, ProjectController.AuthenticationSettings request) {
+        String admin = ownedRealmToken(env);
+        Map<String, Object> realm = readRealm(env.realm(), admin);
+        var current = policyMetadata(env, realm);
+        if (!current.revision().equals(request.revision()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Authentication policy changed; reload before saving");
+        if (!current.passwordPolicyEditable())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Custom Keycloak password rules must be reviewed before editing");
+        if ((request.verifyEmail() || request.resetPasswordAllowed()) && !current.emailActionsAvailable())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email actions require production mode, PROD environment and email configuration");
+        if (request.loginWithEmail() && Boolean.TRUE.equals(realm.get("duplicateEmailsAllowed")))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate email policy must be resolved first");
+        @SuppressWarnings("unchecked")
+        var attributes = new java.util.HashMap<String, Object>((Map<String, Object>) realm.get("attributes"));
+        attributes.put("platform.authPolicyRevision", UUID.randomUUID().toString());
+        http.put().uri("/admin/realms/" + env.realm()).headers(h -> h.setBearerAuth(admin))
+            .body(Map.of("loginWithEmailAllowed", request.loginWithEmail(), "verifyEmail", request.verifyEmail(),
+                "resetPasswordAllowed", request.resetPasswordAllowed(),
+                "passwordPolicy", "length(" + request.passwordMinLength() + ") and maxLength(128)",
+                "attributes", attributes))
+            .retrieve().toBodilessEntity();
+        return policyMetadata(env, readRealm(env.realm(), admin));
+    }
+
+    private AuthenticationPolicy policyMetadata(ProjectService.Environment env, Map<String, Object> realm) {
+        if (realm == null || !(realm.get("attributes") instanceof Map<?, ?> attrs)
+                || !env.id().toString().equals(attrs.get("platform.environmentId")))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Realm ownership mismatch");
+        int minimum = AuthenticationPolicy.minimum((String) realm.get("passwordPolicy"));
+        boolean configuredEmail = realm.get("smtpServer") instanceof Map<?, ?> smtp
+            && smtp.get("host") instanceof String host && !host.isBlank()
+            && smtp.get("from") instanceof String from && !from.isBlank();
+        return new AuthenticationPolicy(!Boolean.FALSE.equals(realm.get("loginWithEmailAllowed")),
+            Boolean.TRUE.equals(realm.get("verifyEmail")), Boolean.TRUE.equals(realm.get("resetPasswordAllowed")),
+            minimum, minimum >= 0 && minimum <= 128, configuredEmail && activationAllowed(env),
+            attrs.get("platform.authPolicyRevision") instanceof String revision ? revision : "unconfigured");
+    }
+
     List<SocialProvider.Metadata> socialProviders(ProjectService.Environment env) {
         String admin = ownedRealmToken(env);
         return SocialProvider.ALL.stream().map(provider -> socialMetadata(env, provider, readSocial(env, provider, admin))).toList();
@@ -177,7 +220,8 @@ class IdentityClient {
         if (!(user.get("attributes") instanceof Map<?, ?> userAttrs)
                 || !List.of("true").equals(userAttrs.get("platformMock")))
             throw new IllegalStateException("Mock user ownership mismatch");
-        String password = UUID.randomUUID() + "-" + UUID.randomUUID();
+        // Meet every managed minimum (12..128) without exceeding maxLength(128).
+        String password = ProjectService.hash(UUID.randomUUID().toString()) + ProjectService.hash(UUID.randomUUID().toString());
         http.put().uri(path + "/users/" + user.get("id") + "/reset-password")
             .headers(h -> h.setBearerAuth(admin))
             .body(Map.of("type", "password", "value", password, "temporary", false))
@@ -231,6 +275,7 @@ class IdentityClient {
                 "attributes", Map.of("pkce.code.challenge.method", "S256"));
             var realm = Map.of("realm", env.realm(), "enabled", false,
                 "registrationAllowed", env.registrationAllowed(), "bruteForceProtected", true,
+                "passwordPolicy", AuthenticationPolicy.DEFAULT_PASSWORD_POLICY,
                 "sslRequired", env.kind().equals("PROD") ? "all" : "external",
                 "accessTokenLifespan", 300, "clients", List.of(client),
                 "attributes", Map.of("platform.environmentId", env.id().toString()));

@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 
-class SocialProviderTest {
+class IdentitySettingsTest {
     private final JsonMapper json = new JsonMapper();
     private final UUID environmentId = UUID.randomUUID();
     private final Map<String, Map<String, Object>> providers = new HashMap<>();
@@ -22,16 +22,28 @@ class SocialProviderTest {
     private ProjectService.Environment env;
     private String lastSubmittedSecret;
     private boolean owned = true;
+    private final Map<String, Object> realmSettings = new HashMap<>();
 
     @BeforeEach void setup() throws Exception {
+        realmSettings.put("attributes", Map.of("platform.environmentId", environmentId.toString()));
+        realmSettings.put("enabled", false);
+        realmSettings.put("registrationAllowed", true);
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             Object result = Map.of();
             int status = 200;
             if (path.endsWith("/token")) result = Map.of("access_token", "test-admin");
-            else if (path.equals("/admin/realms/test")) result = Map.of("attributes",
-                Map.of("platform.environmentId", owned ? environmentId.toString() : "other-environment"));
+            else if (path.equals("/admin/realms/test")) {
+                if (exchange.getRequestMethod().equals("PUT")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> update = json.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
+                    realmSettings.putAll(update);
+                    status = 204;
+                } else {
+                    result = owned ? realmSettings : Map.of("attributes", Map.of("platform.environmentId", "other-environment"));
+                }
+            }
             else if (path.contains("/identity-provider/instances")) {
                 if (List.of("POST", "PUT").contains(exchange.getRequestMethod())) {
                     @SuppressWarnings("unchecked")
@@ -114,6 +126,45 @@ class SocialProviderTest {
         assertEquals("true", config.get("useJwksUrl"));
         assertEquals("https://kauth.kakao.com", config.get("issuer"));
         assertEquals("S256", config.get("pkceMethod"));
+    }
+
+    @Test void authenticationPoliciesPreserveRealmStateAndRequireConfiguredProductionEmail() {
+        var initial = client.authenticationPolicy(env);
+        assertEquals(0, initial.passwordMinLength());
+        assertFalse(initial.emailActionsAvailable());
+        assertStatus(400, () -> client.updateAuthenticationPolicy(env,
+            new ProjectController.AuthenticationSettings(true, true, true, 12, initial.revision())));
+        realmSettings.put("smtpServer", Map.of("host", "mail.example.invalid", "from", "test@example.invalid", "password", "mail-secret"));
+        var ready = client.authenticationPolicy(env);
+        assertTrue(ready.emailActionsAvailable());
+        assertFalse(json.writeValueAsString(ready).contains("mail-secret"));
+        assertFalse(client("dev").authenticationPolicy(env).emailActionsAvailable());
+        var changed = client.updateAuthenticationPolicy(env,
+            new ProjectController.AuthenticationSettings(false, true, true, 16, ready.revision()));
+        assertTrue(changed.verifyEmail());
+        assertTrue(changed.resetPasswordAllowed());
+        assertFalse(changed.loginWithEmail());
+        assertEquals(16, changed.passwordMinLength());
+        assertNotEquals(ready.revision(), changed.revision());
+        assertEquals(false, realmSettings.get("enabled"));
+        assertEquals(true, realmSettings.get("registrationAllowed"));
+        assertEquals("length(16) and maxLength(128)", realmSettings.get("passwordPolicy"));
+        assertStatus(409, () -> client.updateAuthenticationPolicy(env,
+            new ProjectController.AuthenticationSettings(true, false, false, 12, ready.revision())));
+    }
+
+    @Test void customPasswordRulesAndDuplicateEmailSettingsAreNotSilentlyOverwritten() {
+        realmSettings.put("passwordPolicy", "length(24) and digits(1)");
+        assertFalse(client.authenticationPolicy(env).passwordPolicyEditable());
+        assertStatus(409, () -> client.updateAuthenticationPolicy(env,
+            new ProjectController.AuthenticationSettings(true, false, false, 12, "unconfigured")));
+        assertEquals("length(24) and digits(1)", realmSettings.get("passwordPolicy"));
+        realmSettings.put("passwordPolicy", AuthenticationPolicy.DEFAULT_PASSWORD_POLICY);
+        realmSettings.put("duplicateEmailsAllowed", true);
+        assertStatus(409, () -> client.updateAuthenticationPolicy(env,
+            new ProjectController.AuthenticationSettings(true, false, false, 12, "unconfigured")));
+        assertEquals(-1, AuthenticationPolicy.minimum("length(12) and regexPattern(secret-and-rule)"));
+        assertEquals(12, AuthenticationPolicy.minimum(AuthenticationPolicy.DEFAULT_PASSWORD_POLICY));
     }
 
     private static void assertStatus(int expected, Runnable action) {

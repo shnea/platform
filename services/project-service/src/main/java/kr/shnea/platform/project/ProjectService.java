@@ -257,6 +257,23 @@ class ProjectService {
         return identity.socialProviders(env);
     }
 
+    AuthenticationPolicy authenticationPolicy(UUID id) {
+        Environment env = findEnvironment(id);
+        requireReady(env);
+        return identity.authenticationPolicy(env);
+    }
+
+    AuthenticationPolicy updateAuthenticationPolicy(UUID id, ProjectController.AuthenticationSettings request, String actor) {
+        return tx.execute(transaction -> {
+            lockProject(findEnvironment(id).projectId());
+            Environment env = findEnvironment(id);
+            requireReady(env);
+            var result = identity.updateAuthenticationPolicy(env, request);
+            audit(actor, "authentication.policy.updated", id);
+            return result;
+        });
+    }
+
     SocialProvider.Metadata updateSocialProvider(UUID id, String code, ProjectController.SocialSettings request, String actor) {
         SocialProvider provider = SocialProvider.find(code);
         return tx.execute(transaction -> {
