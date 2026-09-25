@@ -14,7 +14,13 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 class SecurityConfig {
     @Bean
-    SecurityFilterChain security(HttpSecurity http) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, ApiProblems problems) throws Exception {
+        org.springframework.security.web.AuthenticationEntryPoint unauthorized = (request, response, error) -> {
+            response.setHeader("WWW-Authenticate", "Bearer");
+            problems.write(ApiCode.AUTHENTICATION_REQUIRED, request, response);
+        };
+        org.springframework.security.web.access.AccessDeniedHandler forbidden = (request, response, error) ->
+            problems.write(ApiCode.ACCESS_DENIED, request, response);
         var converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Map<String, Object> access = jwt.getClaim("realm_access");
@@ -32,7 +38,9 @@ class SecurityConfig {
                 .requestMatchers("/internal/v1/email/environments/*").permitAll() // Dedicated internal secret, never routed by Nginx.
                 .requestMatchers("/api/v1/admin/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().denyAll())
-            .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
+            .exceptionHandling(errors -> errors.authenticationEntryPoint(unauthorized).accessDeniedHandler(forbidden))
+            .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
+                .authenticationEntryPoint(unauthorized).accessDeniedHandler(forbidden))
             .build();
     }
 }

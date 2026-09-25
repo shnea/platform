@@ -8,8 +8,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -70,7 +68,7 @@ class IdentityClient {
         String admin = ownedRealmToken(env);
         var current = readMember(env, userId, admin);
         if (Boolean.TRUE.equals(current.get("enabled")) != expectedEnabled)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "User state changed; reload before saving");
+            throw ApiCode.MEMBER_STATE_CHANGED.failure();
         http.put().uri(memberPath(env, userId)).headers(h -> h.setBearerAuth(admin))
             .body(Map.of("enabled", enabled)).retrieve().toBodilessEntity();
         // Disable first: logout failure must never re-enable the account. Safe to retry.
@@ -84,7 +82,7 @@ class IdentityClient {
             logoutMember(env, userId, admin);
         } else {
             if (readSessions(env, userId, admin).stream().noneMatch(session -> sessionId.equals(session.id())))
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found for this user");
+                throw ApiCode.RESOURCE_NOT_FOUND.failure();
             try {
                 http.delete().uri("/admin/realms/" + env.realm() + "/sessions/" + sessionId + "?isOffline=false")
                     .headers(h -> h.setBearerAuth(admin)).retrieve().toBodilessEntity();
@@ -134,7 +132,7 @@ class IdentityClient {
             Map<String, Object> user = http.get().uri(memberPath(env, userId))
                 .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
             if (user == null || user.get("serviceAccountClientId") != null)
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+                throw ApiCode.RESOURCE_NOT_FOUND.failure();
             // GET /users/{id} omits the service-account link in Keycloak 26.7.
             // General search excludes service accounts; exact username lookup does not.
             boolean member = false;
@@ -147,12 +145,12 @@ class IdentityClient {
                     .headers(h -> h.setBearerAuth(admin)).retrieve().body(List.class);
                 member = matches.stream().anyMatch(row -> userId.toString().equals(row.get("id")));
                 if (!member && matches.size() < 100)
-                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+                    throw ApiCode.RESOURCE_NOT_FOUND.failure();
             }
             return user;
         } catch (RestClientResponseException error) {
             if (error.getStatusCode().value() == 404)
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+                throw ApiCode.RESOURCE_NOT_FOUND.failure();
             throw error;
         }
     }
@@ -177,13 +175,13 @@ class IdentityClient {
         Map<String, Object> realm = readRealm(env.realm(), admin);
         var current = policyMetadata(env, realm);
         if (!current.revision().equals(request.revision()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Authentication policy changed; reload before saving");
+            throw ApiCode.SETTINGS_CHANGED.failure();
         if (!current.passwordPolicyEditable())
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Custom Keycloak password rules must be reviewed before editing");
+            throw ApiCode.AUTHENTICATION_POLICY_REVIEW.failure();
         if ((request.verifyEmail() || request.resetPasswordAllowed()) && !current.emailActionsAvailable())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email actions require matching environment and ready email delivery");
+            throw ApiCode.EMAIL_DELIVERY_NOT_READY.failure();
         if (request.loginWithEmail() && Boolean.TRUE.equals(realm.get("duplicateEmailsAllowed")))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate email policy must be resolved first");
+            throw ApiCode.AUTHENTICATION_POLICY_REVIEW.failure();
         @SuppressWarnings("unchecked")
         var attributes = new java.util.HashMap<String, Object>((Map<String, Object>) realm.get("attributes"));
         attributes.put("platform.authPolicyRevision", UUID.randomUUID().toString());
@@ -199,7 +197,7 @@ class IdentityClient {
     private AuthenticationPolicy policyMetadata(ProjectService.Environment env, Map<String, Object> realm) {
         if (realm == null || !(realm.get("attributes") instanceof Map<?, ?> attrs)
                 || !env.id().toString().equals(attrs.get("platform.environmentId")))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Realm ownership mismatch");
+            throw ApiCode.REALM_OWNERSHIP_MISMATCH.failure();
         int minimum = AuthenticationPolicy.minimum((String) realm.get("passwordPolicy"));
         String delivery = emails.delivery(env);
         return new AuthenticationPolicy(!Boolean.FALSE.equals(realm.get("loginWithEmailAllowed")),
@@ -217,15 +215,15 @@ class IdentityClient {
     SocialProvider.Metadata updateSocialProvider(ProjectService.Environment env, SocialProvider provider,
                                                  ProjectController.SocialSettings request) {
         if (request.enabled() && !activationAllowed(env))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Real social login requires production mode and a PROD environment");
+            throw ApiCode.SOCIAL_PRODUCTION_REQUIRED.failure();
         String admin = ownedRealmToken(env);
         Map<String, Object> current = readSocial(env, provider, admin);
         var readiness = socialReadiness();
         var metadata = socialMetadata(env, provider, current, readiness);
         if (!metadata.revision().equals(request.revision()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Social settings changed; reload before saving");
+            throw ApiCode.SETTINGS_CHANGED.failure();
         if (request.enabled() && !metadata.credentialsConfigured())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Common social credentials are not configured");
+            throw ApiCode.SOCIAL_CREDENTIALS_MISSING.failure();
         var config = provider.config();
         config.put("platform.environmentId", env.id().toString());
         config.put("platform.environmentKind", env.kind());
@@ -247,7 +245,7 @@ class IdentityClient {
                 http.post().uri(path).headers(h -> h.setBearerAuth(admin)).body(representation).retrieve().toBodilessEntity();
             } catch (RestClientResponseException error) {
                 if (error.getStatusCode().value() == 409)
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Social provider already exists; reload");
+                    throw ApiCode.SOCIAL_PROVIDER_CONFLICT.failure();
                 throw error;
             }
         } else {
@@ -267,7 +265,7 @@ class IdentityClient {
         Map<String, Object> realm = readRealm(env.realm(), admin);
         if (realm == null || !(realm.get("attributes") instanceof Map<?, ?> attrs)
                 || !env.id().toString().equals(attrs.get("platform.environmentId")))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Realm ownership mismatch");
+            throw ApiCode.REALM_OWNERSHIP_MISMATCH.failure();
         return admin;
     }
 
@@ -284,7 +282,7 @@ class IdentityClient {
                     || !env.id().toString().equals(config.get("platform.environmentId"))
                     || !provider.acceptsProviderId(result.get("providerId"))
                     || !(config.get("platform.revision") instanceof String revision) || revision.isBlank())
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Unmanaged social provider; inspect Keycloak settings");
+                throw ApiCode.SOCIAL_PROVIDER_CONFLICT.failure();
             return result;
         } catch (RestClientResponseException error) {
             if (error.getStatusCode().value() == 404) return null;
@@ -349,7 +347,7 @@ class IdentityClient {
                 || !List.of("true").equals(userAttrs.get("platformMock")))
             throw new IllegalStateException("Mock user ownership mismatch");
         if (!Boolean.TRUE.equals(user.get("enabled")))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Mock user is disabled");
+            throw ApiCode.MOCK_USER_DISABLED.failure();
         // Meet every managed minimum (12..128) without exceeding maxLength(128).
         String password = ProjectService.hash(UUID.randomUUID().toString()) + ProjectService.hash(UUID.randomUUID().toString());
         http.put().uri(path + "/users/" + user.get("id") + "/reset-password")
@@ -386,18 +384,18 @@ class IdentityClient {
     private String mockResetToken(ProjectService.Environment env) {
         if (!mode.equals("dev") || !env.kind().equals("DEV")
                 || !env.realm().equals("p-" + env.id().toString().replace("-", "")))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV project realm required");
+            throw ApiCode.DEV_ENVIRONMENT_REQUIRED.failure();
         String admin = ownedRealmToken(env);
         // A user-editable marker is not evidence of a disposable account.
         Map<?, ?> profile = http.get().uri("/admin/realms/{realm}/users/profile", env.realm())
             .headers(h -> h.setBearerAuth(admin)).retrieve().body(Map.class);
         if (!(profile.get("attributes") instanceof List<?> attributes))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker policy unavailable");
+            throw ApiCode.MOCK_RESET_PROTECTION.failure();
         for (Object entry : attributes) {
             if (entry instanceof Map<?, ?> attribute && "platformMock".equals(attribute.get("name"))) {
                 if (!(attribute.get("permissions") instanceof Map<?, ?> permissions)
                         || !List.of("admin").equals(permissions.get("edit")))
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker must be admin-only");
+                    throw ApiCode.MOCK_RESET_PROTECTION.failure();
                 return admin;
             }
         }
@@ -423,7 +421,7 @@ class IdentityClient {
             }
             if (rows.size() < 100) return mockPreview(env, targets, false);
         }
-        throw new ResponseStatusException(HttpStatus.CONFLICT, "Too many protected mock accounts; inspect account settings");
+        throw ApiCode.MOCK_RESET_PROTECTION.failure();
     }
 
     private MockReset.Preview mockPreview(ProjectService.Environment env, List<MockReset.Target> targets, boolean more) {
@@ -465,10 +463,10 @@ class IdentityClient {
 
     void deleteMockUser(ProjectService.Environment env, UUID userId) {
         String admin = mockResetToken(env);
-        if (admin == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock marker missing");
+        if (admin == null) throw ApiCode.MOCK_RESET_PROTECTION.failure();
         var user = readMember(env, userId, admin);
         if (!disposableMock(env, user, admin))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mock account changed; reload preview");
+            throw ApiCode.MOCK_RESET_CHANGED.failure();
         // Close login before terminating online/offline sessions. Failure stays disabled.
         http.put().uri(memberPath(env, userId)).headers(h -> h.setBearerAuth(admin))
             .body(Map.of("enabled", false)).retrieve().toBodilessEntity();

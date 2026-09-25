@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -56,7 +55,7 @@ class ProjectService {
     }
 
     List<Project> projects(int limit, int offset) {
-        if (limit < 1 || limit > 100 || offset < 0) throw badRequest("Invalid pagination");
+        if (limit < 1 || limit > 100 || offset < 0) throw ApiCode.INVALID_PAGINATION.failure();
         return db.query("SELECT * FROM projects ORDER BY created_at DESC,id LIMIT ? OFFSET ?",
             (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"),
                 rs.getString("name"), rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision")), limit, offset);
@@ -124,16 +123,16 @@ class ProjectService {
         return tx.execute(status -> {
             requireActive(lockProject(findEnvironment(id).projectId()));
             Environment env = findEnvironment(id);
-            if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+            if (!env.state().equals("READY")) throw ApiCode.ENVIRONMENT_NOT_READY.failure();
             List<String> scopes = requestedScopes == null ? List.of(READ.code()) : requestedScopes;
             List<String> allowed = credentialScopes(id).stream().map(Scope::code).toList();
             if (scopes.isEmpty() || scopes.size() > allowed.size() || scopes.stream().anyMatch(s -> s == null || !allowed.contains(s))
-                    || new HashSet<>(scopes).size() != scopes.size()) throw badRequest("Select supported, distinct credential scopes");
+                    || new HashSet<>(scopes).size() != scopes.size()) throw ApiCode.INVALID_CREDENTIAL_SCOPES.failure();
             UUID keyId = UUID.randomUUID();
             byte[] entropy = new byte[32];
             random.nextBytes(entropy);
             String key = "pk_" + keyId + "_" + Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
-            if (expiresAt != null && !expiresAt.isAfter(Instant.now())) throw badRequest("Expiry must be in the future");
+            if (expiresAt != null && !expiresAt.isAfter(Instant.now())) throw ApiCode.INVALID_EXPIRY.failure();
             db.update("INSERT INTO service_credentials(id,environment_id,secret_hash,expires_at,scopes) VALUES (?,?,?,?,?::jsonb)",
                 keyId, id, hash(key), expiresAt == null ? null : java.sql.Timestamp.from(expiresAt), json.writeValueAsString(scopes));
             audit(actor, "credential.issued", keyId);
@@ -168,18 +167,18 @@ class ProjectService {
             }, keyId);
         Context context = rows.stream().findFirst().orElseThrow(ProjectService::unauthorized);
         if (!context.scopes().contains(requiredScope))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "API key lacks required scope");
+            throw ApiCode.INSUFFICIENT_SCOPE.failure();
         return context;
     }
 
     List<java.util.Map<String, Object>> auditEvents(int limit) {
-        if (limit < 1 || limit > 100) throw badRequest("Invalid limit");
+        if (limit < 1 || limit > 100) throw ApiCode.INVALID_PAGINATION.failure();
         return db.queryForList("SELECT id,actor,action,target_id,environment_id,session_id,created_at FROM audit_events ORDER BY id DESC LIMIT ?", limit);
     }
 
     MockResult mockLogin(String key, String provider, String subject, String scenario) {
         Context context = context(key, MOCK.code());
-        if (!context.kind().equals("DEV")) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
+        if (!context.kind().equals("DEV")) throw ApiCode.DEV_ENVIRONMENT_REQUIRED.failure();
         return tx.execute(status -> {
             // Project lock serializes lifecycle changes and mock password resets. Recheck key after waiting.
             lockProject(context.projectId());
@@ -193,7 +192,7 @@ class ProjectService {
         return tx.execute(status -> {
             requireActive(lockProject(findEnvironment(id).projectId()));
             Environment env = findEnvironment(id);
-            if (!env.state().equals("READY")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+            if (!env.state().equals("READY")) throw ApiCode.ENVIRONMENT_NOT_READY.failure();
             return runMock(env, provider, subject, scenario, actor);
         });
     }
@@ -207,7 +206,7 @@ class ProjectService {
         Environment env = findEnvironment(id);
         requireReady(env);
         if (!mode.equals("dev") || !env.kind().equals("DEV"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
+            throw ApiCode.DEV_ENVIRONMENT_REQUIRED.failure();
         return env;
     }
 
@@ -218,7 +217,7 @@ class ProjectService {
             var ids = preview.items().stream().map(MockReset.Target::id).toList();
             if (ids.isEmpty() || !preview.revision().equals(request.revision())
                     || request.userIds().size() != ids.size() || !new HashSet<>(request.userIds()).equals(new HashSet<>(ids)))
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Reset targets changed; reload preview");
+                throw ApiCode.MOCK_RESET_CHANGED.failure();
             var results = new java.util.ArrayList<MockReset.Item>();
             for (var target : preview.items()) {
                 // Commit intent before the external operation; a process crash leaves a trace.
@@ -246,7 +245,7 @@ class ProjectService {
 
     private MockResult runMock(Environment env, String provider, String subject, String requestedScenario, String actor) {
         if (!mode.equals("dev") || !env.kind().equals("DEV"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DEV environment required");
+            throw ApiCode.DEV_ENVIRONMENT_REQUIRED.failure();
         String scenario = requestedScenario == null ? "success" : requestedScenario;
         if (scenario.equals("success")) {
             var result = new java.util.LinkedHashMap<>(identity.mockLogin(env, provider, subject));
@@ -257,7 +256,7 @@ class ProjectService {
         int code = switch (scenario) {
             case "cancelled", "access_denied" -> 403;
             case "provider_unavailable" -> 503;
-            default -> throw badRequest("Unknown mock scenario");
+            default -> throw ApiCode.INVALID_MOCK_SCENARIO.failure();
         };
         // Failed simulations never create/reset users or issue tokens, even when Keycloak is unavailable.
         audit(actor, "mock.login." + scenario, env.id());
@@ -266,7 +265,7 @@ class ProjectService {
     }
 
     Project updateProject(UUID id, String name, String desiredStatus, long revision, String actor) {
-        if (!List.of("ACTIVE", "SUSPENDED").contains(desiredStatus)) throw badRequest("Invalid project status");
+        if (!List.of("ACTIVE", "SUSPENDED").contains(desiredStatus)) throw ApiCode.INVALID_PROJECT_STATUS.failure();
         tx.executeWithoutResult(transaction -> {
             Project current = lockProject(id);
             checkRevision(current.revision(), revision);
@@ -345,12 +344,12 @@ class ProjectService {
 
     private static void requireReady(Environment env) {
         if (!env.state().equals("READY"))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Environment not ready");
+            throw ApiCode.ENVIRONMENT_NOT_READY.failure();
     }
 
     Member.Page members(UUID id, String search, int limit, int offset) {
         if (limit < 1 || limit > 100 || offset < 0 || offset > 1_000_000 || search.length() > 200
-                || search.chars().anyMatch(Character::isISOControl)) throw badRequest("Invalid user search or pagination");
+                || search.chars().anyMatch(Character::isISOControl)) throw ApiCode.INVALID_MEMBER_SEARCH.failure();
         Environment env = findEnvironment(id);
         requireReady(env);
         return identity.members(env, search.strip(), limit, offset);
@@ -374,7 +373,7 @@ class ProjectService {
     }
 
     void endMemberSessions(UUID id, UUID userId, String sessionId, String actor) {
-        if (sessionId != null && !sessionId.matches("[A-Za-z0-9_-]{1,128}")) throw badRequest("Invalid session ID");
+        if (sessionId != null && !sessionId.matches("[A-Za-z0-9_-]{1,128}")) throw ApiCode.INVALID_SESSION_ID.failure();
         memberAction(id, userId, sessionId, actor, sessionId == null ? "user.sessions.ended" : "user.session.ended",
             env -> identity.endMemberSessions(env, userId, sessionId), false);
     }
@@ -410,15 +409,15 @@ class ProjectService {
             .stream().findFirst().orElseThrow(ProjectService::notFound);
     }
     private static void requireActive(Project project) {
-        if (!project.status().equals("ACTIVE")) throw new ResponseStatusException(HttpStatus.CONFLICT, "Project suspended");
+        if (!project.status().equals("ACTIVE")) throw ApiCode.PROJECT_SUSPENDED.failure();
     }
     private static void checkRevision(long current, long requested) {
-        if (current != requested) throw new ResponseStatusException(HttpStatus.CONFLICT, "Settings changed; reload before saving");
+        if (current != requested) throw ApiCode.SETTINGS_CHANGED.failure();
     }
 
     static void validateRedirects(String kind, List<String> redirects) {
         if (!List.of("DEV", "PROD").contains(kind) || redirects == null || redirects.isEmpty() || redirects.size() > 10)
-            throw badRequest("Invalid environment or redirect URI list");
+            throw ApiCode.INVALID_ENVIRONMENT.failure();
         for (String redirect : redirects) {
             try {
                 URI uri = URI.create(redirect);
@@ -428,8 +427,8 @@ class ProjectService {
                     || ("DEV".equals(kind) && "http".equals(uri.getScheme()) && loopback);
                 if (redirect.length() > 2048 || redirect.contains("*") || !allowed || host == null
                         || uri.getRawUserInfo() != null || uri.getRawFragment() != null)
-                    throw badRequest("Use an exact HTTPS callback; DEV also allows HTTP loopback");
-            } catch (IllegalArgumentException error) { throw badRequest("Invalid redirect URI"); }
+                    throw ApiCode.INVALID_REDIRECT.failure();
+            } catch (IllegalArgumentException error) { throw ApiCode.INVALID_REDIRECT.failure(); }
         }
     }
 
@@ -456,7 +455,6 @@ class ProjectService {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
     }
-    private static ResponseStatusException unauthorized() { return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid API key"); }
-    private static ResponseStatusException notFound() { return new ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"); }
-    private static ResponseStatusException badRequest(String reason) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason); }
+    private static ResponseStatusException unauthorized() { return ApiCode.INVALID_API_KEY.failure(); }
+    private static ResponseStatusException notFound() { return ApiCode.RESOURCE_NOT_FOUND.failure(); }
 }

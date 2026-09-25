@@ -3,8 +3,6 @@ package kr.shnea.platform.project;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 record SocialProvider(String code, String label, String providerId) {
     static final List<SocialProvider> ALL = List.of(
@@ -14,7 +12,7 @@ record SocialProvider(String code, String label, String providerId) {
 
     static SocialProvider find(String code) {
         return ALL.stream().filter(p -> p.code.equals(code)).findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown social provider"));
+            .orElseThrow(() -> ApiCode.UNKNOWN_SOCIAL_PROVIDER.failure());
     }
 
     String alias() { return "platform-" + code; }

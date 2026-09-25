@@ -4,9 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 class EmailController {
@@ -22,14 +20,14 @@ class EmailController {
     @GetMapping("/internal/v1/email/environments/{id}")
     Object context(@PathVariable UUID id, @RequestHeader(value="X-Platform-Mail-Key", required=false) String provided) {
         if (provided == null || !MessageDigest.isEqual(secret, provided.getBytes(StandardCharsets.UTF_8)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            throw ApiCode.ACCESS_DENIED.failure();
         return service.emailContext(id);
     }
     @GetMapping("/api/v1/admin/environments/{id}/email-inbox")
     Object inbox(@PathVariable UUID id, jakarta.servlet.http.HttpServletResponse response) {
-        if (!mode.equals("dev")) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (!mode.equals("dev")) throw ApiCode.RESOURCE_NOT_FOUND.failure();
         var context = service.emailContext(id);
-        if (!"DEV".equals(context.get("kind"))) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (!"DEV".equals(context.get("kind"))) throw ApiCode.RESOURCE_NOT_FOUND.failure();
         response.setHeader("Cache-Control", "no-store");
         return emails.inbox(id);
     }

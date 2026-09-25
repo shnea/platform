@@ -1,0 +1,76 @@
+package kr.shnea.platform.project;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
+// Public machine codes: keep meanings stable even when Korean wording changes.
+enum ApiCode {
+    INVALID_REQUEST(400, "요청 형식과 입력값을 확인해 주세요."),
+    VALIDATION_FAILED(400, "입력 조건에 맞지 않는 항목을 확인해 주세요."),
+    AUTHENTICATION_REQUIRED(401, "인증이 필요합니다. 다시 로그인해 주세요."),
+    INVALID_API_KEY(401, "API 키가 유효하지 않습니다. 만료·폐기 여부와 프로젝트 상태를 확인해 주세요."),
+    ACCESS_DENIED(403, "이 요청을 처리할 권한이 없습니다."),
+    INSUFFICIENT_SCOPE(403, "API 키에 필요한 기능 권한이 없습니다."),
+    DEV_ENVIRONMENT_REQUIRED(403, "개발 모드의 DEV 환경에서만 사용할 수 있습니다."),
+    MOCK_USER_DISABLED(403, "테스트 계정의 로그인이 차단되어 있습니다."),
+    RESOURCE_NOT_FOUND(404, "대상을 찾을 수 없습니다. 목록을 새로고침해 주세요."),
+    METHOD_NOT_ALLOWED(405, "지원하지 않는 요청 방식입니다."),
+    NOT_ACCEPTABLE(406, "요청한 응답 형식을 제공할 수 없습니다."),
+    RESOURCE_CONFLICT(409, "이미 있는 항목이거나 다른 데이터와 충돌합니다. 현재 상태를 확인해 주세요."),
+    ENVIRONMENT_NOT_READY(409, "환경 설정이 아직 반영되지 않았습니다. 환경 상태를 확인해 주세요."),
+    PROJECT_SUSPENDED(409, "중지된 프로젝트입니다. 프로젝트 상태를 확인해 주세요."),
+    SETTINGS_CHANGED(409, "설정이 변경되었습니다. 새로고침 후 다시 확인해 주세요."),
+    MEMBER_STATE_CHANGED(409, "회원 상태가 변경되었습니다. 새로고침 후 다시 확인해 주세요."),
+    MOCK_RESET_CHANGED(409, "초기화 대상이나 계정 상태가 변경되었습니다. 대상을 다시 확인해 주세요."),
+    MOCK_RESET_PROTECTION(409, "테스트 계정 보호 설정을 확인해야 합니다. 관리자에게 문의해 주세요."),
+    REALM_OWNERSHIP_MISMATCH(409, "인증 영역의 소유 설정이 일치하지 않습니다. 관리자에게 문의해 주세요."),
+    AUTHENTICATION_POLICY_REVIEW(409, "별도 비밀번호 규칙이나 이메일 중복 정책을 먼저 확인해 주세요."),
+    SOCIAL_PROVIDER_CONFLICT(409, "소셜 제공자 설정을 확인해야 합니다. 새로고침 후 관리자에게 문의해 주세요."),
+    PAYLOAD_TOO_LARGE(413, "요청 크기가 허용 범위를 초과했습니다."),
+    UNSUPPORTED_MEDIA_TYPE(415, "지원하지 않는 요청 데이터 형식입니다."),
+    RATE_LIMITED(429, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
+    INTERNAL_ERROR(500, "요청 처리 중 오류가 발생했습니다. 현재 상태를 확인하고 요청 ID로 문의해 주세요."),
+    UPSTREAM_UNAVAILABLE(502, "연결된 서비스의 처리를 확인하지 못했습니다. 현재 상태를 먼저 확인해 주세요."),
+    SERVICE_UNAVAILABLE(503, "서비스를 일시적으로 사용할 수 없습니다. 잠시 후 상태를 확인해 주세요."),
+    INVALID_PAGINATION(400, "조회 개수는 1~100, 시작 위치는 0 이상으로 입력해 주세요."),
+    INVALID_CREDENTIAL_SCOPES(400, "사용 가능한 기능 권한을 중복 없이 하나 이상 선택해 주세요."),
+    INVALID_EXPIRY(400, "만료일은 현재 이후로 지정해 주세요."),
+    INVALID_PROJECT_STATUS(400, "프로젝트 상태는 ACTIVE 또는 SUSPENDED로 지정해 주세요."),
+    INVALID_MEMBER_SEARCH(400, "검색어는 제어문자 없이 200자 이내, 조회 개수는 1~100, 시작 위치는 0~1000000으로 입력해 주세요."),
+    INVALID_SESSION_ID(400, "세션 식별자를 확인해 주세요. 영문·숫자·밑줄·하이픈을 최대 128자까지 사용할 수 있습니다."),
+    INVALID_REDIRECT(400, "정확한 HTTPS 콜백 주소를 입력해 주세요. DEV 환경에서는 HTTP localhost 주소도 허용합니다."),
+    INVALID_ENVIRONMENT(400, "DEV 또는 PROD 환경과 1~10개의 콜백 주소를 지정해 주세요."),
+    INVALID_MOCK_SCENARIO(400, "지원하지 않는 테스트 시나리오입니다."),
+    UNKNOWN_SOCIAL_PROVIDER(400, "지원하지 않는 소셜 제공자입니다."),
+    SOCIAL_CREDENTIALS_MISSING(400, "공통 소셜 인증 키가 준비되지 않았습니다. 서버 설정을 확인해 주세요."),
+    SOCIAL_PRODUCTION_REQUIRED(400, "실제 소셜 로그인은 운영 모드의 PROD 환경에서만 켤 수 있습니다."),
+    EMAIL_DELIVERY_NOT_READY(400, "환경에 맞는 이메일 전달 경로가 준비되지 않았습니다. 발송 설정을 확인해 주세요.");
+
+    final int status;
+    final String detail;
+    ApiCode(int status, String detail) { this.status = status; this.detail = detail; }
+    Failure failure() { return new Failure(this); }
+
+    static ApiCode forStatus(int status) {
+        return switch (status) {
+            case 400 -> INVALID_REQUEST;
+            case 401 -> AUTHENTICATION_REQUIRED;
+            case 403 -> ACCESS_DENIED;
+            case 404 -> RESOURCE_NOT_FOUND;
+            case 405 -> METHOD_NOT_ALLOWED;
+            case 406 -> NOT_ACCEPTABLE;
+            case 409 -> RESOURCE_CONFLICT;
+            case 413 -> PAYLOAD_TOO_LARGE;
+            case 415 -> UNSUPPORTED_MEDIA_TYPE;
+            case 429 -> RATE_LIMITED;
+            case 502 -> UPSTREAM_UNAVAILABLE;
+            case 503 -> SERVICE_UNAVAILABLE;
+            default -> status >= 500 ? INTERNAL_ERROR : INVALID_REQUEST;
+        };
+    }
+
+    static final class Failure extends ResponseStatusException {
+        final ApiCode code;
+        Failure(ApiCode code) { super(HttpStatus.valueOf(code.status), code.detail); this.code = code; }
+    }
+}
