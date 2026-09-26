@@ -15,6 +15,26 @@ import { MemberPanel } from "./MemberPanel";
 import { JobPanel } from "./JobPanel";
 import { OperationalAlertsPanel } from "./OperationalAlertsPanel";
 import { Dialog } from "./Dialog";
+import { SectionTabs } from "./SectionTabs";
+import { ProjectOverview } from "./ProjectOverview";
+
+type View = "projects" | "jobs" | "alerts" | "audit";
+type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
+const views: { value: View; label: string; description: string }[] = [
+  { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
+  { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
+  { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
+  { value: "audit", label: "감사 이력", description: "관리 작업과 인증 활동을 확인하세요. 최근 100건을 표시합니다." },
+];
+const projectSections: { value: ProjectSection; label: string }[] = [
+  { value: "overview", label: "개요" }, { value: "auth", label: "인증 설정" },
+  { value: "members", label: "회원" }, { value: "keys", label: "API 키" },
+  { value: "test", label: "개발 테스트" }, { value: "settings", label: "프로젝트 설정" },
+];
+const authSections = [
+  { value: "login", label: "로그인 주소" }, { value: "policy", label: "가입·복구 정책" },
+  { value: "social", label: "소셜 로그인" },
+] as const;
 
 type Project = {
   id: string;
@@ -193,8 +213,13 @@ function Workspace() {
     [envId, setEnvId] = useState<string | null>(null),
     [keys, setKeys] = useState<Key[]>([]),
     [events, setEvents] = useState<Event[]>([]);
-  const [tab, setTab] = useState<"projects" | "audit">("projects"),
+  const [tab, setTab] = useState<View>("projects"),
     [modal, setModal] = useState<Modal | null>(null);
+  const [section, setSection] = useState<ProjectSection>("overview");
+  const [authSection, setAuthSection] = useState<"login" | "policy" | "social">("login");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pageTitle = useRef<HTMLHeadingElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [detailLoading, setDetailLoading] = useState(false),
@@ -208,12 +233,24 @@ function Workspace() {
   const previousProject = useRef<string | null>(null);
   const project = projects.find((p) => p.id === selected),
     env = envs.find((e) => e.id === envId);
+  const view = views.find(item => item.value === tab)!;
+  const activeSection = section === "test" && (mode !== "dev" || env?.kind !== "DEV") ? "overview" : section;
+  function moveTo(next: View) {
+    if (busy) return;
+    setTab(next); setMenuOpen(false); setError(""); setNotice("");
+    requestAnimationFrame(() => { pageTitle.current?.focus(); window.scrollTo(0, 0); });
+  }
+  function chooseProject(id: string | null) {
+    setSelected(id); setEnvs([]); setEnvId(null); setKeys([]);
+    setSection("overview"); setAuthSection("login"); setError(""); setNotice("");
+    requestAnimationFrame(() => pageTitle.current?.focus());
+  }
   useEffect(() => {
     let live = true;
     setLoading(true);
     setError("");
     const load =
-      tab === "projects"
+      tab !== "audit"
         ? api<Project[]>(`/projects?limit=20&offset=${offset}`).then((rows) => {
             if (live) setProjects(rows);
           })
@@ -268,7 +305,7 @@ function Workspace() {
     let live = true;
     setKeys([]);
     setScopeOptions([]);
-    if (!envId) {
+    if (!envId || tab !== "projects" || activeSection !== "keys") {
       setKeysLoading(false);
       return;
     }
@@ -292,7 +329,7 @@ function Workspace() {
     return () => {
       live = false;
     };
-  }, [envId, refresh]);
+  }, [envId, refresh, tab, activeSection]);
   function open(value: Modal) {
     setKeyHasExpiry(false);
     setError("");
@@ -414,29 +451,17 @@ function Workspace() {
                 : "API 키 폐기";
   return (
     <div className="shell">
-      <aside>
-        <div>
+      <aside className={menuOpen ? "menu-open" : ""}>
+        <button ref={menuButton} className="secondary mobile-menu" aria-expanded={menuOpen} aria-controls="workspace-menu"
+          disabled={busy} onClick={() => setMenuOpen(value => !value)}>{view.label} · {menuOpen ? "메뉴 닫기" : "메뉴 열기"}</button>
+        <div id="workspace-menu" className="workspace-menu" onKeyDown={event => {
+          if (event.key === "Escape") { setMenuOpen(false); menuButton.current?.focus(); }
+        }}>
           <p className="nav-label">워크스페이스</p>
           <nav aria-label="관리 메뉴">
-            <button
-              className={tab === "projects" ? "nav active" : "nav"}
-              disabled={busy}
-              aria-current={tab === "projects" ? "page" : undefined}
-              onClick={() => {
-                setTab("projects");
-                setSelected(null);
-              }}
-            >
-              프로젝트 <span aria-hidden="true">↗</span>
-            </button>
-            <button
-              className={tab === "audit" ? "nav active" : "nav"}
-              disabled={busy}
-              aria-current={tab === "audit" ? "page" : undefined}
-              onClick={() => setTab("audit")}
-            >
-              감사 이력
-            </button>
+            {views.map(item => <button key={item.value} className={tab === item.value ? "nav active" : "nav"}
+              disabled={busy} aria-current={tab === item.value ? "page" : undefined}
+              onClick={() => moveTo(item.value)}>{item.label}</button>)}
           </nav>
         </div>
         <div className="workspace-note">
@@ -454,21 +479,13 @@ function Workspace() {
         <div className="page-heading">
           <div>
             <p className="breadcrumb">
-              워크스페이스 / {tab === "audit" ? "감사 이력" : "프로젝트"}
+              워크스페이스 / {view.label}{project && tab !== "audit" ? ` / ${project.code}` : ""}
             </p>
-            <h1>
-              {tab === "audit"
-                ? "감사 이력"
-                : project
-                  ? project.name
-                  : "프로젝트"}
+            <h1 ref={pageTitle} tabIndex={-1}>
+              {tab === "projects" && project ? project.name : view.label}
             </h1>
             <p className="muted">
-              {tab === "audit"
-                ? "관리 작업과 인증 활동을 확인하세요. 최근 100건을 표시합니다."
-                : project
-                  ? "환경별 로그인과 서비스 접근을 관리하세요."
-                  : "새 서비스를 연결할 준비, 프로젝트부터 시작하세요."}
+              {tab === "projects" && project ? "환경을 선택한 뒤 필요한 기능 탭으로 이동하세요." : view.description}
             </p>
           </div>
           <div className="actions">
@@ -537,7 +554,7 @@ function Workspace() {
         ) : !project ? (
           <>
             <div className="section-line">
-              <h2>프로젝트 목록</h2>
+              <h2>{tab === "projects" ? "프로젝트 목록" : "조회할 프로젝트 선택"}</h2>
               <span className="muted small">페이지 {offset / 20 + 1}</span>
             </div>
             {loading ? (
@@ -551,11 +568,7 @@ function Workspace() {
                     className="project-row"
                     key={p.id}
                     disabled={busy}
-                    onClick={() => {
-                      setSelected(p.id);
-                      setError("");
-                      setNotice("");
-                    }}
+                    onClick={() => chooseProject(p.id)}
                   >
                     <span className="project-initial" aria-hidden="true">
                       {p.name.slice(0, 1)}
@@ -600,19 +613,25 @@ function Workspace() {
         ) : (
           <>
             <div className="project-toolbar">
-              <button
-                className="quiet"
-                disabled={busy}
-                onClick={() => {
-                  setSelected(null);
-                  setError("");
-                  setNotice("");
-                }}
-              >
-                ← 프로젝트 목록
+              <button className="quiet" disabled={busy} onClick={() => chooseProject(null)}>
+                다른 프로젝트 선택
               </button>
+              <div className="actions scope-caption">{tab !== "projects" && <strong>{project.name}</strong>}<State value={project.status} />
+                {tab !== "projects" && <button className="secondary" disabled={busy} onClick={() => moveTo("projects")}>프로젝트로 이동</button>}
+              </div>
+            </div>
+            {tab === "projects" && <SectionTabs id="project-section" label="프로젝트 기능" value={activeSection} disabled={busy}
+              items={projectSections.filter(item => item.value !== "test" || mode === "dev" && env?.kind === "DEV")}
+              onChange={value => { setSection(value); setError(""); setNotice(""); }} />}
+            <div className="workspace-content" id={tab === "projects" ? "project-section-panel" : undefined}
+              role={tab === "projects" ? "tabpanel" : undefined} aria-labelledby={tab === "projects" ? `project-section-${activeSection}` : undefined} tabIndex={0}>
+            {tab === "projects" && activeSection === "settings" ? <section>
+              <div className="section-line"><h2>프로젝트 설정</h2></div>
+              <dl><div><dt>프로젝트 코드</dt><dd className="identifier">{project.code}</dd></div>
+                <div><dt>프로젝트 이름</dt><dd>{project.name}</dd></div>
+                <div><dt>사용 상태</dt><dd><State value={project.status} /></dd></div></dl>
+              <p className="muted">프로젝트 이름과 사용 상태는 모든 환경에 적용됩니다.</p>
               <div className="actions">
-                <State value={project.status} />
                 <button
                   className="secondary"
                   disabled={busy}
@@ -632,24 +651,15 @@ function Workspace() {
                   {project.status === "ACTIVE" ? "중지" : "재개"}
                 </button>
               </div>
-            </div>
+            </section> : <>
             {project.status === "SUSPENDED" && (
-              <p className="warning">
+              <details className="scope-warning"><summary>중지된 프로젝트입니다</summary><p>
                 프로젝트가 중지되어 API 키 사용이 차단됩니다. 로그인 차단 반영
                 여부는 아래 환경별 상태를 확인하세요. 이미 발급된 토큰은
                 만료까지 유효할 수 있습니다.
-              </p>
+              </p></details>
             )}
-            <div className="section-line">
-              <h2>로그인 환경</h2>
-              <button
-                className="secondary"
-                disabled={busy || project.status !== "ACTIVE"}
-                onClick={() => open({ type: "environment" })}
-              >
-                환경 만들기 +
-              </button>
-            </div>
+            <h2 className="sr-only">조회 환경</h2>
             {detailLoading ? (
               <p className="empty" role="status">
                 환경을 불러오는 중…
@@ -660,31 +670,43 @@ function Workspace() {
                 <p>
                   DEV 또는 PROD 환경을 만들면 독립된 로그인 영역이 준비됩니다.
                 </p>
+                {tab === "projects" && <button className="secondary" disabled={busy || project.status !== "ACTIVE"}
+                  onClick={() => open({ type: "environment" })}>환경 만들기</button>}
               </div>
             ) : (
               <>
-                <div
-                  className="environment-tabs"
-                  role="group"
-                  aria-label="로그인 환경 선택"
-                >
-                  {envs.map((item) => (
-                    <button
-                      key={item.id}
-                      disabled={busy}
-                      className={
-                        envId === item.id ? "env-tab selected" : "env-tab"
-                      }
-                      aria-pressed={envId === item.id}
-                      onClick={() => setEnvId(item.id)}
-                    >
-                      {item.code}
-                      <span>{item.kind}</span>
-                    </button>
-                  ))}
+                <div className="environment-context">
+                  <label>조회 환경<select value={envId ?? ""} disabled={busy} onChange={event => {
+                    setEnvId(event.target.value); setError(""); setNotice("");
+                    if (section === "test") setSection("overview");
+                  }}>{envs.map(item => <option key={item.id} value={item.id}>{item.code} ({item.kind})</option>)}</select></label>
+                  {env && <State value={env.state} />}
+                  {tab === "projects" && activeSection === "overview" && <button className="secondary"
+                    disabled={busy || project.status !== "ACTIVE"} onClick={() => open({ type: "environment" })}>환경 만들기</button>}
                 </div>
                 {env && (
                   <>
+                    {tab === "projects" && activeSection === "overview" && <ProjectOverview key={`overview:${env.id}:${refresh}`} environmentId={env.id}
+                      ready={env.state === "READY"} disabled={busy} open={moveTo} />}
+                    {tab === "jobs" && <>
+                    <JobPanel key={`jobs:${env.id}`} environmentId={env.id}
+                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`}
+                      ready={env.state === "READY"} disabled={busy} onBusyChange={setBusy}
+                      onSettled={() => {
+                        void api<Environment[]>(`/projects/${project.id}/environments`).then(rows => {
+                          setEnvs(current => current.some(item => item.id === env.id) ? rows : current);
+                        }).catch(e => setError(e.message));
+                      }} />
+                    </>}
+                    {tab === "alerts" && <>
+                    <OperationalAlertsPanel key={`alerts:${env.id}`} environmentId={env.id}
+                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy} onBusyChange={setBusy} />
+                    </>}
+                    {tab === "projects" && activeSection === "auth" && <>
+                      <SectionTabs id="auth-section" label="인증 설정 항목" items={authSections} value={authSection} disabled={busy}
+                        onChange={setAuthSection} />
+                      <div id="auth-section-panel" role="tabpanel" aria-labelledby={`auth-section-${authSection}`} tabIndex={0}>
+                        {authSection === "login" && <>
                     <section className="settings">
                       <div className="section-line">
                         <h3>로그인 설정</h3>
@@ -743,43 +765,44 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
-                    <OperationalAlertsPanel key={`alerts:${env.id}`} environmentId={env.id}
-                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy} onBusyChange={setBusy} />
-                    <JobPanel key={`jobs:${env.id}`} environmentId={env.id}
-                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`}
-                      ready={env.state === "READY"} disabled={busy} onBusyChange={setBusy}
-                      onSettled={() => {
-                        void api<Environment[]>(`/projects/${project.id}/environments`).then(rows => {
-                          setEnvs(current => current.some(item => item.id === env.id) ? rows : current);
-                        }).catch(e => setError(e.message));
-                      }} />
+                        </>}
+                        {authSection === "policy" && <>
+                    <AuthenticationPolicyPanel
+                      key={`policy:${env.id}:${env.state}`}
+                      environmentId={env.id}
+                      ready={env.state === "READY"} onBusyChange={setBusy}
+                    />
+                        </>}
+                        {authSection === "social" && <>
+                    <SocialProviderPanel
+                      key={`social:${env.id}:${env.state}`}
+                      environmentId={env.id}
+                      ready={env.state === "READY"} onBusyChange={setBusy}
+                    />
+                        </>}
+                      </div>
+                    </>}
+                    {tab === "projects" && activeSection === "members" && <>
                     <MemberPanel
                       key={`members:${env.id}:${env.state}:${project.status}:${memberRefresh}`}
                       environmentId={env.id}
                       ready={env.state === "READY"}
                       suspended={project.status !== "ACTIVE"}
                     />
-                    <AuthenticationPolicyPanel
-                      key={`policy:${env.id}:${env.state}`}
-                      environmentId={env.id}
-                      ready={env.state === "READY"}
-                    />
-                    <SocialProviderPanel
-                      key={`social:${env.id}:${env.state}`}
-                      environmentId={env.id}
-                      ready={env.state === "READY"}
-                    />
-                    {mode === "dev" && env.kind === "DEV" && (
+                    </>}
+                    {tab === "projects" && activeSection === "test" && mode === "dev" && env.kind === "DEV" && (
                       <MockLoginPanel
                         key={`${env.id}:${env.state}:${project.status}`}
                         environmentId={env.id}
                         environmentLabel={`${project.name} / ${env.code} (DEV)`}
+                        onBusyChange={setBusy}
                         onReset={() => setMemberRefresh(value => value + 1)}
                         disabled={
                           project.status !== "ACTIVE" || env.state !== "READY"
                         }
                       />
                     )}
+                    {tab === "projects" && activeSection === "keys" && <>
                     <section className="keys">
                       <div className="section-line">
                         <div>
@@ -853,10 +876,13 @@ function Workspace() {
                         </p>
                       )}
                     </section>
+                    </>}
                   </>
                 )}
               </>
             )}
+            </>}
+            </div>
           </>
         )}
       </main>

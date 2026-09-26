@@ -25,14 +25,17 @@ export function MockLoginPanel({
   disabled,
   environmentLabel,
   onReset,
+  onBusyChange,
 }: {
   environmentId: string;
   disabled: boolean;
   environmentLabel: string;
   onReset: () => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
+  useEffect(() => { onBusyChange(busy || resetBusy); }, [busy, resetBusy, onBusyChange]);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const live = useRef(true);

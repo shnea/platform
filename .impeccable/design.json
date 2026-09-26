@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-25T08:56:25.567Z",
+  "generatedAt": "2026-09-26T08:52:23.890Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -73,9 +73,9 @@
       "name": "현재 메뉴",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "현재 위치는 배경과 글자색 및 aria-current로 구분",
+      "description": "프로젝트·비동기 작업·운영 알림·감사 이력의 주요 메뉴. 현재 위치는 배경·강조색과 aria-current로 구분하고 모바일에서는 현재 메뉴 이름이 있는 버튼으로 펼치거나 접는다.",
       "html": "<nav aria-label=\"관리 메뉴\"><button class=\"ds-nav\" aria-current=\"page\">프로젝트</button></nav>",
-      "css": ".ds-nav{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;border:1px solid transparent;border-radius:6px;padding:9px 15px;min-height:42px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s;background:var(--raised,#202d29);color:var(--accent,#b0e1c7);text-align:left}.ds-nav:hover{filter:brightness(1.1)}.ds-nav:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav{transition:none}}"
+      "css": ".ds-nav{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;border:1px solid transparent;border-radius:6px;padding:9px 15px;min-height:44px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s;background:var(--raised,#202d29);color:var(--accent,#b0e1c7);text-align:left}.ds-nav:hover{filter:brightness(1.1)}.ds-nav:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav{transition:none}}"
     },
     {
       "name": "반영 상태",

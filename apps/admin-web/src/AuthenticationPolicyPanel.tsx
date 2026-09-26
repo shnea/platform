@@ -16,13 +16,16 @@ type Policy = {
 export function AuthenticationPolicyPanel({
   environmentId,
   ready,
+  onBusyChange,
 }: {
   environmentId: string;
   ready: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange(busy); }, [busy, onBusyChange]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);

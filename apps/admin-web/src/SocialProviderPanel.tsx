@@ -44,9 +44,11 @@ const guides: Record<
 export function SocialProviderPanel({
   environmentId,
   ready,
+  onBusyChange,
 }: {
   environmentId: string;
   ready: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [providers, setProviders] = useState<Provider[] | null>(null);
   const [code, setCode] = useState("kakao");
@@ -54,6 +56,7 @@ export function SocialProviderPanel({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  useEffect(() => { onBusyChange(saving); }, [saving, onBusyChange]);
   const [reload, setReload] = useState(0);
   const live = useRef(true);
   useEffect(() => {
