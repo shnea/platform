@@ -28,6 +28,7 @@ class InternalSecurity extends OncePerRequestFilter {
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         String path = request.getRequestURI();
+        if (path.equals("/internal/v1/monitoring")) { chain.doFilter(request,response); return; } // Controller validates monitoring secret.
         if (path.startsWith("/actuator/health")) { chain.doFilter(request, response); return; }
         if (path.equals("/internal/v1/events/jobs") || path.equals("/internal/v1/operational-alerts") ||
                 path.equals("/internal/v1/operational-alerts/email-settings") || path.equals("/internal/v1/operational-alerts/email-deliveries") ||

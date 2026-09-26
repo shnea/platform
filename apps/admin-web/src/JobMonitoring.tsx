@@ -83,7 +83,7 @@ export function JobMonitoring({ environmentId, environmentLabel, disabled, openJ
       <div className="form-actions"><button className="secondary" disabled={disabled} onClick={() => openJobs("FAILED")}>전체 기간 실패 작업 보기</button>
         <button className="secondary" disabled={disabled} onClick={openAlerts}>운영 알림 보기</button></div>
       </div></div>
-      <p className="small muted">‘적체 경보 설정’에서 오래 대기하는 작업의 알림을 켤 수 있습니다. 작업 수치만으로 서비스 정상 여부를 판단하지 않습니다. 서비스·디스크 지표는 아직 제공하지 않습니다.</p>
+      <p className="small muted">‘적체 경보 설정’에서 오래 대기하는 작업의 알림을 켤 수 있습니다. 플랫폼 전체 서비스 지표는 위의 ‘서비스 상태’에서 확인하세요. 디스크 지표는 후속 제공 예정입니다.</p>
     </>}
   </section>;
 }

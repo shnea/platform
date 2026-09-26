@@ -14,6 +14,7 @@ import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 import { MemberPanel } from "./MemberPanel";
 import { JobPanel } from "./JobPanel";
 import { MonitoringWorkspace } from "./MonitoringWorkspace";
+import { ServiceMonitoring } from "./ServiceMonitoring";
 import { AlertWorkspace } from "./AlertWorkspace";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
@@ -24,7 +25,7 @@ type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "setti
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
-  { value: "monitoring", label: "모니터링", description: "작업 대기·실행 현황과 최근 24시간 처리 결과를 확인하세요." },
+  { value: "monitoring", label: "모니터링", description: "플랫폼 서비스 상태와 프로젝트별 작업 현황을 확인하세요." },
   { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
   { value: "audit", label: "감사 이력", description: "관리 작업과 인증 활동을 확인하세요. 최근 100건을 표시합니다." },
 ];
@@ -218,6 +219,8 @@ function Workspace() {
   const [tab, setTab] = useState<View>("projects"),
     [modal, setModal] = useState<Modal | null>(null);
   const [section, setSection] = useState<ProjectSection>("overview");
+  const [monitoringScope, setMonitoringScope] = useState<"services" | "projects">("services");
+  const serviceView = tab === "monitoring" && monitoringScope === "services";
   const [authSection, setAuthSection] = useState<"login" | "policy" | "social">("login");
   const [menuOpen, setMenuOpen] = useState(false);
   const pageTitle = useRef<HTMLHeadingElement>(null);
@@ -254,6 +257,7 @@ function Workspace() {
     let live = true;
     setLoading(true);
     setError("");
+    if (serviceView) { setLoading(false); return; }
     const load =
       tab !== "audit"
         ? api<Project[]>(`/projects?limit=20&offset=${offset}`).then((rows) => {
@@ -272,7 +276,7 @@ function Workspace() {
     return () => {
       live = false;
     };
-  }, [offset, refresh, tab]);
+  }, [offset, refresh, tab, serviceView]);
   useEffect(() => {
     let live = true;
     const sameProject = previousProject.current === selected;
@@ -484,7 +488,7 @@ function Workspace() {
         <div className="page-heading">
           <div>
             <p className="breadcrumb">
-              워크스페이스 / {view.label}{project && tab !== "audit" ? ` / ${project.code}` : ""}
+              워크스페이스 / {view.label}{project && tab !== "audit" && !serviceView ? ` / ${project.code}` : ""}
             </p>
             <h1 ref={pageTitle} tabIndex={-1}>
               {tab === "projects" && project ? project.name : view.label}
@@ -494,13 +498,13 @@ function Workspace() {
             </p>
           </div>
           <div className="actions">
-            <button
+            {!serviceView && <button
               className="secondary"
               disabled={busy || loading}
               onClick={reload}
             >
               새로고침
-            </button>
+            </button>}
             {tab === "projects" && !project && (
               <button disabled={busy} onClick={() => open({ type: "project" })}>
                 프로젝트 만들기 <span aria-hidden="true">+</span>
@@ -518,7 +522,11 @@ function Workspace() {
             {notice}
           </p>
         )}
-        {tab === "audit" ? (
+        {tab === "monitoring" && <SectionTabs id="monitoring-scope" label="모니터링 범위" value={monitoringScope} onChange={setMonitoringScope} disabled={busy}
+          items={[{value:"services",label:"서비스 상태"},{value:"projects",label:"프로젝트 작업"}]} />}
+        <div id={tab === "monitoring" ? "monitoring-scope-panel" : undefined} role={tab === "monitoring" ? "tabpanel" : undefined}
+          aria-labelledby={tab === "monitoring" ? `monitoring-scope-${monitoringScope}` : undefined}>
+        {serviceView ? <ServiceMonitoring /> : tab === "audit" ? (
           loading ? (
             <p role="status">이력을 불러오는 중…</p>
           ) : (
@@ -894,6 +902,7 @@ function Workspace() {
             </div>
           </>
         )}
+        </div>
       </main>
       {modal && (
         <Dialog

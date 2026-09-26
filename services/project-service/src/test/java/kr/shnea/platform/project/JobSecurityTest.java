@@ -54,7 +54,7 @@ class JobSecurityTest {
             mvc.perform(put("/api/v1/admin/environments/"+id+"/operational-alerts/email-settings")).andExpect(status().isUnauthorized());
             mvc.perform(put("/api/v1/admin/environments/"+id+"/operational-alerts/email-settings").header("Authorization","Bearer reader"))
                 .andExpect(status().isForbidden());
-            for (String suffix : List.of("/jobs", "/jobs/"+id, "/jobs/"+id+"/events", "/environments/"+id+"/operational-alerts",
+            for (String suffix : List.of("/service-metrics", "/jobs", "/jobs/"+id, "/jobs/"+id+"/events", "/environments/"+id+"/operational-alerts",
                     "/environments/"+id+"/operational-alerts/email-settings", "/environments/"+id+"/operational-alerts/email-deliveries", "/environments/"+id+"/job-metrics", "/environments/"+id+"/job-backlog-settings")) {
                 mvc.perform(get("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(get("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))

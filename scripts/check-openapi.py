@@ -37,7 +37,7 @@ def main():
         spec, _ = call('GET', '/api/v1/admin/openapi', headers)
         validate(spec)
         assert spec == json.loads(Path('/contracts/project.json').read_text())
-        assert len(spec['paths']) == 38 and sum(len(v) for v in spec['paths'].values()) == 45
+        assert len(spec['paths']) == 39 and sum(len(v) for v in spec['paths'].values()) == 46
         assert not any(path.startswith('/internal') for path in spec['paths'])
 
         def verify(schema, value):
@@ -52,6 +52,24 @@ def main():
 
         get('/api/v1/config')
         get('/api/v1/admin/jobs')
+        report, report_headers = get('/api/v1/admin/service-metrics')
+        assert report_headers['Cache-Control'] == 'no-store'
+        assert {s['id'] for s in report['services']} == {'project-service', 'file-service', 'notification-service'}
+        call('GET', '/api/v1/admin/service-metrics', expected=401)
+        for service in report['services']:
+            assert service['status'] == 'UP', service['id']
+            endpoint = 'http://'+service['id']+':8080/internal/v1/monitoring'
+            call('GET', endpoint, expected=403)
+            call('GET', endpoint, {'X-Platform-Monitoring-Key':os.environ['PLATFORM_MAIL_SECRET']}, expected=403)
+            secret = os.environ.get('PLATFORM_MONITORING_SECRET', '')
+            if secret:
+                assert service['metricsStatus'] == 'AVAILABLE' and service['metrics'] is not None, service['id']
+                snapshot, snapshot_headers = call('GET', endpoint, {'X-Platform-Monitoring-Key':secret})
+                verify({'$ref':'#/components/schemas/ServiceSnapshot'}, snapshot)
+                assert snapshot_headers['Cache-Control'] == 'no-store'
+            else:
+                assert service['metricsStatus'] == 'DISABLED' and service['metrics'] is None
+        print('PASS service monitoring scope, dedicated internal key and no-store')
         projects, _ = get('/api/v1/admin/projects')
         get('/api/v1/admin/audit-events')
         for project in projects:

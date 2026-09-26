@@ -736,6 +736,14 @@ textarea::placeholder {
 .job-chart-bar.failed { background: var(--danger); }
 .job-chart-bar.cancelled { background: var(--muted); }
 .job-chart-count { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.service-status-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-block: 32px; }
+.service-status-list article { border-top: 1px solid var(--line); padding-top: 16px; min-width: 0; }
+.service-status-list .section-line { flex-wrap: wrap; gap: 8px; }
+.service-monitoring > p, .service-monitoring details { max-width: 75ch; }
+.service-chart .job-chart-count { flex-basis: 88px; }
+.service-chart .job-chart-scale { margin-right: 100px; }
+.danger-text { color: var(--danger); }
+@media (max-width: 1100px) { .service-status-list { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
 @media (max-width: 1100px) { .monitoring-layout { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
 .checkbox input {
   width: 18px;

@@ -27,7 +27,7 @@ with urlopen(base + "/", timeout=10) as response:
     assert response.headers["Cache-Control"] == "no-store"
 print("PASS admin HTML and security/cache headers")
 
-for path in ("/actuator/env", "/api/projects/actuator/env", "/api/files/upload", "/unknown"):
+for path in ("/actuator/env", "/api/projects/actuator/env", "/api/files/upload", "/unknown", "/internal/v1/monitoring"):
     try:
         urlopen(base + path, timeout=10)
     except HTTPError as error:

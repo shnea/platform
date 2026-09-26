@@ -37,6 +37,7 @@ class SecurityConfig {
                 .requestMatchers("/actuator/health/**", "/error", "/api/v1/config").permitAll()
                 .requestMatchers("/api/v1/integration/context", "/api/v1/dev/login").permitAll() // Controllers validate scoped key.
                 .requestMatchers("/internal/v1/email/environments/*").permitAll() // Dedicated internal secret, never routed by Nginx.
+                .requestMatchers("/internal/v1/monitoring").permitAll() // ServiceTelemetry checks its own dedicated secret.
                 .requestMatchers("/api/v1/admin/**").hasRole("PLATFORM_ADMIN")
                 .anyRequest().denyAll())
             .exceptionHandling(errors -> errors.authenticationEntryPoint(unauthorized).accessDeniedHandler(forbidden))

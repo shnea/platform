@@ -2029,6 +2029,33 @@
           }
         }
       }
+    },
+    "/api/v1/admin/service-metrics": {
+      "get": {
+        "operationId": "get_service_metrics",
+        "summary": "플랫폼 서비스 상태와 재시작 이후 누적 HTTP 지표 조회",
+        "description": "관리자 전용. 선택한 환경의 현재 대기·재시도 대기·실행 수와 DB 측정 시각 기준 최근 24시간 완료·최종 실패·취소 수를 조회합니다. 완료 시각으로 시작 포함/끝 제외 집계합니다. 최장 대기는 현재 대기 상태 진입(updated_at) 이후 경과이며 없으면 null입니다. dueWaiting은 실행 예정 시각이 지난 QUEUED/RETRY_WAIT 수입니다. 실패 수는 미해결 장애 수가 아닙니다. 없는 환경은 404, 빈 환경은 0과 null입니다. 중지 환경도 조회합니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceReport"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3951,6 +3978,127 @@
           },
           "monitoringAvailable": {
             "type": "boolean"
+          }
+        }
+      },
+      "ServiceSnapshot": {
+        "type": "object",
+        "required": [
+          "instanceId",
+          "startedAt",
+          "measuredAt",
+          "requests",
+          "clientErrors",
+          "serverErrors",
+          "serverErrorPercent",
+          "averageMs"
+        ],
+        "properties": {
+          "instanceId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "measuredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "clientErrors": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "serverErrors": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "serverErrorPercent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100
+          },
+          "averageMs": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      },
+      "ServiceReading": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "checkedAt",
+          "metricsStatus",
+          "metrics"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN",
+              "UNREACHABLE",
+              "UNKNOWN"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metricsStatus": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE",
+              "DISABLED"
+            ]
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ServiceReport": {
+        "type": "object",
+        "required": [
+          "measuredAt",
+          "services"
+        ],
+        "properties": {
+          "measuredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceReading"
+            }
           }
         }
       }
