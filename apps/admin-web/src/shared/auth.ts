@@ -38,7 +38,7 @@ export async function api<T>(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
-  });
+  }).catch(() => { throw new Error("서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."); });
   if (!response.ok) throw await readApiError(response);
   return response.status === 204 ? (undefined as T) : response.json();
 }

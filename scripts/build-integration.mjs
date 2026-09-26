@@ -7,12 +7,12 @@ import {createHash} from 'node:crypto';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const out=resolve(process.argv[2]??resolve(root,'output/integrations'));
 await mkdir(out,{recursive:true});
-for(const [source,name] of [['docs/SERVICE_INTEGRATION.md','SERVICE_INTEGRATION.md'],['docs/integration/AUTH.md','auth.md'],['packages/editor/INTEGRATION.md','editor.md']]){
+for(const [source,name] of [['docs/SERVICE_INTEGRATION.md','SERVICE_INTEGRATION.md'],['docs/integration/AUTH.md','auth.md'],['docs/integration/JOBS.md','jobs.md'],['docs/integration/LOGS.md','logs.md'],['packages/editor/INTEGRATION.md','editor.md']]){
  await copyFile(resolve(root,source),resolve(out,name));
 }
-for(const service of ['project','file']){
- const source=JSON.parse(await readFile(resolve(root,`services/${service}-service/src/main/resources/openapi.json`),'utf8'));
- const paths=Object.fromEntries(Object.entries(source.paths).filter(([path])=>service==='project'?['/api/v1/integration/context','/api/v1/dev/login'].includes(path):path.startsWith('/api/v1/files')&&!path.includes('/admin/')&&!path.startsWith('/api/v1/files/downloads/')));
+for(const service of ['project','file','jobs','logs']){
+ const source=JSON.parse(await readFile(resolve(root,`services/${service==='file'?'file':'project'}-service/src/main/resources/openapi.json`),'utf8'));
+ const paths=Object.fromEntries(Object.entries(source.paths).filter(([path])=>service==='project'?['/api/v1/integration/context','/api/v1/dev/login'].includes(path):service==='jobs'?path.startsWith('/api/v1/jobs'):service==='logs'?path==='/api/v1/logs':path.startsWith('/api/v1/files')&&!path.includes('/admin/')&&!path.startsWith('/api/v1/files/downloads/')));
  const components={};
  function include(group,name){
   if(components[group]?.[name])return;

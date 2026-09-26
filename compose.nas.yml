@@ -1,0 +1,21 @@
+# Use only with compose.yml on the NAS. Application files live on volume1;
+# every persistent data volume binds to an explicit directory on volume2.
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /volume2/homes/platform/postgres
+  file-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /volume2/homes/platform/files
+  log-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /volume2/homes/platform/loki

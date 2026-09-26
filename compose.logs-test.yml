@@ -1,0 +1,30 @@
+# Disposable retention verification; never combine with the application Compose files.
+name: platform-log-checks
+services:
+  loki:
+    image: grafana/loki:3.7.0
+    command:
+      - -config.file=/etc/loki/platform.yml
+      - -compactor.compaction-interval=1s
+      - -compactor.apply-retention-interval=1s
+      - -compactor.retention-delete-delay=1s
+      - -store.retention=24h
+      - -validation.reject-old-samples.max-age=168h
+      - -querier.max-query-lookback=0s
+      - -querier.query-ingesters-within=0s
+      - -query-engine.enforce-retention-period=false
+    volumes:
+      - ./infra/loki/loki.yml:/etc/loki/platform.yml:ro
+      - log-test-data:/loki
+    mem_limit: 512m
+  check:
+    image: python:3.13-alpine
+    depends_on: [loki]
+    volumes:
+      - ./scripts/check-log-retention.py:/check.py:ro
+      - log-test-data:/data:ro
+    environment:
+      LOG_CHECK_PHASE: ${LOG_CHECK_PHASE:-write}
+    command: [python, /check.py]
+volumes:
+  log-test-data:

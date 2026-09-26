@@ -52,14 +52,20 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(40);
-        assertThat(prod.path("paths").size()).isEqualTo(35);
+        assertThat(dev.path("paths").size()).isEqualTo(54);
+        assertThat(prod.path("paths").size()).isEqualTo(49);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 
     @Test void recordFieldsAndSchemaPropertiesStayInSync() throws Exception {
         var schemas = new OpenApiController(json, "dev").specification().getBody().path("components").path("schemas");
         var models = Map.ofEntries(
+            Map.entry("ExternalJob",ExternalJobs.Job.class), Map.entry("ExternalJobSubmit",ExternalJobs.Submit.class),
+            Map.entry("ExternalJobAttempt",ExternalJobs.Attempt.class), Map.entry("ExternalJobDetail",ExternalJobs.Detail.class),
+            Map.entry("ExternalJobPage",ExternalJobs.Page.class), Map.entry("ExternalJobClaim",ExternalJobs.Claim.class),
+            Map.entry("ExternalJobClaimRequest",ExternalJobController.ClaimRequest.class), Map.entry("ExternalJobHeartbeat",ExternalJobController.Heartbeat.class),
+            Map.entry("ExternalJobReport",ExternalJobController.Report.class), Map.entry("LogEntry",CommonLogs.Entry.class),
+            Map.entry("LogBatch",CommonLogs.Batch.class), Map.entry("LogAccepted",CommonLogs.Accepted.class), Map.entry("LogPage",CommonLogs.Page.class),
             Map.entry("ServiceReport",ServiceMonitoring.Report.class), Map.entry("ServiceReading",ServiceMonitoring.Reading.class),
             Map.entry("ServiceSnapshot",kr.shnea.platform.http.ServiceTelemetry.Snapshot.class),
             Map.entry("OperationalAlert",OperationalAlertController.Alert.class),

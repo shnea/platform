@@ -58,6 +58,10 @@ docker compose -f compose.yml -f compose.dev.yml down
 
 운영용 `compose.yml`에는 빌드 경로나 소스 마운트가 없다. 운영 배포 전 이미지 게시, Linux 대상 아키텍처, TLS와 도메인, 관리자 보호, 백업·복원 검증을 완료해야 한다. 현재 개발 이미지는 운영 출시본이 아니다. 구성과 경계는 [실행 기반 문서](docs/ARCHITECTURE.md)를 참고한다.
 
+NAS 신규 설치는 [NAS 배포 안내](docs/NAS_DEPLOYMENT.md)를 따른다. 설정은 `/volume1/docker/prod/platform`, DB·파일·로그 데이터는 `/volume2/homes/platform` 아래에 저장한다. 사용자가 직접 배포하며 개발 데이터는 이전하지 않는다.
+
+외부 프로젝트의 [Job 워커 연결](docs/integration/JOBS.md)과 [공통 로그 연결](docs/integration/LOGS.md)은 서버 API 키로 사용한다. Job은 호스트 워커가 실행하며, 로그는 내부 Loki에 환경별로 저장한다. 관리자 비동기 작업 탭과 독립 로그 메뉴에서 확인한다.
+
 관리자 화면 수정 후에는 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps admin-web`을 실행한다. 이미지 빌드 과정에서 `npm ci`, TypeScript 검사와 Vite 빌드를 실행한다. 로그인·설정·모바일 수동 검수 순서는 [관리자 화면 안내](docs/ADMIN_WEB.md)에 있다.
 
 NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프록시 안내](docs/REVERSE_PROXY.md)의 헤더 신뢰·포트 접근 제한을 먼저 확인한다.

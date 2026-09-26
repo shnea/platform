@@ -23,6 +23,7 @@ uploads/
 output/playwright/
 output/job-checks/
 output/integrations/
+output/releases/
 .recovery/
 .playwright-cli/
 .impeccable/review/

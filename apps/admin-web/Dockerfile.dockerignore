@@ -9,6 +9,8 @@
 !docs/SERVICE_INTEGRATION.md
 !docs/integration/
 !docs/integration/AUTH.md
+!docs/integration/JOBS.md
+!docs/integration/LOGS.md
 !scripts/
 !scripts/build-integration.mjs
 !services/

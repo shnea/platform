@@ -22,9 +22,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class JobSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, JobController.class, OutboxController.class, OperationalAlertController.class})
+    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, JobController.class, OutboxController.class, OperationalAlertController.class, ExternalJobController.class, CommonLogController.class})
     static class Config {
         @Bean ProvisionJobs jobs() { return mock(ProvisionJobs.class); }
+        @Bean ExternalJobs externalJobs() { return mock(ExternalJobs.class); }
+        @Bean CommonLogs commonLogs() { return mock(CommonLogs.class); }
         @Bean OutboxDelivery delivery() { return mock(OutboxDelivery.class); }
         @Bean ProjectService projects() { return mock(ProjectService.class); }
         @Bean JsonMapper json() { return new JsonMapper(); }
@@ -46,7 +48,7 @@ class JobSecurityTest {
             String id = UUID.randomUUID().toString();
             mvc.perform(put("/api/v1/admin/environments/"+id+"/job-backlog-settings")).andExpect(status().isUnauthorized());
             mvc.perform(put("/api/v1/admin/environments/"+id+"/job-backlog-settings").header("Authorization","Bearer reader")).andExpect(status().isForbidden());
-            for (String suffix : List.of("/environments/"+id+"/provision-jobs", "/jobs/"+id+"/cancel", "/jobs/"+id+"/retry", "/events/"+id+"/retry", "/environments/"+id+"/operational-alerts/"+id+"/acknowledge")) {
+            for (String suffix : List.of("/environments/"+id+"/external-jobs/"+id+"/cancel", "/environments/"+id+"/external-jobs/"+id+"/retry", "/environments/"+id+"/provision-jobs", "/jobs/"+id+"/cancel", "/jobs/"+id+"/retry", "/events/"+id+"/retry", "/environments/"+id+"/operational-alerts/"+id+"/acknowledge")) {
                 mvc.perform(post("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(post("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
@@ -54,7 +56,7 @@ class JobSecurityTest {
             mvc.perform(put("/api/v1/admin/environments/"+id+"/operational-alerts/email-settings")).andExpect(status().isUnauthorized());
             mvc.perform(put("/api/v1/admin/environments/"+id+"/operational-alerts/email-settings").header("Authorization","Bearer reader"))
                 .andExpect(status().isForbidden());
-            for (String suffix : List.of("/service-metrics", "/jobs", "/jobs/"+id, "/jobs/"+id+"/events", "/environments/"+id+"/operational-alerts",
+            for (String suffix : List.of("/environments/"+id+"/logs", "/environments/"+id+"/external-jobs", "/environments/"+id+"/external-jobs/"+id, "/service-metrics", "/jobs", "/jobs/"+id, "/jobs/"+id+"/events", "/environments/"+id+"/operational-alerts",
                     "/environments/"+id+"/operational-alerts/email-settings", "/environments/"+id+"/operational-alerts/email-deliveries", "/environments/"+id+"/job-metrics", "/environments/"+id+"/job-backlog-settings")) {
                 mvc.perform(get("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(get("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
@@ -63,6 +65,8 @@ class JobSecurityTest {
             verifyNoInteractions(context.getBean(ProvisionJobs.class));
             verifyNoInteractions(context.getBean(OutboxDelivery.class));
             verifyNoInteractions(context.getBean(ProjectService.class));
+            verifyNoInteractions(context.getBean(ExternalJobs.class));
+            verifyNoInteractions(context.getBean(CommonLogs.class));
         }
     }
 }

@@ -10,14 +10,15 @@
 |---|---|---|---|
 | Nginx | nginx | 없음 | 30140 진입·상태 라우팅·Keycloak 프록시 |
 | 관리자 웹 | admin-web | 없음 | React·TypeScript UI, Keycloak 브라우저 로그인, 테마·프로젝트·키·감사 관리 |
-| 프로젝트 | project-service | platform_project | 프로젝트·환경·중지·재개·설정 동기화·API 키·감사·개발 Mock 로그인 |
+| 프로젝트 | project-service | platform_project | 프로젝트·환경·API 키·감사·개발 Mock, 내부/외부 Job 큐, 공통 로그 인증·마스킹·한도·조회 |
+| 공통 로그 저장소 | 외부 이미지 `grafana/loki:3.7.0` | 환경 UUID별 tenant·전용 파일 볼륨 | 로그·색인·WAL, 7일 보존과 물리 정리 |
 | 파일 | file-service | platform_file | 업로드·재개, 원본/미리보기/썸네일·부분 전송·HLS 변환/재생, 보기 권한, 보존 정책·자동 정리·감사와 영속 볼륨 |
 | 알림 | notification-service | platform_notification | 인증 메일 모의 수신함·NCP 전달·상태/보존 관리, 내부 오류/요청 추적 |
 | Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진·프로젝트 realm·소셜 브로커 |
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
 | 인증 초기화 도구 | tools | DB 직접 접근 없음 | setup 프로필로만 실행, 관리자 realm·서비스 계정 설정 |
 
-이미지는 모두 `register.shnea.kr/platform-접미사:IMAGE_TAG`로 빌드한다. 현재 로컬 태그는 `0.1.0-dev`다. 레지스트리에 게시한 상태는 아니다.
+자체 이미지는 `register.shnea.kr/platform-접미사:IMAGE_TAG`로 빌드한다. Loki는 고정 버전 외부 이미지를 사용한다. 현재 로컬 태그는 `0.1.0-dev`다. 레지스트리에 게시한 상태는 아니다.
 
 하나의 PostgreSQL 서버에 별도 DB와 비밀번호를 둔다. 서비스 계정에는 다른 DB의 CONNECT 권한이 없다. DB 관리자와 Docker 호스트 관리자는 모든 DB를 관리할 수 있으므로 물리적인 장애·관리자 격리는 아니다. 서비스에는 자기 비밀번호만 전달한다. Keycloak DB에 접근하는 신규 업무 코드는 만들지 않는다.
 
@@ -26,6 +27,10 @@
 각 API는 개별 Gradle 하위 프로젝트, 프로세스, 이미지다. Kotlin DSL로 빌드하고 Gradle은 Docker 이미지에 고정한다. `libraries:http`는 공통 오류 직렬화·요청 ID·내부 누적 지표를 제공하며 별도 프로세스나 DB를 만들지 않는다. 서비스 간 DB 조인은 없다. 프로젝트 관리 API는 별도 관리자 realm의 JWT·audience·역할로 보호하며, 연동·Mock API는 환경별 서버 키를 검증한다. 파일 서비스는 전용 내부 인증키로 프로젝트 서비스에 파일 권한을 확인하고 자기 DB와 `file-data` 영속 볼륨만 사용한다. 세부 계약과 단계별 미완료 범위는 [파일 서비스](FILES.md)를 따른다.
 
 ## 버전 선택
+
+외부 Job은 프로젝트 DB의 별도 영속 큐다. 각 프로젝트 워커가 권한이 있는 환경에서 작업을 점유하고, 60초 점유 연장·완료/실패를 보고한다. 플랫폼은 만료 복구와 제한된 재시도를 담당하며 외부 코드를 실행하지 않는다. 내부 Job·Outbox와 분리하고 관리자 화면에서 탭으로 구분한다. 상세 계약은 [Job 연결 지침](integration/JOBS.md)을 따른다.
+
+공통 로그는 프로젝트 서비스가 서버 키를 검증해 환경 UUID를 Loki tenant로 지정한다. 클라이언트가 tenant를 선택할 수 없다. 전용 내부 `logs` 네트워크에는 project-service와 Loki만 연결하며 Loki 호스트 포트는 없다. 환경별 분당·하루 한도와 전송 전 마스킹을 적용한다. 저장소의 7일 보존·삭제 지연, 송신 측 제외 규칙은 [로그 연결 지침](integration/LOGS.md)을 따른다. NAS에서는 DB·파일·로그 영속 볼륨을 모두 volume2로 연결한다. [수동 배포 안내](NAS_DEPLOYMENT.md) 참고.
 
 | 구성 | 사용 버전 |
 |---|---|

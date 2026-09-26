@@ -13,7 +13,8 @@ import { MockLoginPanel } from "../features/testing/MockLoginPanel";
 import { SocialProviderPanel } from "../features/accounts/SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "../features/accounts/AuthenticationPolicyPanel";
 import { MemberPanel } from "../features/accounts/MemberPanel";
-import { JobPanel } from "../features/jobs/JobPanel";
+import { JobWorkspace } from "../features/jobs/JobWorkspace";
+import { LogPanel } from "../features/logs/LogPanel";
 import { MonitoringWorkspace } from "../features/monitoring/MonitoringWorkspace";
 import { ServiceMonitoring } from "../features/monitoring/ServiceMonitoring";
 import { AlertWorkspace } from "../features/alerts/AlertWorkspace";
@@ -25,14 +26,15 @@ import { DeveloperCenter } from "../features/developer/DeveloperCenter";
 import { EditorEntry } from "../features/editor/EditorEntry";
 import { FileWorkspace } from "../features/files/FileWorkspace";
 
-type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
+type View = "projects" | "files" | "jobs" | "logs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
 type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
-const viewIcons = {projects:'folder',files:'file',editor:'pencil',jobs:'list-checks',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
+const viewIcons = {projects:'folder',files:'file',editor:'pencil',jobs:'list-checks',logs:'search',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
   { value: "files", label: "파일", description: "파일을 올리고 썸네일·미리보기·URL과 보존 정책을 관리하세요." },
   { value: "editor", label: "에디터", description: "문서를 직접 편집하고 읽기 화면과 연동 데이터를 확인하세요." },
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
+  { value: "logs", label: "로그", description: "프로젝트 서버가 전송한 로그를 검색하고 같은 요청의 흐름을 확인하세요." },
   { value: "monitoring", label: "모니터링", description: "플랫폼 서비스 상태와 프로젝트별 작업 현황을 확인하세요." },
   { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
   { value: "developer", label: "개발자 센터", description: "파일 API 명세와 서버 연동 예제로 프로젝트를 연결하세요." },
@@ -715,7 +717,7 @@ function Workspace() {
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"}
                       onBusyChange={setBusy} />}
                     {tab === "jobs" && <>
-                    <JobPanel key={`jobs:${env.id}`} environmentId={env.id} initialState={jobInitialState}
+                    <JobWorkspace key={`jobs:${env.id}`} environmentId={env.id} initialState={jobInitialState}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`}
                       ready={env.state === "READY"} disabled={busy} onBusyChange={setBusy}
                       onSettled={() => {
@@ -724,6 +726,7 @@ function Workspace() {
                         }).catch(e => setError(e.message));
                       }} />
                     </>}
+                    {tab === "logs" && <LogPanel key={`logs:${env.id}`} environmentId={env.id}/>}
                     {tab === "monitoring" && <MonitoringWorkspace key={`monitoring:${env.id}`} environmentId={env.id} onBusyChange={setBusy}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy}
                       openJobs={state => { moveTo("jobs"); setJobInitialState(state); }} openAlerts={() => moveTo("alerts")} />}

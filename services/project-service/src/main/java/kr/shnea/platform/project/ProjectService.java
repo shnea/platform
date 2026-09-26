@@ -132,6 +132,11 @@ class ProjectService {
     List<Scope> credentialScopes(UUID environmentId) {
         Environment env = findEnvironment(environmentId);
         var scopes=new java.util.ArrayList<Scope>(); scopes.add(READ);
+        scopes.addAll(List.of(new Scope("jobs:read","외부 작업 조회","같은 환경의 작업과 결과를 조회합니다."),
+            new Scope("jobs:write","외부 작업 관리","작업을 등록·취소·재시도합니다."),
+            new Scope("jobs:work","외부 작업 실행","워커가 작업을 점유하고 상태·결과를 보고합니다."),
+            new Scope("logs:write","로그 전송","같은 환경으로 진단 로그를 전송합니다."),
+            new Scope("logs:read","로그 조회","같은 환경의 진단 로그를 조회합니다.")));
         if(mode.equals("dev") && env.kind().equals("DEV"))scopes.add(MOCK);
         if(project(env.projectId(),false).filesEnabled())scopes.addAll(List.of(FILE_READ,FILE_WRITE,FILE_DELETE,FILE_SHARE));
         return List.copyOf(scopes);
@@ -427,7 +432,7 @@ class ProjectService {
         return json.readValue(rs.getString("scopes"), List.class);
     }
 
-    private Project lockProject(UUID id) { return project(id, true); }
+    Project lockProject(UUID id) { return project(id, true); }
     private Project project(UUID id, boolean lock) {
         return db.query("SELECT * FROM projects WHERE id=?" + (lock ? " FOR UPDATE" : ""),
             (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("name"),

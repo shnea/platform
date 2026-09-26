@@ -17,6 +17,10 @@
 | 환경 확인·DEV Mock API | https://platform.shnea.kr/integrations/project.openapi.json |
 | 파일 업로드·재개·보기·공유·삭제 API | https://platform.shnea.kr/integrations/file.openapi.json |
 | 실행 가능한 서버 파일 클라이언트 (Python 3.11+) | https://platform.shnea.kr/examples/file-client.py |
+| 외부 Job · pull 워커 연결 | https://platform.shnea.kr/integrations/jobs.md |
+| Job API · Python 워커 | https://platform.shnea.kr/integrations/jobs.openapi.json · https://platform.shnea.kr/examples/jobs-client.py |
+| 공통 로그 · 비동기 전송 | https://platform.shnea.kr/integrations/logs.md |
+| 로그 API · Python 전송기 | https://platform.shnea.kr/integrations/logs.openapi.json · https://platform.shnea.kr/examples/logs-client.py |
 | React·Vue·JS·JSP 에디터/뷰어·첨부 연결 | https://platform.shnea.kr/integrations/editor.md |
 | 에디터 설치 패키지 | https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.6.tgz |
 | 패키지 SHA-256 | https://platform.shnea.kr/integrations/checksums.json |
@@ -32,6 +36,8 @@
 | 이용자 로그인 | 환경 issuer의 OIDC discovery, client `app`, Code + PKCE S256. 서버 키/관리자 계정 사용 금지 |
 | 파일 | 호스트 서버에서 `X-Platform-Key`. `files:read/write/delete/share` 중 필요한 권한만 발급. 프로젝트 파일 사용 켜기 필요 |
 | 에디터 | 패키지 자체는 인증 불필요. 본문 JSON 저장·사용자 권한·첨부 전송은 호스트 책임 |
+| Job | 호스트 서버 키 `jobs:write/read/work`. 플랫폼이 큐 관리, 프로젝트 워커가 실행. 업무는 job.id로 멱등 처리 |
+| 로그 | 호스트 서버 키 `logs:write/read`. 비동기·제한된 전송, 민감값 제외. 7일 보존·환경별 한도 |
 
 ## 구현 규칙
 
@@ -40,7 +46,7 @@
 3. 외부 도메인의 기본 뷰어 iframe·직접 HLS fetch는 현재 임베드/CORS 제한이 있다. 새 탭 뷰어를 쓰거나 호스트 중계·플레이어를 별도 구현한다. 무조건 허용된다고 가정하지 않는다.
 4. 보존 코드 `default`는 영구가 아니다. 장기 첨부의 정책을 명시한다. 본문 제거와 원본 삭제를 분리한다.
 5. 오류는 HTTP 상태 + `code`로 판단하고 `detail`·응답 `X-Request-ID`를 처리한다. 통신 실패 후 변경 요청을 무조건 재실행하지 않는다.
-6. 일반 알림 발송·외부 웹훅·공통 로그 API는 아직 미제공. Job은 플랫폼 내부용이며 외부 범용 접수 API가 없다.
+6. Job 점유 만료 시 실행·보고를 중지한다. 로그 장애가 사용자 요청을 막지 않게 한다. 일반 알림 발송·외부 웹훅 API는 아직 미제공.
 
 ## 실행 순서
 

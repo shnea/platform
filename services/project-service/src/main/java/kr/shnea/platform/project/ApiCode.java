@@ -5,6 +5,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 // Public machine codes: keep meanings stable even when Korean wording changes.
 enum ApiCode {
+    EXTERNAL_JOB_REQUEST_CONFLICT(409, "같은 요청 ID로 다른 작업을 등록할 수 없습니다."),
+    EXTERNAL_JOB_LEASE_LOST(409, "작업 점유가 만료되거나 다른 워커로 변경되었습니다. 실행 결과를 다시 반영하지 마세요."),
+    EXTERNAL_JOB_CAPACITY(429, "이 환경의 작업 보관 또는 활성 작업 한도에 도달했습니다."),
+    LOG_QUOTA_EXCEEDED(429, "환경의 로그 전송 한도에 도달했습니다. 전송량을 줄여 주세요."),
+    LOG_BACKEND_UNAVAILABLE(503, "로그 저장소 응답을 확인하지 못했습니다. 제한된 횟수로 재시도해 주세요."),
     FILE_SERVICE_DISABLED(403, "프로젝트에서 파일 서비스를 사용하도록 설정해 주세요."),
     EVENT_NOT_RETRYABLE(409, "최종 실패한 이벤트만 다시 전달할 수 있습니다."),
     JOB_STATE_CHANGED(409, "작업 상태가 변경되었습니다. 작업 목록을 다시 확인해 주세요."),

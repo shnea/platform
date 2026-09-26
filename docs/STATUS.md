@@ -2,6 +2,20 @@
 
 ## 현재 단계
 
+### 외부 Job·공통 로그·연결 지침과 NAS 배포 준비 완료 (2026-09-27)
+
+- **최신 합의:** 외부 프로젝트의 워커가 작업을 가져가 실행한다. 플랫폼은 큐·상태·재시도·감사를 관리하며 외부 실행 코드를 받지 않는다. NAS 배포는 사용자가 직접 하며 개발 데이터·실제 `.env`를 이전하지 않는다. 배포 루트는 `/volume1/docker/prod/platform`, DB·파일·로그 데이터는 `/volume2/homes/platform/{postgres,files,loki}`다.
+- **외부 Job:** 환경별 `jobs:write/read/work` 키로 등록·조회·점유·점유 연장·완료/실패·취소·재접수를 제공한다. UUID 접수 중복 방지, 60초 점유, 만료 워커 거부, 최대 10회 실행, 점유 만료 복구, 실행 이력·감사와 완료 후 30일 보존을 구현했다. 호스트 업무의 중복 방지는 호스트 책임이다. 내부 Job과 별도 테이블·관리자 탭이며 기존 키에 새 권한을 자동 부여하지 않는다.
+- **공통 로그:** `logs:write/read`로 환경별 수집·검색·요청/Trace 추적을 제공한다. 프로젝트 서비스가 환경 UUID를 tenant로 정하고 외부 tenant 헤더는 사용하지 않는다. Loki 3.7.0은 전용 내부 네트워크·영속 볼륨을 사용하고 호스트 포트는 없다. 7일 보존, 환경별 하루 10 MiB·10,000회·분당 120회, 배치 100건/256 KiB, 마스킹·전송 제한·장애 응답을 적용했다. 자동 마스킹이 모든 개인정보를 검출하는 것은 아니며 송신 측 비밀값 제외가 필요하다.
+- **화면·공개 자료:** 독립 로그 메뉴에 검색·조회 결과 분포 차트·상세·같은 요청 조회·한국어 오류/재시도를 추가했다. 개발자 센터의 `Job·로그 연결`에서 지침·OpenAPI·표준 라이브러리 Python 워커/비동기 로그 전송기를 받는다. [AI 연결 진입점](https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md)은 54줄, 무인증 공개 링크 15개다. 관리자/내부 계약은 공개 명세에서 제외한다.
+- **DB·계약 검증:** `docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check`로 실제 PostgreSQL 격리 DB 테스트 **122개, 실패·오류·누락 0**. 동시 점유/중복 접수, 만료·재시도·취소·이력·격리·권한·로그 마스킹/한도/장애와 기존 프로젝트·파일·알림 회귀 검사를 포함한다. `api-check` 실제 응답/OpenAPI 검증, `smoke` 16항목, `python -X utf8 scripts/check-external-clients.py` 6개 통과. Docker project-service·admin-web·nginx 빌드 통과, 기존 HLS 청크 크기 경고는 유지한다.
+- **실제 연결 검증:** `docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps external-check start` → DEV project-service/Loki 재시작 → `external-check finish` 통과. 두 테스트 프로젝트에서 키 권한·격리·동시 점유·Python 예제·마스킹·가짜 tenant 거부를 확인하고, 재시작 후 로그 유지·점유 만료·오래된 워커 거부·두 번째 실행 완료까지 검증했다. 만든 키는 폐기하고 해당 프로젝트는 중지했다. 진단 로그는 보존 정책으로 만료되며 실제 사용자 데이터는 변경하지 않았다.
+- **로그 물리 보존 검증:** 별도 `compose.logs-test.yml`의 `platform-log-checks` 스택에서 48시간 전 로그를 넣고 보존 시간을 24시간으로 단축했다. 기본 write 단계로 flush/정상 종료해 색인을 저장한 뒤 `LOG_CHECK_PHASE=delete` 단계로 재시작하여 오래된 tenant의 실제 chunk 파일 삭제와 최근 tenant 파일 유지를 확인했다. 초기 검사 가정인 조회 시간 범위·색인 업로드 시점을 바로잡고 최종 두 단계 검사 통과. 운영 7일을 실제로 기다린 검사는 아니다. 검사 컨테이너·전용 로그 볼륨은 정리했고 DEV 데이터는 보존했다.
+- **브라우저·배포 구성:** 실제 관리자에서 외부 작업 상세·재접수·취소, 로그 조건·상세·요청 추적·빈 결과·통신 실패/복구, 1440/390px·양 테마를 확인했다. 모바일 차트 가로 넘침 없음. detector 1회 `[]`, 독립 마감 검토 `ship`/중대 지적 없음. 공개 HTTPS 검사에서 발견한 예제 다운로드 허용 경로 누락을 수정한 뒤 `python -X utf8 scripts/check-integration.py` 15개 링크·4개 공개 명세·패키지 SHA-256 검사 통과. `python -X utf8 scripts/check-nas-config.py`는 새 운영 비밀값·덮어쓰기 방지·volume2 세 볼륨·DB/Loki 비공개·이미지 기반 구성 검사를 통과했다.
+- **정리:** 화면 문서 담당 검토는 기존 Operate 규칙의 확장으로 판단해 DESIGN.md·sidecar를 보존했다. 검증 관리자 로그아웃·전용 브라우저 종료, 격리 DB/보존 검사 컨테이너 정리 완료. 추가 상주 검사 프로세스는 없으며 Loki는 실제 DEV 서비스로 유지한다. 필요 시 `docker compose -f compose.yml -f compose.dev.yml stop loki`로 중지하고 `up -d loki`로 재개한다.
+- **인계:** [NAS 배포 안내](NAS_DEPLOYMENT.md), `compose.nas.yml`, `init-env.py --nas`, 빈 디렉터리 최초 준비 스크립트와 `python scripts/package-nas.py`를 제공한다. `output/releases/platform-nas-config.zip`은 설정 파일만 담으며 이미지·실제 `.env`·데이터를 포함하지 않는다. DEV에 반영했고 NAS 배포·릴리스 이미지 게시를 실행하지 않았다. NAS CPU/ACL·실기동·프록시 IP·MFA 재등록·백업 복원·외부 프로젝트의 실제 업무 연결·운영 부하는 미검증이다.
+- **다음:** 배포할 이미지 태그로 빌드/게시 → 사용자가 NAS에 설정 ZIP 배치·새 `.env` 생성·초기 실행 → NPM 전달 주소 변경 → PROD 프로젝트와 최소 권한 키를 새로 발급해 외부 Job·로그 연결 검수. 남은 알림 채널·웹훅·전체 출시 검수는 별도 단계이며 이번 완료로 전체 첫 출시를 완료 처리하지 않는다.
+
 ### AI용 연결 진입점과 공개 자료 제공 완료 (2026-09-27)
 
 - **최신 사용자 기준:** 장문 사용자 설명서를 AI용 기능→URL→인증→규칙 진입점 48줄로 축약했다. [공개 연결 지침](https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md)의 9개 링크는 저장소 권한·관리자 로그인 없이 HTTP GET으로 읽는다. 실제 API 인증은 그대로 유지한다. RAG/MCP가 필요한 계약을 찾아 읽는 용도로 사용하며 MCP 서버 자체를 만든 것은 아니다.

@@ -27,13 +27,17 @@ for link in sorted(links):
         assert not re.search(r'`docs/[^`]+\.md`', content.decode('utf-8')), link
 print(f'PASS public guide: {len(guide.splitlines())} lines, {len(links)} accessible links, no credentials supplied')
 
-for kind in ['project', 'file']:
+for kind in ['project', 'file', 'jobs', 'logs']:
     spec = json.loads(get(f'/integrations/{kind}.openapi.json'))
     assert spec['openapi'].startswith('3.') and spec['paths']
     assert not any('/admin/' in path or '/internal/' in path or '/downloads/' in path for path in spec['paths'])
     assert 'Administrator' not in spec.get('components', {}).get('securitySchemes', {})
     if kind == 'project':
         assert set(spec['paths']) == {'/api/v1/integration/context', '/api/v1/dev/login'}
+    if kind == 'jobs':
+        assert len(spec['paths']) == 8 and '/api/v1/jobs/claim' in spec['paths']
+    if kind == 'logs':
+        assert set(spec['paths']) == {'/api/v1/logs'}
     def visit(value):
         if isinstance(value, dict):
             if '$ref' in value:

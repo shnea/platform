@@ -1,0 +1,54 @@
+# Only project-service is attached to the logs network. No published ports.
+auth_enabled: true
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+schema_config:
+  configs:
+    - from: 2026-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 2
+  delete_request_store: filesystem
+limits_config:
+  retention_period: 168h
+  max_query_lookback: 168h
+  max_query_length: 24h
+  query_timeout: 4s
+  ingestion_rate_mb: 1
+  ingestion_burst_size_mb: 2
+  reject_old_samples: true
+  reject_old_samples_max_age: 1h
+  max_global_streams_per_user: 12
+  max_line_size: 16KB
+  max_entries_limit_per_query: 200
+ingester:
+  wal:
+    enabled: true
+    dir: /loki/wal
+  chunk_idle_period: 5m
+  max_chunk_age: 1h
+querier:
+  max_concurrent: 2
+analytics:
+  reporting_enabled: false
