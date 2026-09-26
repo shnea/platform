@@ -2391,12 +2391,13 @@
                     "auth:mock",
                     "files:read",
                     "files:write",
-                    "files:delete"
+                    "files:delete",
+                    "files:share"
                   ]
                 },
                 "uniqueItems": true,
                 "minItems": 1,
-                "maxItems": 5
+                "maxItems": 6
               },
               {
                 "type": "null"
@@ -2437,12 +2438,13 @@
                 "auth:mock",
                 "files:read",
                 "files:write",
-                "files:delete"
+                "files:delete",
+                "files:share"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 5
+            "maxItems": 6
           }
         },
         "required": [
@@ -2494,12 +2496,13 @@
                 "auth:mock",
                 "files:read",
                 "files:write",
-                "files:delete"
+                "files:delete",
+                "files:share"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 5
+            "maxItems": 6
           }
         },
         "required": [
@@ -2520,7 +2523,8 @@
               "auth:mock",
               "files:read",
               "files:write",
-              "files:delete"
+              "files:delete",
+              "files:share"
             ]
           },
           "label": {
@@ -2567,12 +2571,13 @@
                 "auth:mock",
                 "files:read",
                 "files:write",
-                "files:delete"
+                "files:delete",
+                "files:share"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 5
+            "maxItems": 6
           }
         },
         "required": [

@@ -39,7 +39,7 @@ class FileViews {
                 byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);token=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
                 db.update("DELETE FROM file_view_tokens WHERE file_id=? AND greatest(expires_at,playback_expires_at)<=now()",id);
                 // Keep at most 20 short-lived viewer sessions per file; do not invalidate an active video on refresh.
-                db.update("DELETE FROM file_view_tokens WHERE token_hash IN (SELECT token_hash FROM file_view_tokens WHERE file_id=? ORDER BY expires_at DESC OFFSET 19)",id);
+                db.update("DELETE FROM file_view_tokens WHERE token_hash IN (SELECT token_hash FROM file_view_tokens WHERE file_id=? AND share_id IS NULL ORDER BY expires_at DESC OFFSET 19)",id);
                 db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at,playback_expires_at) SELECT ?,id,access_revision,?,? FROM files WHERE id=?",hash(token),java.sql.Timestamp.from(end),
                     FileVideos.candidate(info.originalName())?java.sql.Timestamp.from(Instant.now().plusSeconds(7200)):null,id);
             }
@@ -54,8 +54,8 @@ class FileViews {
         var row=files.downloadable(id);
         if(key!=null) {files.sameEnvironment(row,access.require(key,"files:read"));return files.downloadable(id);}
         access.requireActive(row.environment());row=files.downloadable(id);
-        if(row.visibility().equals("PRIVATE")) {
-            if(token==null||db.queryForObject("SELECT count(*) FROM file_view_tokens t JOIN files f ON f.id=t.file_id WHERE t.file_id=? AND t.token_hash=? AND t."+(playback?"playback_expires_at":"expires_at")+">now() AND t.access_revision=f.access_revision",Long.class,id,hash(token))!=1)throw FileFailure.missing();
+        if(row.visibility().equals("PRIVATE")||token!=null) {
+            if(token==null||db.queryForObject("SELECT count(*) FROM file_view_tokens t JOIN files f ON f.id=t.file_id WHERE t.file_id=? AND t.token_hash=? AND t."+(playback?"playback_expires_at":"expires_at")+">now() AND t.access_revision=f.access_revision AND (t.share_id IS NULL OR EXISTS (SELECT 1 FROM file_shares s WHERE s.id=t.share_id AND s.file_id=t.file_id AND s.revoked_at IS NULL AND s.expires_at>now() AND s.access_revision=f.access_revision))",Long.class,id,hash(token))!=1)throw FileFailure.missing();
         }
         return row;
     }
@@ -169,7 +169,7 @@ class FileViews {
             if(Files.size(output)>2_000_000)throw new IOException("Probe output too large");return Files.readAllBytes(output);
         } finally {if(process!=null&&process.isAlive()){process.destroyForcibly();process.waitFor(5,TimeUnit.SECONDS);}Files.deleteIfExists(output);}
     }
-    private static String hash(String token) {
+    static String hash(String token) {
         try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII)));}
         catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}
     }

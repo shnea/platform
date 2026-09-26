@@ -111,7 +111,7 @@ production = request("POST", api + "/projects/" + projects[0]["id"] + "/environm
     {"code": "prod", "kind": "PROD", "registrationAllowed": False, "redirectUris": ["https://example.test/callback"]}, admin, expected=201)
 assert production["state"] == "READY"
 prod_url = api + "/environments/" + production["id"]
-assert [scope['code'] for scope in request('GET', prod_url + '/credential-scopes', token=admin)] == ['integration:read', 'files:read', 'files:write', 'files:delete']
+assert [scope['code'] for scope in request('GET', prod_url + '/credential-scopes', token=admin)] == ['integration:read', 'files:read', 'files:write', 'files:delete', 'files:share']
 request('POST', prod_url + '/credentials', {'scopes': ['auth:mock']}, token=admin, expected=400)
 credential = request("POST", api + "/environments/" + production["id"] + "/credentials", token=admin, expected=201)
 request("POST", base + "/api/v1/dev/login", {"provider": "google", "subject": "test-user"}, key=credential["apiKey"], expected=403)

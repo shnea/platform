@@ -3,7 +3,7 @@
   "info": {
     "title": "SHNEA 파일 서비스 API",
     "version": "0.1.0",
-    "description": "서버 키와 관리자 JWT 경로를 분리한다. 업로드·원본·보존 관리와 이미지/영상 썸네일, 지원 영상/오디오/PDF/TXT/MD 뷰어 제공. 비공개 콘텐츠는 파일별 최대 5분 임시 링크 또는 서버 키로 보호한다. 이용자 JWT·비밀번호 공유는 후속 단계다. HLS VOD 자동 변환과 자동/360p/720p/1080p 선택을 제공한다. 원본보다 확대하지 않으며 지원 입력과 처리 한도는 FILES 지침을 따른다."
+    "description": "서버 키와 관리자 JWT 경로를 분리한다. 업로드·원본·보존 관리와 이미지/영상 썸네일, 지원 영상/오디오/PDF/TXT/MD 뷰어 제공. 비공개 콘텐츠는 파일별 최대 5분 임시 링크 또는 서버 키로 보호한다. 비공개 파일에 비밀번호 공유·만료·철회를 제공한다. 공유 인증은 최대 2시간이며 파생 콘텐츠에도 철회·만료를 검사한다. 이용자 JWT는 후속 단계다. HLS VOD 자동 변환과 자동/360p/720p/1080p 선택을 제공한다. 원본보다 확대하지 않으며 지원 입력과 처리 한도는 FILES 지침을 따른다."
   },
   "servers": [
     {
@@ -2359,6 +2359,519 @@
         ],
         "description": "서버가 전체 SHA-256과 크기를 검증한 READY 파일만 비교합니다. 자기 자신과 삭제·미완료 파일은 제외하며 자동 병합·삭제하지 않습니다. 환경 파일 조회 권한이 필요합니다. 최신 업로드순, 같은 시각이면 파일 ID순입니다."
       }
+    },
+    "/api/v1/files/{id}/shares": {
+      "get": {
+        "operationId": "get_api_v1_files_id_shares",
+        "summary": "최근 공유 링크 최대 50개 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileShare"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scope": "files:share"
+      },
+      "post": {
+        "operationId": "post_api_v1_files_id_shares",
+        "summary": "비공개 파일 비밀번호 공유 생성",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileShare"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileShareCreate"
+              }
+            }
+          }
+        },
+        "x-required-scope": "files:share",
+        "description": "보기·다운로드 허용. 기본 7일, 1~30일. 사용 가능 링크 최대 10개. 비밀번호는 조회·복구할 수 없다. 응답을 잃으면 목록으로 생성 여부를 확인하고 재시도한다. 공개 범위 변경 시 기존 공유는 영구 무효화된다."
+      }
+    },
+    "/api/v1/files/{id}/shares/{shareId}": {
+      "delete": {
+        "operationId": "delete_api_v1_files_id_shares_shareId",
+        "summary": "공유 및 발급된 파생 콘텐츠 접근 철회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "shareId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "성공"
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scope": "files:share"
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/{id}/shares": {
+      "get": {
+        "operationId": "get_api_v1_files_admin_environments_environmentId_id_shares",
+        "summary": "최근 공유 링크 최대 50개 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileShare"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_api_v1_files_admin_environments_environmentId_id_shares",
+        "summary": "비공개 파일 비밀번호 공유 생성",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileShare"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileShareCreate"
+              }
+            }
+          }
+        },
+        "description": "보기·다운로드 허용. 기본 7일, 1~30일. 사용 가능 링크 최대 10개. 비밀번호는 조회·복구할 수 없다. 응답을 잃으면 목록으로 생성 여부를 확인하고 재시도한다. 공개 범위 변경 시 기존 공유는 영구 무효화된다."
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/{id}/shares/{shareId}": {
+      "delete": {
+        "operationId": "delete_api_v1_files_admin_environments_environmentId_id_shares_shareId",
+        "summary": "공유 및 발급된 파생 콘텐츠 접근 철회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "shareId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "성공"
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/shares/{shareId}/access": {
+      "post": {
+        "operationId": "post_api_v1_files_shares_shareId_access",
+        "summary": "비밀번호 확인 후 보기 URL 발급",
+        "tags": [
+          "Files"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "shareId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileViewLinks"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 표준 오류. 비밀번호 확인 한도 초과는 429 FILE_SHARE_RATE_LIMITED와 Retry-After: 900.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileSharePassword"
+              }
+            }
+          }
+        },
+        "description": "공유 링크당 15분에 10회(성공 포함). 발급한 모든 URL은 최대 2시간 또는 공유 만료까지. 이후 비밀번호 재입력. 링크 철회·파일 공개 범위 변경·삭제·프로젝트 중지 시 차단된다. 서버는 토큰 해시만 저장한다."
+      }
+    },
+    "/api/v1/files/shares/{shareId}/view": {
+      "get": {
+        "operationId": "get_api_v1_files_shares_shareId_view",
+        "summary": "비밀번호 입력 화면과 보호된 공유 OG 안내",
+        "tags": [
+          "Files"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "shareId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "파일 이름·원본·썸네일을 노출하지 않는 일반 OG 안내",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "사용할 수 없는 링크 또는 서비스 오류의 한국어 HTML",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/shares/{shareId}/open": {
+      "post": {
+        "operationId": "post_api_v1_files_shares_shareId_open",
+        "summary": "공유 화면 비밀번호 제출",
+        "tags": [
+          "Files"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "shareId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "인증된 기존 파일 뷰어로 이동",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류와 비밀번호 재입력 HTML. 429 응답 Retry-After: 900.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FileSharePassword"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/shares/preview.png": {
+      "get": {
+        "operationId": "file_share_generic_preview",
+        "summary": "보호된 파일 공유용 공통 안내 이미지",
+        "tags": [
+          "Files"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "파일 내용과 무관한 공통 PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3181,6 +3694,76 @@
             "type": "boolean"
           }
         }
+      },
+      "FileShareCreate": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64,
+            "writeOnly": true
+          },
+          "expiresInDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 7
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "FileSharePassword": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "FileShare": {
+        "type": "object",
+        "properties": {
+          "shareId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED",
+              "EXPIRED",
+              "INVALIDATED"
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shareId",
+          "createdAt",
+          "expiresAt",
+          "state",
+          "url"
+        ]
       }
     }
   }

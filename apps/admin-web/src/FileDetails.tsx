@@ -5,6 +5,7 @@ import { Dialog } from "./Dialog";
 import type { RetentionPolicy } from "./RetentionPanel";
 import {VideoPlayer,videoState,videoReason,type FileViewsData} from "./VideoPlayer";
 import {FileDuplicates} from "./FileDuplicates";
+import {FileShares} from "./FileShares";
 
 type Views=FileViewsData;
 const states:Record<string,string>={QUEUED:"미리보기 생성 대기",PROCESSING:"미리보기 생성 중",READY:"미리보기 준비 완료",UNSUPPORTED:"미리보기 미지원",FAILED:"미리보기 생성 실패"};
@@ -31,6 +32,7 @@ export function FileDetails({file,environmentId,policies,onClose,onOpen,onBusyCh
   <div className="section-line"><button className="secondary" disabled={busy} onClick={onClose}>파일 목록으로</button><button className="secondary" disabled={busy||loading} onClick={()=>void load()}>{expired?"보기 URL 재발급":"보기 정보 새로고침"}</button></div>
   <h3 className="file-detail-name" tabIndex={-1} ref={heading}>{file.originalName}</h3><p className="small muted">{fileSize(file.size)} · {file.visibility==='PUBLIC'?'공개':'비공개'} · {data?kinds[data.kind]:"형식 확인 중"}</p>
   <FileDuplicates fileId={file.fileId} environmentId={environmentId} disabled={busy} onOpen={onOpen}/>
+  <FileShares file={file} environmentId={environmentId} disabled={busy} onBusyChange={setBusy}/>
   {loading&&<p role="status">보기 정보를 불러오는 중…</p>}{error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {expired&&<p className="warning" role="status">임시 보기 URL이 만료되었습니다. ‘보기 URL 재발급’을 눌러 다시 확인해 주세요.</p>}
   {data&&<><p>{data.video?'원본 미리보기: ':''}{states[data.state]}{data.errorCode==='FILE_PREVIEW_INPUT_LIMIT'?' · 원본 미리보기 처리 한도를 초과했습니다.':data.errorCode==='FILE_PREVIEW_CODEC_UNSUPPORTED'?' · 원본 직접 재생을 지원하지 않는 코덱입니다.':''}</p>

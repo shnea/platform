@@ -27,6 +27,7 @@ class FileErrors {
         } else failure = FileFailure.unavailable();
         response.reset();
         response.setHeader("X-Content-Type-Options", "nosniff");
+        if(failure.code.equals("FILE_SHARE_RATE_LIMITED"))response.setHeader("Retry-After","900");
         return new ResponseEntity<>(HttpProblems.body(failure.code, failure.status, failure.getMessage(), request),
             HttpProblems.headers(request), failure.status);
     }

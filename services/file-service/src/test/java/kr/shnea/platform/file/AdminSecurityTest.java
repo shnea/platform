@@ -27,6 +27,8 @@ class AdminSecurityTest {
         @Bean FileViews views() { return mock(FileViews.class); }
         @Bean FileVideos videos() { return mock(FileVideos.class); }
         @Bean FileStore store() { return mock(FileStore.class); }
+        @Bean FileShares shares() { return mock(FileShares.class); }
+        @Bean FileSharesController sharesController() throws java.io.IOException {return new FileSharesController(shares(),access(),"https://platform.example/auth");}
         @Bean JsonMapper json() { return new JsonMapper(); }
         @Bean JwtDecoder decoder() { return value -> {
             if(value.equals("invalid")) throw new BadJwtException("Invalid token");
@@ -39,7 +41,7 @@ class AdminSecurityTest {
             context.setServletContext(new MockServletContext()); context.register(Config.class); context.refresh();
             var mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain",Filter.class)).build();
             String root="/api/v1/files/admin/environments/"+UUID.randomUUID(), id=UUID.randomUUID().toString();
-            var requests=List.of(get(root+"/"+id+"/duplicates"),get(root),get(root+"/uploads"),post(root+"/uploads"),get(root+"/uploads/"+id),patch(root+"/uploads/"+id),
+            var requests=List.of(get(root+"/"+id+"/shares"),post(root+"/"+id+"/shares"),delete(root+"/"+id+"/shares/"+UUID.randomUUID()),get(root+"/"+id+"/duplicates"),get(root),get(root+"/uploads"),post(root+"/uploads"),get(root+"/uploads/"+id),patch(root+"/uploads/"+id),
                 delete(root+"/uploads/"+id),post(root+"/uploads/"+id+"/complete"),put(root+"/"+id+"/visibility"),delete(root+"/"+id),post(root+"/"+id+"/download-ticket"),
                 get(root+"/retention"),post(root+"/retention/preview"),put(root+"/retention/policies"),put(root+"/retention/settings"),get(root+"/retention/candidates"),get(root+"/retention/history"),put(root+"/"+id+"/retention"),post(root+"/"+id+"/views"),post(root+"/"+id+"/views/retry"),post(root+"/"+id+"/video/retry"));
             for(var request:requests) {

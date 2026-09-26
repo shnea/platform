@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T14:31:56.000Z",
+  "generatedAt": "2026-09-26T15:14:47.686Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -28,6 +28,11 @@
         "value": "900px"
       },
       {
+        "name": "file-share-form-stack",
+        "value": "700px",
+        "purpose": "비밀번호 공유 생성 폼의 비밀번호·기간·버튼 세 열을 한 열로 전환한다."
+      },
+      {
         "name": "mobile",
         "value": "600px",
         "purpose": "파일 URL 행과 파일 보존 변경 폼을 세로로 배치한다. 미리보기 안쪽 여백은 8px, 문서 프레임 높이는 440px로 줄이며 동작은 줄바꿈한다."
@@ -35,6 +40,20 @@
     ]
   },
   "components": [
+    {
+      "name": "비밀번호 공유 관리",
+      "kind": "custom",
+      "description": "파일 상세의 동일 내용 확인 다음에 기본 접힌 details로 제공한다. 펼치면 목록을 조회하고 비공개 파일에만 비밀번호 8~64자와 기간 1·7·30일(기본 7일)의 생성 폼을 표시한다. 공개 파일에는 비공개 전환 안내를 표시한다. 비밀번호는 생성 성공 후 지우고 별도 전달하도록 안내한다. 사용 가능 링크 우선·최근 이력 포함 최대 50개에 상태·생성/만료 시각·읽기 전용 URL을 표시한다. 사용 가능 링크에는 복사·열기·철회를 제공하며 복사 실패 시 URL 직접 선택을 안내한다. 철회는 기존 확인 대화상자에서 접근 차단과 이미 받은 내용의 회수 불가를 설명한다. 조회 중·빈 목록·실패·완료를 문구와 역할로 구분하고 목록 새로고침을 제공한다. 생성·철회 성공 후 결과 그룹으로 포커스를 옮긴다. 아래는 기본 접힘 영역과 빈 목록의 정적 예시다.",
+      "html": "<details class=\"ds-file-shares\"><summary>비밀번호 공유 링크</summary><p>링크와 비밀번호를 받은 사람은 파일 보기·다운로드를 할 수 있습니다.</p><div class=\"ds-share-form\"><label>새 공유 비밀번호<input type=\"password\" autocomplete=\"new-password\" minlength=\"8\" maxlength=\"64\" aria-describedby=\"ds-share-help\" required /></label><label>공유 기간<select><option>1일</option><option selected>7일</option><option>30일</option></select></label><button type=\"button\">공유 링크 만들기</button><p id=\"ds-share-help\">8~64자 · 비밀번호는 저장 후 다시 확인할 수 없습니다.</p></div><p>아직 만든 공유 링크가 없습니다.</p><button type=\"button\" class=\"ds-share-refresh\">공유 목록 새로고침</button></details>",
+      "css": ".ds-file-shares{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;color:var(--text,#e8eee8);border-block:1px solid var(--line,#34443e);padding:12px 0;margin:16px 0 24px}.ds-file-shares summary{min-height:44px;cursor:pointer;align-content:center}.ds-file-shares p{font-size:13px;color:var(--muted,#a5b7ae)}.ds-share-form{display:grid;grid-template-columns:minmax(160px,1fr) 120px auto;gap:12px;align-items:end;margin:20px 0}.ds-share-form label{display:grid;gap:8px;min-width:0;font-size:14px;font-weight:600}.ds-share-form>p{grid-column:1/-1;margin:0}.ds-share-form input,.ds-share-form select{width:100%;min-width:0;height:48px;padding:0 12px;border:1px solid var(--line,#34443e);border-radius:5px;background:var(--bg,#111918);color:var(--text,#e8eee8);font:inherit}.ds-file-shares button{min-height:44px;padding:9px 15px;border:1px solid transparent;border-radius:6px;background:var(--accent,#b0e1c7);color:var(--accent-ink,#123b2c);font:inherit;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}.ds-file-shares .ds-share-refresh{background:transparent;border-color:var(--line,#34443e);color:var(--text,#e8eee8)}.ds-file-shares button:hover:not(:disabled){filter:brightness(1.1)}.ds-file-shares :is(summary,input,select,button):focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}.ds-file-shares button:disabled{opacity:.5;cursor:not-allowed}@media(max-width:700px){.ds-share-form{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.ds-file-shares button{transition:none}}"
+    },
+    {
+      "name": "익명 비밀번호 공유",
+      "kind": "custom",
+      "description": "file-share.html은 시스템 밝은·어두운 테마와 기존 색·시스템 글꼴을 사용한다. 최대 480px, 안쪽 여백 24px의 한 열이며 제목은 모바일에서도 32px/1.4, 본문 16px/1.65, 라벨·도움말 14px다. 스크립트 없는 기본 POST 폼으로 인증 후 기존 뷰어에 연결한다. 오류는 위험색 경계와 문구로 표시하고 사용할 수 없는 링크는 폼을 숨긴다. 파일명·실제 썸네일·내용은 표시하지 않는다. 공통 OG는 System.Drawing으로 만든 잠금 그림·한국어 안내의 1200×630 file-share-preview.png이며 출처 메타데이터를 내장한다. 실제 메신저 카드·캐시는 별도 수신 검수가 필요하다. 아래는 제출 동작을 제외한 정적 폼 예시다.",
+      "html": "<section class=\"ds-public-share\"><h1>비밀번호로 보호된 파일</h1><p>파일을 보낸 사람에게 받은 비밀번호로<br>공유 파일을 확인해 주세요.</p><div class=\"ds-public-form\"><label for=\"ds-public-password\">공유 비밀번호</label><input id=\"ds-public-password\" type=\"password\" minlength=\"8\" maxlength=\"64\" autocomplete=\"current-password\" aria-describedby=\"ds-public-help\" required /><p id=\"ds-public-help\" class=\"ds-public-hint\">전달받은 비밀번호 8~64자를 입력해 주세요.</p><button type=\"button\">파일 열기</button></div></section>",
+      "css": ".ds-public-share{--ds-bg:#111918;--ds-surface:#182220;--ds-text:#e8eee8;--ds-muted:#a5b7ae;--ds-line:#34443e;--ds-accent:#b0e1c7;--ds-ink:#123b2c;color-scheme:dark;max-width:480px;margin:clamp(40px,12vh,120px) auto;padding:24px;background:var(--ds-bg);color:var(--ds-text);font:16px/1.65 \"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;overflow-wrap:anywhere}.ds-public-share h1{font-size:32px;line-height:1.4;letter-spacing:-.035em;margin:0 0 16px;text-wrap:balance}.ds-public-share p{margin:0 0 24px;color:var(--ds-muted)}.ds-public-form{margin-top:32px}.ds-public-share label{display:block;font-size:14px;font-weight:600;margin-bottom:8px}.ds-public-share input{width:100%;min-height:48px;background:var(--ds-surface);color:var(--ds-text);border:1px solid var(--ds-line);border-radius:5px;padding:10px 12px;font:inherit;caret-color:var(--ds-accent)}.ds-public-share button{width:100%;min-height:48px;background:var(--ds-accent);color:var(--ds-ink);border:0;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}.ds-public-share button:hover{filter:brightness(.92)}.ds-public-share :is(input,button):focus-visible{outline:2px solid var(--ds-accent);outline-offset:3px}.ds-public-share .ds-public-hint{font-size:14px;margin:8px 0 24px}@media(prefers-color-scheme:light){.ds-public-share{color-scheme:light;--ds-bg:#f5f6f1;--ds-surface:#fff;--ds-text:#183126;--ds-muted:#52695c;--ds-line:#cdd7ce;--ds-accent:#245c43;--ds-ink:#fff}}"
+    },
     {
       "name": "주요 동작",
       "kind": "button",

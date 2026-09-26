@@ -41,6 +41,67 @@ class FilesDatabaseTest {
     RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
     FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000);}
     FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos());}
+    FileShares shares(){return new FileShares(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),views());}
+    @Test void passwordSharesArePrivateScopedHashedAndRevocableAcrossAllViews() {
+        UUID id=duplicateFixture(owner,"secret.txt",bytes,"PUBLIC");var shares=shares();String password="공유 검증 비밀번호";
+        code("FILE_SHARE_PRIVATE_REQUIRED",()->shares.create(id,owner,new FileShares.Create(password,7)));
+        service.visibility(id,owner,"PRIVATE");
+        var foreign=new FileAccess.Context(owner.projectId(),UUID.randomUUID(),UUID.randomUUID());
+        code("FILE_NOT_FOUND",()->shares.create(id,foreign,new FileShares.Create(password,7)));
+        var share=shares.create(id,owner,new FileShares.Create(password,null));
+        assertThat(share.state()).isEqualTo("ACTIVE");assertThat(share.expiresAt()).isAfter(java.time.Instant.now().plusSeconds(6*86400));
+        assertThat(db.queryForObject("SELECT password_hash FROM file_shares WHERE id=?",String.class,share.shareId())).doesNotContain(password).hasSize(96);
+        code("FILE_NOT_FOUND",()->shares.list(id,foreign));code("FILE_NOT_FOUND",()->shares.revoke(id,share.shareId(),foreign));
+        code("FILE_SHARE_PASSWORD_INVALID",()->shares.unlock(share.shareId(),"wrong-password"));
+        assertThat(db.queryForObject("SELECT attempts FROM file_shares WHERE id=?",Integer.class,share.shareId())).isEqualTo(1);
+        var links=shares.unlock(share.shareId(),password);String token=links.viewerUrl().split("token=")[1];
+        assertThat(views().authorize(id,token,null).id()).isEqualTo(id);assertThat(views().authorize(id,token,null,true).id()).isEqualTo(id);
+        assertThat(db.queryForObject("SELECT token_hash FROM file_view_tokens WHERE share_id=?",String.class,share.shareId())).isNotEqualTo(token);
+        shares.revoke(id,share.shareId(),owner);shares.revoke(id,share.shareId(),owner);
+        assertThat(shares.list(id,owner).getFirst().state()).isEqualTo("REVOKED");
+        code("FILE_SHARE_UNAVAILABLE",()->shares.unlock(share.shareId(),password));
+        code("FILE_NOT_FOUND",()->views().authorize(id,token,null));code("FILE_NOT_FOUND",()->views().authorize(id,token,null,true));
+        assertThat(db.queryForObject("SELECT count(*) FROM file_audit WHERE share_id=? AND action='file.share.revoked'",Long.class,share.shareId())).isEqualTo(1);
+    }
+    @Test void shareAttemptsSurviveFailureAndRestartAndResetAfterWindow() {
+        UUID id=duplicateFixture(owner,"secret.txt",bytes,"PRIVATE");var shares=shares();var share=shares.create(id,owner,new FileShares.Create("password-123",1));
+        for(int i=0;i<10;i++)code("FILE_SHARE_PASSWORD_INVALID",()->shares.unlock(share.shareId(),"wrong-password"));
+        code("FILE_SHARE_RATE_LIMITED",()->shares().unlock(share.shareId(),"password-123"));
+        db.update("UPDATE file_shares SET window_started_at=now()-interval '16 minutes' WHERE id=?",share.shareId());
+        assertThat(shares().unlock(share.shareId(),"password-123").fileId()).isEqualTo(id);
+        assertThat(db.queryForObject("SELECT attempts FROM file_shares WHERE id=?",Integer.class,share.shareId())).isEqualTo(1);
+    }
+    @Test void shareExpiryVisibilityDeletionAndProjectStopInvalidateAccess() {
+        UUID id=duplicateFixture(owner,"secret.mp4",bytes,"PRIVATE");var shares=shares();var share=shares.create(id,owner,new FileShares.Create("password-123",1));
+        db.update("UPDATE file_shares SET expires_at=now()+interval '60 seconds' WHERE id=?",share.shareId());
+        var links=shares.unlock(share.shareId(),"password-123");String token=links.viewerUrl().split("token=")[1];
+        assertThat(links.streamExpiresAt()).isEqualTo(links.expiresAt()).isBefore(java.time.Instant.now().plusSeconds(61));
+        db.update("UPDATE file_shares SET expires_at=now()-interval '1 second' WHERE id=?",share.shareId());
+        code("FILE_NOT_FOUND",()->views().authorize(id,token,null,true));code("FILE_SHARE_UNAVAILABLE",()->shares.available(share.shareId()));
+        var next=shares.create(id,owner,new FileShares.Create("password-123",7));
+        String old=shares.unlock(next.shareId(),"password-123").viewerUrl().split("token=")[1];service.visibility(id,owner,"PUBLIC");
+        code("FILE_NOT_FOUND",()->views().authorize(id,old,null,true));assertThat(views().authorize(id,null,null).id()).isEqualTo(id);
+        service.visibility(id,owner,"PRIVATE");
+        code("FILE_SHARE_UNAVAILABLE",()->shares.unlock(next.shareId(),"password-123"));
+        assertThat(shares.list(id,owner).getFirst().state()).isEqualTo("INVALIDATED");
+        var active=shares.create(id,owner,new FileShares.Create("password-123",7));
+        var access=org.mockito.Mockito.mock(FileAccess.class);org.mockito.Mockito.doThrow(FileFailure.missing()).when(access).requireActive(owner.environmentId());
+        var stopped=new FileShares(db,tx,service,access,views());code("FILE_NOT_FOUND",()->stopped.unlock(active.shareId(),"password-123"));
+        service.delete(id,owner);code("FILE_SHARE_UNAVAILABLE",()->shares.available(active.shareId()));
+    }
+    @Test void shareValidationLimitsAndAuditFailureRollback() {
+        UUID id=duplicateFixture(owner,"secret.txt",bytes,"PRIVATE");var shares=shares();
+        code("FILE_SHARE_INVALID_PASSWORD",()->shares.create(id,owner,new FileShares.Create("short",7)));
+        code("FILE_SHARE_INVALID_PASSWORD",()->shares.create(id,owner,new FileShares.Create(" ".repeat(8),7)));
+        code("FILE_SHARE_INVALID_EXPIRY",()->shares.create(id,owner,new FileShares.Create("password-123",31)));
+        db.execute("ALTER TABLE file_audit ADD CONSTRAINT fail_share_audit CHECK (action<>'file.share.created')");
+        assertThatThrownBy(()->shares.create(id,owner,new FileShares.Create("password-123",7))).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(shares.list(id,owner)).isEmpty();db.execute("ALTER TABLE file_audit DROP CONSTRAINT fail_share_audit");
+        for(int i=0;i<10;i++)shares.create(id,owner,new FileShares.Create("password-123",7));
+        code("FILE_SHARE_LIMIT",()->shares.create(id,owner,new FileShares.Create("password-123",7)));
+        shares.revoke(id,shares.list(id,owner).getFirst().shareId(),owner);
+        assertThat(shares.create(id,owner,new FileShares.Create("password-123",7)).state()).isEqualTo("ACTIVE");
+    }
     UUID duplicateFixture(FileAccess.Context context,String name,byte[] content,String visibility) {
         UUID id=service.create(context,new FilesService.Create(UUID.randomUUID(),name,(long)content.length,hash(content),visibility,"default")).uploadId();
         if(content.length>0)service.append(id,context,0,content.length,hash(content),new ByteArrayInputStream(content));

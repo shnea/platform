@@ -33,6 +33,10 @@ class FileAccessDatabaseTest {
         code(ApiCode.INSUFFICIENT_SCOPE,()->projects.context(old.apiKey(),"files:read"));
         assertThat(projects.credentials(environment).getFirst().scopes()).containsExactly("integration:read");
         var key=projects.issueCredential(environment,null,List.of("files:read","files:write","files:delete"),"test");
+        code(ApiCode.INSUFFICIENT_SCOPE,()->projects.context(key.apiKey(),"files:share"));
+        var shareKey=projects.issueCredential(environment,null,List.of("files:share"),"test");
+        assertThat(projects.context(shareKey.apiKey(),"files:share").environmentId()).isEqualTo(environment);
+        code(ApiCode.INSUFFICIENT_SCOPE,()->projects.context(shareKey.apiKey(),"files:write"));
         assertThat(projects.context(key.apiKey(),"files:write").environmentId()).isEqualTo(environment);
         code(ApiCode.INSUFFICIENT_SCOPE,()->projects.context(key.apiKey(),"auth:mock"));
         db.update("UPDATE projects SET status='SUSPENDED' WHERE id=?", project);

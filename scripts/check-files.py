@@ -91,14 +91,14 @@ def start():
     prod, _ = call('POST', ADMIN+'/projects/'+state['projects'][0]['id']+'/environments', dict(code='prod', kind='PROD', registrationAllowed=False,
                     redirectUris=['https://example.invalid/callback']), auth=True, expected=201)
     assert prod['state'] == 'READY'; environments.append(prod)
-    full = key(environments[0], ['files:read','files:write','files:delete'])
-    foreign = key(environments[1], ['files:read','files:write','files:delete'])
-    prod_key = key(prod, ['files:read','files:write','files:delete'])
+    full = key(environments[0], ['files:read','files:write','files:delete','files:share'])
+    foreign = key(environments[1], ['files:read','files:write','files:delete','files:share'])
+    prod_key = key(prod, ['files:read','files:write','files:delete','files:share'])
     read = key(environments[0], ['files:read'])
     old = key(environments[0], ['integration:read'])
     state.update(full=full, foreign=foreign, prod_key=prod_key, read=read, old=old)
     spec, _ = call('GET', '/api/v1/files/openapi', key=full['apiKey']); validate(spec)
-    assert sum(len(v) for v in spec['paths'].values()) == 41
+    assert sum(len(v) for v in spec['paths'].values()) == 51
     state['environments'] = environments; save()
     call('GET', '/api/v1/files', expected=401)
     call('GET', '/api/v1/files', key=old['apiKey'], expected=403)
@@ -120,6 +120,7 @@ def finish():
     state.update(json.loads(STATE.read_text(encoding='utf-8'))); login(state['refresh']); save()
     full=state['full']['apiKey']; upload=state['upload']['uploadId']
     check_duplicates()
+    check_shares()
     admin_path='/api/v1/files/admin/environments/'+state['environments'][0]['id']
     call('GET',admin_path,expected=401)
     call('GET',admin_path,key=full,expected=401)
@@ -195,6 +196,41 @@ def check_duplicates():
     call('DELETE','/api/v1/files/'+ids[1],key=full,expected=204)
     after,_=call('GET',path,key=full);assert [x['fileId'] for x in after['files']]==[ids[2]]
     print('PASS duplicates: verified renamed private/public files, pagination, scopes, DEV/PROD isolation, admin JWT, deleted-file exclusion')
+
+
+def check_shares():
+    full=state['full']['apiKey']; content=b'protected share verification'
+    upload,_=create_file(full,content,'protected-share.txt',visibility='PRIVATE')
+    file=upload['uploadId'];chunk(file,full,0,content);call('POST','/api/v1/files/uploads/'+file+'/complete',key=full)
+    path='/api/v1/files/'+file;password=secrets.token_urlsafe(16)
+    call('GET',path+'/shares',expected=401)
+    call('POST',path+'/shares',dict(password=password),key=state['read']['apiKey'],expected=403)
+    for name in ['foreign','prod_key']:call('GET',path+'/shares',key=state[name]['apiKey'],expected=404)
+    share,_=call('POST',path+'/shares',dict(password=password),key=full,expected=201)
+    assert 'password' not in share and share['state']=='ACTIVE'
+    page,headers=call('GET',share['url'],raw=True)
+    assert b'og:title' in page and b'og:image' in page and b'protected-share.txt' not in page and password.encode() not in page
+    assert headers['Cache-Control']=='no-store'
+    png,_=call('GET','/api/v1/files/shares/preview.png',raw=True);assert png.startswith(b'\x89PNG')
+    unlock='/api/v1/files/shares/'+share['shareId']+'/access'
+    problem,_=call('POST',unlock,dict(password='wrong-password'),expected=401);assert problem['code']=='FILE_SHARE_PASSWORD_INVALID'
+    links,_=call('POST',unlock,dict(password=password));body,_=call('GET',links['originalUrl'],raw=True);assert body==content
+    call('GET',path+'/content/original',expected=404)
+    admin='/api/v1/files/admin/environments/'+state['environments'][0]['id']+'/'+file+'/shares'
+    call('GET',admin,key=full,expected=401);listed,_=call('GET',admin,auth=True);assert listed[0]['shareId']==share['shareId']
+    call('DELETE',admin+'/'+share['shareId'],auth=True,expected=204)
+    call('GET',links['originalUrl'],expected=404);call('GET',links['viewerUrl'],expected=404)
+    call('POST',unlock,dict(password=password),expected=404)
+    share,_=call('POST',path+'/shares',dict(password=password,expiresInDays=1),key=full,expected=201)
+    unlock='/api/v1/files/shares/'+share['shareId']+'/access'
+    for _ in range(10):call('POST',unlock,dict(password='wrong-password'),expected=401)
+    problem,headers=call('POST',unlock,dict(password=password),expected=429)
+    assert problem['code']=='FILE_SHARE_RATE_LIMITED' and headers['Retry-After']=='900'
+    call('PUT',path+'/visibility',dict(visibility='PUBLIC'),key=full)
+    call('POST',path+'/shares',dict(password=password),key=full,expected=409)
+    call('PUT',path+'/visibility',dict(visibility='PRIVATE'),key=full)
+    call('POST',unlock,dict(password=password),expected=404)
+    print('PASS shares: explicit scope, environment isolation, generic OG, password gate, original protection, admin revoke, persisted rate limit and visibility invalidation')
 
 
 def cleanup():

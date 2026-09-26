@@ -39,6 +39,7 @@ class ProjectService {
     private static final Scope FILE_READ = new Scope("files:read", "파일 조회", "같은 환경의 파일 목록과 비공개 원본을 조회합니다. 서버에서만 사용하세요.");
     private static final Scope FILE_WRITE = new Scope("files:write", "파일 업로드·설정", "파일을 업로드하고 같은 환경 파일의 공개 범위를 변경합니다.");
     private static final Scope FILE_DELETE = new Scope("files:delete", "파일 삭제", "같은 환경의 파일을 삭제합니다.");
+    private static final Scope FILE_SHARE = new Scope("files:share", "파일 공유 관리", "같은 환경의 비공개 파일에 비밀번호 공유 링크를 만들고 조회·철회합니다.");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final TransactionTemplate resetAuditTx;
@@ -120,7 +121,7 @@ class ProjectService {
     List<Scope> credentialScopes(UUID environmentId) {
         Environment env = findEnvironment(environmentId);
         return mode.equals("dev") && env.kind().equals("DEV")
-            ? List.of(READ, MOCK, FILE_READ, FILE_WRITE, FILE_DELETE) : List.of(READ, FILE_READ, FILE_WRITE, FILE_DELETE);
+            ? List.of(READ, MOCK, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_SHARE) : List.of(READ, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_SHARE);
     }
 
     Credential issueCredential(UUID id, Instant expiresAt, List<String> requestedScopes, String actor) {

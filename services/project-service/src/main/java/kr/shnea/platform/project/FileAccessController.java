@@ -26,7 +26,7 @@ class FileAccessController {
                   @RequestHeader(value="X-Platform-Key", required=false) String key,
                   @RequestParam String scope) {
         authorize(secret);
-        if (!Set.of("files:read", "files:write", "files:delete").contains(scope)) throw ApiCode.INSUFFICIENT_SCOPE.failure();
+        if (!Set.of("files:read", "files:write", "files:delete", "files:share").contains(scope)) throw ApiCode.INSUFFICIENT_SCOPE.failure();
         var context = projects.context(key, scope);
         return Map.of("projectId", context.projectId(), "environmentId", context.environmentId(),
             "credentialId", UUID.fromString(key.split("_", 3)[1]));

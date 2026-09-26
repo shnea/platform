@@ -73,3 +73,8 @@
   .file-upload-heading { align-items: flex-start; }
   .file-workspace .actions { gap: 8px; flex-wrap: wrap; }
 }
+.file-share-form { display: grid; grid-template-columns: minmax(160px, 1fr) 120px auto; gap: 12px; align-items: end; margin: 20px 0; }
+.file-share-form > p { grid-column: 1 / -1; margin: 0; }
+.file-share-form > label { margin: 0; }
+.file-shares .file-url-list label { min-width: 0; }
+@media (max-width: 700px) { .file-share-form { grid-template-columns: 1fr; } }
