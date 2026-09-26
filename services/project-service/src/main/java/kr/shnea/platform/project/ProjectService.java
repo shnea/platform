@@ -36,6 +36,9 @@ class ProjectService {
     record MockResult(int httpStatus, java.util.Map<String, Object> result) {}
     private static final Scope READ = new Scope("integration:read", "연동 정보 조회", "프로젝트·환경과 로그인 주소를 조회합니다.");
     private static final Scope MOCK = new Scope("auth:mock", "개발용 가짜 로그인", "외부 소셜 인증 없이 테스트 사용자의 로그인 토큰을 발급합니다.");
+    private static final Scope FILE_READ = new Scope("files:read", "파일 조회", "같은 환경의 파일 목록과 비공개 원본을 조회합니다. 서버에서만 사용하세요.");
+    private static final Scope FILE_WRITE = new Scope("files:write", "파일 업로드·설정", "파일을 업로드하고 같은 환경 파일의 공개 범위를 변경합니다.");
+    private static final Scope FILE_DELETE = new Scope("files:delete", "파일 삭제", "같은 환경의 파일을 삭제합니다.");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final TransactionTemplate resetAuditTx;
@@ -116,7 +119,8 @@ class ProjectService {
 
     List<Scope> credentialScopes(UUID environmentId) {
         Environment env = findEnvironment(environmentId);
-        return mode.equals("dev") && env.kind().equals("DEV") ? List.of(READ, MOCK) : List.of(READ);
+        return mode.equals("dev") && env.kind().equals("DEV")
+            ? List.of(READ, MOCK, FILE_READ, FILE_WRITE, FILE_DELETE) : List.of(READ, FILE_READ, FILE_WRITE, FILE_DELETE);
     }
 
     Credential issueCredential(UUID id, Instant expiresAt, List<String> requestedScopes, String actor) {

@@ -1,0 +1,799 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SHNEA 파일 서비스 API",
+    "version": "0.1.0",
+    "description": "서버 간 연동 1단계. 브라우저에 서버 API 키를 넣지 마세요. 업로드는 발급 키 소유이며 완료 파일 관리는 환경 범위입니다. 사용자 JWT·관리자 UI·미리보기·보존 자동 삭제는 후속 단계입니다."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Files",
+      "description": "프로젝트·환경 격리 파일 저장"
+    }
+  ],
+  "paths": {
+    "/api/v1/files/uploads": {
+      "post": {
+        "operationId": "post_files_uploads",
+        "summary": "업로드 세션 생성 — requestId 재시도는 같은 세션",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/uploads/{id}": {
+      "get": {
+        "operationId": "get_files_uploads_id",
+        "summary": "수신 위치·만료·완료 상태 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patch_files_uploads_id",
+        "summary": "현재 수신 위치부터 최대 8MiB 조각 전송",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Upload-Offset",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "X-Chunk-SHA256",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          {
+            "name": "Content-Length",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8388608
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete_files_uploads_id",
+        "summary": "미완료 업로드 취소 — 완료 파일은 보존",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "204": {
+            "description": "성공"
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files/uploads/{id}/complete": {
+      "post": {
+        "operationId": "post_files_uploads_id_complete",
+        "summary": "전체 SHA-256 확인 후 파일 확정 — 재시도 안전",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileInfo"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "operationId": "get_files",
+        "summary": "같은 프로젝트·환경의 완료 파일 목록",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:read",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileInfo"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files/{id}": {
+      "get": {
+        "operationId": "get_files_id",
+        "summary": "파일 정보 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:read",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileInfo"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "delete_files_id",
+        "summary": "파일 삭제 — 즉시 접근 차단, 물리 정리는 재시도",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:delete",
+        "responses": {
+          "204": {
+            "description": "성공"
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files/{id}/visibility": {
+      "put": {
+        "operationId": "put_files_id_visibility",
+        "summary": "파일 공개·비공개 변경",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:write",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileInfo"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Visibility"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}/download": {
+      "get": {
+        "operationId": "get_files_id_download",
+        "summary": "원본 다운로드 — PUBLIC만 익명 허용",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {},
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:read",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "항상 attachment, no-store, nosniff. 비공개는 같은 환경 files:read 필요. 중지 프로젝트는 공개 파일도 차단. Range 미지원(전체 200 응답), HEAD는 본문 없이 권한/헤더 확인하며 이용 시각을 연장하지 않습니다."
+      }
+    },
+    "/api/v1/files/openapi": {
+      "get": {
+        "operationId": "get_files_openapi",
+        "summary": "파일 서비스 OpenAPI 명세",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:read",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServerApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Platform-Key"
+      }
+    },
+    "schemas": {
+      "UploadCreate": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000000000
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ],
+            "default": "PUBLIC"
+          },
+          "retentionCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "default": "default"
+          }
+        },
+        "required": [
+          "requestId",
+          "originalName",
+          "size",
+          "sha256"
+        ]
+      },
+      "Upload": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "UPLOADING",
+              "READY",
+              "CANCELLED",
+              "EXPIRED",
+              "DELETED"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000000000
+          },
+          "receivedBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxChunkBytes": {
+            "type": "integer",
+            "const": 8388608
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "uploadId",
+          "state",
+          "size",
+          "receivedBytes",
+          "maxChunkBytes",
+          "expiresAt",
+          "fileId"
+        ]
+      },
+      "FileInfo": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000000000
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          },
+          "retentionCode": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileId",
+          "originalName",
+          "size",
+          "sha256",
+          "visibility",
+          "retentionCode",
+          "createdAt",
+          "lastUsedAt",
+          "downloadUrl"
+        ]
+      },
+      "Visibility": {
+        "type": "object",
+        "properties": {
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE"
+            ]
+          }
+        },
+        "required": [
+          "visibility"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri"
+          },
+          "code": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "requestId"
+        ]
+      }
+    }
+  }
+}

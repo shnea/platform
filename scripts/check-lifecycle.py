@@ -40,7 +40,7 @@ k = request('POST', eurl + '/credentials', token=admin, expected=201)
 assert 'expiresAt' in k and k['expiresAt'] is None
 assert k['scopes'] == ['integration:read']
 request('GET', eurl + '/credential-scopes', expected=401)
-assert [scope['code'] for scope in request('GET', eurl + '/credential-scopes', token=admin)] == ['integration:read', 'auth:mock']
+assert [scope['code'] for scope in request('GET', eurl + '/credential-scopes', token=admin)] == ['integration:read', 'auth:mock', 'files:read', 'files:write', 'files:delete']
 listing = request('GET', eurl + '/credentials', token=admin)
 assert 'expires_at' in listing[0] and listing[0]['expires_at'] is None
 assert listing[0]['id'] == k['id'] and 'apiKey' not in listing[0] and 'secret_hash' not in listing[0]

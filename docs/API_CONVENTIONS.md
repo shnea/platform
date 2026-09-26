@@ -2,11 +2,11 @@
 
 ## 적용 범위
 
-프로젝트 서비스의 관리자·연동/내부 API와 알림 서비스의 내부 이메일 API에 적용했다. 성공 응답 구조와 HTTP 상태, 관리자 JWT·서버 API 키의 권한 경계는 유지한다. 관리자 화면에서는 서버의 한국어 오류 안내와 요청 ID를 확인한다.
+프로젝트 서비스의 관리자·연동/내부 API, 파일 서비스 업무 API와 알림 서비스의 내부 이메일 API에 적용했다. 성공 응답 구조와 HTTP 상태, 관리자 JWT·서버 API 키의 권한 경계는 유지한다. 관리자 화면에서는 서버의 한국어 오류 안내와 요청 ID를 확인한다.
 
-Nginx의 `/api/v1/`에서 자체 생성한 413/502/503/504도 표준 본문을 반환한다. 업스트림 서비스가 반환한 오류 본문은 유지한다. `/auth/`의 표준 인증 오류와 프록시의 다른 경로는 바꾸지 않는다. 관리자 웹은 표준 본문이 없는 응답에도 한국어 기본 안내를 제공한다. 아직 업무 API가 없는 파일 서비스와 향후 API는 구현 시 같은 계약을 적용한다. 개발자 센터 화면은 후속 작업이다.
+Nginx의 `/api/v1/`와 파일 경로에서 자체 생성한 413/502/503/504도 표준 본문을 반환한다. 업스트림 서비스가 반환한 오류 본문은 유지한다. `/auth/`의 표준 인증 오류와 프록시의 다른 경로는 바꾸지 않는다. 관리자 웹은 표준 본문이 없는 응답에도 한국어 기본 안내를 제공한다. 파일 서비스의 오류·API 계약은 [파일 지침](FILES.md)과 별도 OpenAPI를 따른다. 개발자 센터의 파일 API 통합 탐색은 후속 작업이다.
 
-현재 외부 API의 [OpenAPI 3.1.1 명세](../services/project-service/src/main/resources/openapi.json)는 관리자 JWT로 `GET /api/v1/admin/openapi`에서 조회한다. Job API를 포함해 DEV 30개 경로/35개 작업을 문서화하며 PROD에서는 개발 전용 5개 작업/경로를 제거한다. 내부 이메일 API와 Keycloak OAuth/OIDC는 노출하지 않는다. 인증·본문·응답·필드 조건·부분 실패와 재시도 주의점을 명시했고 Gradle 검사에서 컨트롤러를 자동 탐색해 경로/모델 변경을 대조한다. [OpenAPI 공식 규격](https://spec.openapis.org/oas/v3.1.1.html)을 기준으로 검증한다.
+프로젝트 서비스의 [OpenAPI 3.1.1 명세](../services/project-service/src/main/resources/openapi.json)는 관리자 JWT로 `GET /api/v1/admin/openapi`에서 조회한다. DEV 39개 경로/46개 작업을 문서화하며 PROD에서는 개발 전용 5개 작업/경로를 제거한다. 파일 서비스는 `GET /api/v1/files/openapi`에 별도 8개 경로/11개 작업 명세를 제공한다(`files:read`). 내부 API와 Keycloak OAuth/OIDC는 노출하지 않는다. 인증·본문·응답·필드 조건·부분 실패와 재시도 주의점을 명시했고 Gradle 검사에서 컨트롤러를 탐색해 경로/모델 변경을 대조한다. [OpenAPI 공식 규격](https://spec.openapis.org/oas/v3.1.1.html)을 기준으로 검증한다.
 
 Keycloak OAuth/OIDC 오류와 `/api/v1/dev/login`의 의도된 모의 로그인 결과는 기존 계약을 유지한다. 관리자 모의 로그인은 HTTP 200 안에 `httpStatus`와 `result`를 반환하며 업무 API 예외와 구분한다.
 

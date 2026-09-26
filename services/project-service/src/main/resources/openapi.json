@@ -2388,12 +2388,15 @@
                   "type": "string",
                   "enum": [
                     "integration:read",
-                    "auth:mock"
+                    "auth:mock",
+                    "files:read",
+                    "files:write",
+                    "files:delete"
                   ]
                 },
                 "uniqueItems": true,
                 "minItems": 1,
-                "maxItems": 2
+                "maxItems": 5
               },
               {
                 "type": "null"
@@ -2431,12 +2434,15 @@
               "type": "string",
               "enum": [
                 "integration:read",
-                "auth:mock"
+                "auth:mock",
+                "files:read",
+                "files:write",
+                "files:delete"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 2
+            "maxItems": 5
           }
         },
         "required": [
@@ -2485,12 +2491,15 @@
               "type": "string",
               "enum": [
                 "integration:read",
-                "auth:mock"
+                "auth:mock",
+                "files:read",
+                "files:write",
+                "files:delete"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 2
+            "maxItems": 5
           }
         },
         "required": [
@@ -2508,7 +2517,10 @@
             "type": "string",
             "enum": [
               "integration:read",
-              "auth:mock"
+              "auth:mock",
+              "files:read",
+              "files:write",
+              "files:delete"
             ]
           },
           "label": {
@@ -2552,12 +2564,15 @@
               "type": "string",
               "enum": [
                 "integration:read",
-                "auth:mock"
+                "auth:mock",
+                "files:read",
+                "files:write",
+                "files:delete"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 2
+            "maxItems": 5
           }
         },
         "required": [

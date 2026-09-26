@@ -8,7 +8,7 @@ template_path = Path(".env.example")
 template = template_path.read_text(encoding="utf-8")
 for key in ("POSTGRES_PASSWORD", "PROJECT_DB_PASSWORD", "FILE_DB_PASSWORD",
             "NOTIFICATION_DB_PASSWORD", "IDENTITY_DB_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD",
-            "PLATFORM_ADMIN_PASSWORD", "KEYCLOAK_PROVISIONER_SECRET", "PLATFORM_MAIL_SECRET", "PLATFORM_EVENTS_SECRET", "PLATFORM_MONITORING_SECRET"):
+            "PLATFORM_ADMIN_PASSWORD", "KEYCLOAK_PROVISIONER_SECRET", "PLATFORM_MAIL_SECRET", "PLATFORM_EVENTS_SECRET", "PLATFORM_MONITORING_SECRET", "PLATFORM_FILES_SECRET"):
     template = template.replace(f"{key}=\n", f"{key}={secrets.token_hex(32)}\n")
 try:
     fd = os.open(".env", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

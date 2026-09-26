@@ -25,7 +25,7 @@ class ProjectController {
                           @NotNull List<@NotBlank String> redirectUris) {}
     record ProjectSettings(@NotBlank @Size(max=120) String name, @NotNull String status, @NotNull Long revision) {}
     record EnvironmentSettings(@NotNull Boolean registrationAllowed, @NotNull List<@NotBlank String> redirectUris, @NotNull Long revision) {}
-    record NewCredential(@Future Instant expiresAt, @Size(min=1, max=2) List<@NotBlank String> scopes) {}
+    record NewCredential(@Future Instant expiresAt, @Size(min=1, max=5) List<@NotBlank String> scopes) {}
     record AuthenticationSettings(@NotNull Boolean loginWithEmail, @NotNull Boolean verifyEmail,
                                   @NotNull Boolean resetPasswordAllowed, @NotNull @Min(12) @Max(128) Integer passwordMinLength,
                                   @NotBlank @Size(max=64) String revision) {}

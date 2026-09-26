@@ -117,6 +117,7 @@ services:
     cpus: ${PROJECT_CPUS:-1.0}
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_project
+      PLATFORM_FILES_SECRET: ${PLATFORM_FILES_SECRET:-}
       PLATFORM_MONITORING_SECRET: ${PLATFORM_MONITORING_SECRET:-}
       PLATFORM_JOBS_ENABLED: ${PLATFORM_JOBS_ENABLED:-true}
       PLATFORM_EVENTS_ENABLED: ${PLATFORM_EVENTS_ENABLED:-false}
@@ -134,8 +135,13 @@ services:
     image: register.shnea.kr/platform-file-service:${IMAGE_TAG:?Set IMAGE_TAG}
     mem_limit: ${FILE_MEMORY:-512m}
     cpus: ${FILE_CPUS:-1.0}
+    volumes:
+      - file-data:/app/storage
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_file
+      PLATFORM_FILES_SECRET: ${PLATFORM_FILES_SECRET:-}
+      FILE_ENVIRONMENT_QUOTA: ${FILE_ENVIRONMENT_QUOTA:-50000000000}
+      FILE_PENDING_LIMIT: ${FILE_PENDING_LIMIT:-20}
       PLATFORM_MONITORING_SECRET: ${PLATFORM_MONITORING_SECRET:-}
       DB_USERNAME: platform_file
       DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
@@ -191,3 +197,4 @@ networks:
 
 volumes:
   postgres-data:
+  file-data:
