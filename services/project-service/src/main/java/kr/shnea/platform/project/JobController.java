@@ -26,6 +26,8 @@ class JobController {
     }
     @GetMapping("/api/v1/admin/jobs/{id}")
     ProvisionJobs.Detail detail(@PathVariable UUID id) { return jobs.detail(id); }
+    @GetMapping("/api/v1/admin/environments/{id}/job-metrics")
+    ProvisionJobs.Metrics metrics(@PathVariable UUID id) { return jobs.metrics(id); }
     @PostMapping("/api/v1/admin/jobs/{id}/cancel")
     ProvisionJobs.Job cancel(@PathVariable UUID id, @AuthenticationPrincipal Jwt actor) { return jobs.cancel(id, actor.getSubject()); }
     @PostMapping("/api/v1/admin/jobs/{id}/retry") @ResponseStatus(HttpStatus.ACCEPTED)

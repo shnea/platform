@@ -9,6 +9,7 @@
 | `POST /api/v1/admin/environments/{id}/provision-jobs` | 현재 환경 revision으로 작업 접수. HTTP 202는 접수 결과이며 완료 보장이 아니다 |
 | `GET /api/v1/admin/jobs` | `environmentId`, `state`, `createdFrom`, `createdTo`, `limit`(기본 20, 최대 100), `offset`(최대 1,000,000)으로 조회 |
 | `GET /api/v1/admin/jobs/{id}` | 작업 상태·시도 횟수·시도 이력·실패 코드·요청 ID 조회 |
+| `GET /api/v1/admin/environments/{id}/job-metrics` | 현재 대기·실행과 최근 24시간 처리 결과. [모니터링 지침](MONITORING.md) 참고 |
 | `POST /api/v1/admin/jobs/{id}/cancel` | QUEUED/RETRY_WAIT 취소. 이미 CANCELLED면 그대로 반환. 실행 중 작업을 강제 중단하지 않음 |
 | `POST /api/v1/admin/jobs/{id}/retry` | FAILED 작업의 이력을 보존하고 현재 revision으로 후속 작업 접수 |
 
@@ -35,6 +36,7 @@ HTTP 오류 `JOB_STATE_CHANGED`, `JOB_NOT_CANCELLABLE`, `JOB_NOT_RETRYABLE`은 �
 - **환경 반영 접수**는 READY가 아닌 환경에서 사용한다. 대기 중 작업만 취소할 수 있고 최종 실패 작업만 재시도할 수 있다. 조치 전 환경과 영향을 확인하는 창이 열린다. 재시도는 원래 이력을 보존하고 후속 작업을 보여준다.
 - 자동 새로고침을 켜면 현재 목록에 활성 작업이 있거나 상세의 작업이 진행 중일 때 5초마다 확인한다. 상세를 보는 동안 목록 조회는 멈추고 상세만 갱신한다. 탭이 숨겨졌거나 확인창을 연 동안에는 자동 조회를 멈춘다. 수동 새로고침도 제공한다.
 - 목록 조회가 실패하면 이전 목록을 숨기고 오류와 재조회 버튼을 표시한다. 상세 조회 실패 때는 이전 상세를 남기되 조치를 막는다. 조치 결과를 확정하지 못하면 확인창에서 중복 제출하지 않고 닫은 뒤 상태를 다시 조회한다.
+- **모니터링** 메뉴에서 현재 대기 수·최장 대기 시간과 최근 24시간 처리 결과 차트를 조회한다. 상태별 작업 보기로 이동하면 해당 환경과 상태 필터가 적용된다. 작업 목록의 기간은 접수 기준이고 모니터링은 완료 기준이므로, **전체 기간 실패 작업 보기**는 기간 제한 없이 실패 이력을 연다.
 
 ## 실행·복구와 기록
 

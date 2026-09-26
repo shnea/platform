@@ -33,11 +33,12 @@ function Failure({ code }: { code: string | null }) {
   return code ? <p className="small job-failure">{failures[code] || "작업 상태를 확인해 주세요."} <code>{code}</code></p> : null;
 }
 
-export function JobPanel({ environmentId, environmentLabel, ready, disabled, onBusyChange, onSettled }: {
+export function JobPanel({ environmentId, environmentLabel, ready, disabled, onBusyChange, onSettled, initialState = "" }: {
   environmentId: string; environmentLabel: string; ready: boolean; disabled: boolean;
   onBusyChange: (busy: boolean) => void; onSettled: () => void;
+  initialState?: string;
 }) {
-  const [query, setQuery] = useState({ state: "", from: "", to: "", offset: 0, reload: 0 });
+  const [query, setQuery] = useState({ state: initialState, from: "", to: "", offset: 0, reload: 0 });
   const [rows, setRows] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

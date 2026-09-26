@@ -1907,6 +1907,44 @@
           }
         }
       }
+    },
+    "/api/v1/admin/environments/{id}/job-metrics": {
+      "get": {
+        "operationId": "get_environment_job_metrics",
+        "summary": "환경 반영 Job 모니터링 지표",
+        "description": "관리자 전용. 선택한 환경의 현재 대기·재시도 대기·실행 수와 DB 측정 시각 기준 최근 24시간 완료·최종 실패·취소 수를 조회합니다. 완료 시각으로 시작 포함/끝 제외 집계합니다. 최장 대기는 현재 대기 상태 진입(updated_at) 이후 경과이며 없으면 null입니다. dueWaiting은 실행 예정 시각이 지난 QUEUED/RETRY_WAIT 수입니다. 실패 수는 미해결 장애 수가 아닙니다. 없는 환경은 404, 빈 환경은 0과 null입니다. 중지 환경도 조회합니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobMetrics"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3627,6 +3665,84 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "JobMetrics": {
+        "type": "object",
+        "required": [
+          "projectId",
+          "environmentId",
+          "measuredAt",
+          "windowFrom",
+          "queued",
+          "retryWaiting",
+          "running",
+          "dueWaiting",
+          "succeededLast24Hours",
+          "failedLast24Hours",
+          "cancelledLast24Hours",
+          "oldestWaitingAt",
+          "oldestWaitingSeconds"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "measuredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "windowFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "queued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "retryWaiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "running": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dueWaiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "succeededLast24Hours": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedLast24Hours": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cancelledLast24Hours": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "oldestWaitingAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "oldestWaitingSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
           }
         }
       }

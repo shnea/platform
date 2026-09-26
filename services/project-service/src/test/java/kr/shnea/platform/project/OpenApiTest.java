@@ -52,8 +52,8 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(36);
-        assertThat(prod.path("paths").size()).isEqualTo(31);
+        assertThat(dev.path("paths").size()).isEqualTo(37);
+        assertThat(prod.path("paths").size()).isEqualTo(32);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 
@@ -61,6 +61,7 @@ class OpenApiTest {
         var schemas = new OpenApiController(json, "dev").specification().getBody().path("components").path("schemas");
         var models = Map.ofEntries(
             Map.entry("OperationalAlert",OperationalAlertController.Alert.class),
+            Map.entry("JobMetrics",ProvisionJobs.Metrics.class),
             Map.entry("AlertEmailSettings",OperationalAlertController.EmailSettings.class),
             Map.entry("AlertEmailSettingsUpdate",OperationalAlertController.EmailSettingsUpdate.class),
             Map.entry("AlertEmailDelivery",OperationalAlertController.EmailDelivery.class),

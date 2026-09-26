@@ -248,6 +248,52 @@ class ProvisionJobsDatabaseTest {
         assertThatThrownBy(() -> jobs.list(null, null, 20, 0, start, start)).isInstanceOf(ResponseStatusException.class);
     }
 
+    @Test void metricsDistinguishEmptyMissingAndCurrentWaitingStates() {
+        var empty=jobs.metrics(environmentId);
+        assertThat(empty.projectId()).isEqualTo(projectId);assertThat(empty.environmentId()).isEqualTo(environmentId);
+        assertThat(empty.queued()+empty.retryWaiting()+empty.running()+empty.failedLast24Hours()).isZero();
+        assertThat(empty.oldestWaitingSeconds()).isNull();assertThat(empty.oldestWaitingAt()).isNull();
+        assertThat(java.time.Duration.between(empty.windowFrom(),empty.measuredAt()).toHours()).isEqualTo(24);
+        assertThatThrownBy(()->jobs.metrics(UUID.randomUUID())).isInstanceOf(ResponseStatusException.class)
+            .satisfies(e->assertThat(((ResponseStatusException)e).getStatusCode().value()).isEqualTo(404));
+        var job=enqueue();
+        db.update("UPDATE platform_jobs SET updated_at=now()-interval '90 seconds',created_at=now()-interval '1 hour' WHERE id=?",job.id());
+        var waiting=jobs.metrics(environmentId);
+        assertThat(waiting.queued()).isEqualTo(1);assertThat(waiting.dueWaiting()).isEqualTo(1);
+        assertThat(waiting.oldestWaitingSeconds()).isBetween(90L,95L);
+        db.update("UPDATE platform_jobs SET state='RETRY_WAIT',updated_at=now()-interval '5 seconds',next_run_at=now()+interval '1 hour' WHERE id=?",job.id());
+        var retry=jobs.metrics(environmentId);assertThat(retry.queued()).isZero();assertThat(retry.retryWaiting()).isEqualTo(1);
+        assertThat(retry.dueWaiting()).isZero();assertThat(retry.oldestWaitingSeconds()).isBetween(5L,10L);
+        db.update("UPDATE platform_jobs SET state='RUNNING' WHERE id=?",job.id());
+        var running=jobs.metrics(environmentId);assertThat(running.running()).isEqualTo(1);assertThat(running.oldestWaitingSeconds()).isNull();
+        db.update("UPDATE platform_jobs SET state='QUEUED',updated_at=now()+interval '1 hour' WHERE id=?",job.id());
+        assertThat(jobs.metrics(environmentId).oldestWaitingSeconds()).isZero();
+    }
+
+    @Test void metricsUseCompletionWindowAndScopeWithoutTreatingFailureAsUnresolvedIncident() {
+        for(String state:List.of("FAILED","SUCCEEDED","CANCELLED"))db.update("""
+            INSERT INTO platform_jobs(id,project_id,environment_id,type,state,target_revision,request_id,created_at,completed_at)
+            VALUES (?,?,?,'ENVIRONMENT_PROVISION',?,0,?,now()-interval '3 days',now()-interval '1 minute')
+            """,UUID.randomUUID(),projectId,environmentId,state,REQUEST);
+        for(String age:List.of("24 hours 5 seconds","-1 hour"))db.update("""
+            INSERT INTO platform_jobs(id,project_id,environment_id,type,state,target_revision,request_id,completed_at)
+            VALUES (?,?,?,'ENVIRONMENT_PROVISION','FAILED',0,?,now()-?::interval)
+            """,UUID.randomUUID(),projectId,environmentId,REQUEST,age);
+        db.update("""
+            INSERT INTO platform_jobs(id,project_id,environment_id,type,state,target_revision,request_id,completed_at)
+            VALUES (?,?,?,'ENVIRONMENT_PROVISION','FAILED',0,?,now()-interval '23 hours 59 minutes 55 seconds')
+            """,UUID.randomUUID(),projectId,environmentId,REQUEST);
+        var otherProject=projects.createProject("other-metrics","격리 검수","test-admin").id();var other=UUID.randomUUID();
+        db.update("INSERT INTO environments(id,project_id,code,kind,realm,registration_allowed,redirect_uris,state) VALUES (?,?,'prod','PROD',?,false,'[]','READY')",other,otherProject,"p-"+other.toString().replace("-",""));
+        db.update("INSERT INTO platform_jobs(id,project_id,environment_id,type,state,target_revision,request_id,completed_at) VALUES (?,?,?,'ENVIRONMENT_PROVISION','FAILED',0,?,now()-interval '1 minute')",UUID.randomUUID(),otherProject,other,REQUEST);
+        var metric=jobs.metrics(environmentId);
+        assertThat(metric.failedLast24Hours()).isEqualTo(2);assertThat(metric.succeededLast24Hours()).isEqualTo(1);
+        assertThat(metric.cancelledLast24Hours()).isEqualTo(1);assertThat(metric.oldestWaitingSeconds()).isNull();
+        assertThat(jobs.metrics(other).failedLast24Hours()).isEqualTo(1);
+        db.update("UPDATE projects SET status='SUSPENDED' WHERE id=?",projectId);
+        assertThat(jobs.metrics(environmentId).failedLast24Hours()).isEqualTo(2);
+    }
+
     private ProvisionJobs.Job enqueue() { return jobs.enqueue(environmentId, "test-admin", REQUEST); }
     private int count(String sql) { return db.queryForObject(sql, Integer.class); }
     private void due(UUID id) { db.update("UPDATE platform_jobs SET next_run_at=now()-interval '1 second' WHERE id=?", id); }

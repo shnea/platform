@@ -711,6 +711,32 @@ textarea::placeholder {
 .alert-email-form {
   max-width: 68ch;
 }
+.monitoring-values > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.monitoring-values dt { font-weight: 600; }
+.monitoring-values dd { margin: 0; font-variant-numeric: tabular-nums; }
+.monitoring-values .small { display: block; font-weight: 400; }
+.monitoring-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin-block: 24px; }
+.monitoring-layout h4 { margin-top: 0; }
+.job-result-chart { margin: 0; }
+.job-chart-scale { display: flex; justify-content: space-between; margin: 24px 64px 0 80px; }
+.job-chart-bars > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 16px; align-items: center; padding-block: 20px; border: 0; }
+.job-chart-bars dt { color: var(--text); }
+.job-chart-bars dd { display: flex; align-items: center; gap: 12px; margin: 0; min-width: 0; }
+.job-chart-track { display: block; flex: 1; min-width: 0; height: 24px; background: var(--raised); }
+.job-chart-bar { display: block; height: 100%; }
+.job-chart-bar.completed { background: var(--accent); }
+.job-chart-bar.failed { background: var(--danger); }
+.job-chart-bar.cancelled { background: var(--muted); }
+.job-chart-count { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .monitoring-layout { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
 .checkbox input {
   width: 18px;
   height: 18px;

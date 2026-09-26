@@ -16,6 +16,9 @@ class ProvisionJobs {
                String errorCode, UUID retryOf, Instant createdAt, Instant updatedAt, Instant completedAt) {}
     record Attempt(int attempt, String state, String errorCode, Instant startedAt, Instant endedAt) {}
     record Detail(Job job, List<Attempt> attempts) {}
+    record Metrics(UUID projectId,UUID environmentId,Instant measuredAt,Instant windowFrom,
+                   long queued,long retryWaiting,long running,long dueWaiting,Instant oldestWaitingAt,
+                   Long oldestWaitingSeconds,long succeededLast24Hours,long failedLast24Hours,long cancelledLast24Hours) {}
     record Claim(Job job, UUID token) {}
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -69,6 +72,31 @@ class ProvisionJobs {
     Job job(UUID id) {
         return db.query("SELECT * FROM platform_jobs WHERE id=?", (rs, row) -> map(rs), id)
             .stream().findFirst().orElseThrow(ApiCode.RESOURCE_NOT_FOUND::failure);
+    }
+    Metrics metrics(UUID environmentId) {
+        // One statement/snapshot and the database clock keep counts and the rolling window consistent.
+        var rows=db.query("""
+            WITH measured AS (SELECT statement_timestamp() AS at)
+            SELECT e.project_id,e.id,m.at,m.at-interval '24 hours' AS window_from,
+              count(j.id) FILTER(WHERE j.state='QUEUED') AS queued,
+              count(j.id) FILTER(WHERE j.state='RETRY_WAIT') AS retry_waiting,
+              count(j.id) FILTER(WHERE j.state='RUNNING') AS running,
+              count(j.id) FILTER(WHERE j.state IN ('QUEUED','RETRY_WAIT') AND j.next_run_at<=m.at) AS due_waiting,
+              min(j.updated_at) FILTER(WHERE j.state IN ('QUEUED','RETRY_WAIT')) AS oldest_waiting_at,
+              CASE WHEN count(j.id) FILTER(WHERE j.state IN ('QUEUED','RETRY_WAIT'))>0 THEN
+                greatest(0,floor(extract(epoch FROM m.at-min(j.updated_at) FILTER(WHERE j.state IN ('QUEUED','RETRY_WAIT')))))::bigint
+                END AS oldest_waiting_seconds,
+              count(j.id) FILTER(WHERE j.state='SUCCEEDED') AS succeeded,
+              count(j.id) FILTER(WHERE j.state='FAILED') AS failed,
+              count(j.id) FILTER(WHERE j.state='CANCELLED') AS cancelled
+            FROM environments e CROSS JOIN measured m LEFT JOIN platform_jobs j ON j.environment_id=e.id
+              AND (j.state IN ('QUEUED','RETRY_WAIT','RUNNING') OR
+                   (j.completed_at>=m.at-interval '24 hours' AND j.completed_at<m.at))
+            WHERE e.id=? GROUP BY e.id,m.at
+            """,(rs,n)->new Metrics(rs.getObject("project_id",UUID.class),rs.getObject("id",UUID.class),instant(rs,"at"),instant(rs,"window_from"),
+                rs.getLong("queued"),rs.getLong("retry_waiting"),rs.getLong("running"),rs.getLong("due_waiting"),instant(rs,"oldest_waiting_at"),
+                rs.getObject("oldest_waiting_seconds",Long.class),rs.getLong("succeeded"),rs.getLong("failed"),rs.getLong("cancelled")),environmentId);
+        return rows.stream().findFirst().orElseThrow(ApiCode.RESOURCE_NOT_FOUND::failure);
     }
     Detail detail(UUID id) {
         return new Detail(job(id), db.query("SELECT * FROM job_attempts WHERE job_id=? ORDER BY attempt",
