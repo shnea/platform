@@ -29,6 +29,10 @@
 .job-failure { overflow-wrap: anywhere; }
 .job-failure code { display: block; color: var(--muted); }
 .job-panel .pagination { align-items: center; }
+.job-events { border-top: 1px solid var(--line); margin-top: 24px; }
+.job-event { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.job-event-history { margin-top: 16px; }
+.job-event-history summary { cursor: pointer; padding-block: 12px; min-height: 44px; }
 @media (max-width: 900px) {
   .job-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

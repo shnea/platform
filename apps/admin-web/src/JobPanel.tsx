@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "./auth";
 import { Dialog } from "./Dialog";
+import { JobEventsPanel } from "./JobEventsPanel";
 
 type Job = {
   id: string; environmentId: string; state: string; targetRevision: number;
@@ -150,13 +151,14 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
   const [loading, setLoading] = useState(true), [reload, setReload] = useState(0);
   const [error, setError] = useState(""), [actionError, setActionError] = useState("");
   const [action, setAction] = useState<"cancel" | "retry" | null>(null), [busy, setBusy] = useState(false);
+  const [eventDialog, setEventDialog] = useState(false);
   const [notice, setNotice] = useState("");
   const live = useRef(true), locked = useRef(false), settled = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const notifySettled = useRef(onSettled); notifySettled.current = onSettled;
   useEffect(() => { live.current = true; heading.current?.focus(); return () => { live.current = false; }; }, []);
   useEffect(() => {
-    if (action || busy) return;
+    if (action || busy || eventDialog) return;
     let current = true;
     let timer: ReturnType<typeof setTimeout>;
     setLoading(true); setError("");
@@ -173,7 +175,7 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
     }
     void load();
     return () => { current = false; clearTimeout(timer); };
-  }, [id, reload, auto, action, busy]);
+  }, [id, reload, auto, action, busy, eventDialog]);
   async function execute() {
     if (!action || locked.current || actionError) return;
     locked.current = true; setBusy(true); onBusyChange(true);
@@ -195,8 +197,8 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
   }
   return <div className="job-detail">
     <div className="section-line"><h4 ref={heading} tabIndex={-1}>작업 상세</h4><div className="actions">
-      <button className="quiet" disabled={busy} onClick={back}>작업 목록으로</button>
-      <button className="secondary" disabled={busy || loading} onClick={() => setReload(n => n + 1)}>상태 새로고침</button>
+      <button className="quiet" disabled={busy || eventDialog} onClick={back}>작업 목록으로</button>
+      <button className="secondary" disabled={busy || eventDialog || loading} onClick={() => setReload(n => n + 1)}>상태 새로고침</button>
     </div></div>
     {loading && <p role="status">상태를 확인하는 중…</p>}
     {error && <p className="alert" role="alert">{error} 표시된 정보는 마지막 조회 결과입니다.</p>}
@@ -224,6 +226,8 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
         <p className="small muted">시작 {date(attempt.startedAt)}<br />종료 {date(attempt.endedAt)}</p>
         <Failure code={attempt.errorCode} />
       </li>)}</ol> : <p className="empty">아직 실행한 시도가 없습니다.</p>}
+      <JobEventsPanel jobId={id} jobState={job.state} environmentLabel={environmentLabel} auto={auto}
+        paused={!!action || busy} onBusyChange={onBusyChange} onDialogChange={setEventDialog} />
     </>}
     {action && job && <Dialog title={action === "cancel" ? "작업 취소 확인" : "실패 작업 재시도"} busy={busy} close={closeAction}>
       <p><strong>{environmentLabel}</strong></p><p className="identifier">{job.id}</p>
