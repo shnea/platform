@@ -19,7 +19,12 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 class ProjectController {
     record NewProject(@Pattern(regexp="[a-z][a-z0-9-]{1,39}") @NotNull String code,
-                      @NotBlank @Size(max=120) String name) {}
+                      @NotBlank @Size(max=120) String name, Boolean filesEnabled) {}
+    record FileSettings(@NotNull Boolean enabled, @NotNull Long revision) {}
+    @PutMapping("/api/v1/admin/projects/{id}/files")
+    Object fileSettings(@PathVariable UUID id, @Valid @RequestBody FileSettings request, @AuthenticationPrincipal Jwt user) {
+        return service.updateFiles(id, request.enabled(), request.revision(), user.getSubject());
+    }
     record NewEnvironment(@Pattern(regexp="[a-z][a-z0-9-]{1,39}") @NotNull String code,
                           @NotNull String kind, @NotNull Boolean registrationAllowed,
                           @NotNull List<@NotBlank String> redirectUris) {}
@@ -89,7 +94,7 @@ class ProjectController {
     }
     @PostMapping("/api/v1/admin/projects") @ResponseStatus(HttpStatus.CREATED)
     Object create(@Valid @RequestBody NewProject request, @AuthenticationPrincipal Jwt user) {
-        return service.createProject(request.code(), request.name(), user.getSubject());
+        return service.createProject(request.code(), request.name(), user.getSubject(), Boolean.TRUE.equals(request.filesEnabled()));
     }
     @GetMapping("/api/v1/admin/projects/{id}/environments")
     Object environments(@PathVariable UUID id) { return service.environments(id); }

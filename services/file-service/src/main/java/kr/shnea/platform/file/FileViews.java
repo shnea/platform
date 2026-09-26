@@ -19,7 +19,7 @@ class FileViews {
     record View(String state,String kind,String mediaType,boolean thumbnail,String errorCode) {}
     record Links(UUID fileId,String state,String kind,String mediaType,String errorCode,String originalUrl,String previewUrl,
                  String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt,
-                 FileVideos.Status video,String streamUrl,Instant streamExpiresAt) {}
+                 FileVideos.Status video,String streamUrl,Instant streamExpiresAt,String shareUrl) {}
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FilesService files;
     private final FileAccess access; private final FileStore store; private final FileVideos videos;
     FileViews(JdbcTemplate db,TransactionTemplate tx,FilesService files,FileAccess access,FileStore store,FileVideos videos) {
@@ -66,7 +66,8 @@ class FileViews {
         Instant streamEnd=token==null?null:db.query("SELECT playback_expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=? AND playback_expires_at IS NOT NULL",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
         return new Links(id,v.state(),video==null?v.kind():"VIDEO",v.mediaType(),v.errorCode(),base+"/content/original"+query,
             v.state().equals("READY")?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
-            base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd);
+            base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd,
+            files.downloadable(id).visibility().equals("PUBLIC")?base+"/share":null);
     }
     Object retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{

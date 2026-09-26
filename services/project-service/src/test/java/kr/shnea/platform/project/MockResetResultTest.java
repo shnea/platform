@@ -21,7 +21,7 @@ class MockResetResultTest {
     @Test void partialResultCommitsIntentAndOutcomeForEachUserAndRejectsStaleBatch() {
         UUID environmentId = UUID.randomUUID(), projectId = UUID.randomUUID();
         var env = new ProjectService.Environment(environmentId, projectId, "dev", "DEV", "test", false, List.of(), "READY", "test", 0);
-        var project = new ProjectService.Project(projectId, "test", "test", Instant.now(), "ACTIVE", 0);
+        var project = new ProjectService.Project(projectId, "test", "test", Instant.now(), "ACTIVE", 0, false);
         var first = new MockReset.Target(UUID.randomUUID(), "one", "google");
         var second = new MockReset.Target(UUID.randomUUID(), "two", "google");
         var plan = new MockReset.Preview(List.of(first, second), false, "a".repeat(64));

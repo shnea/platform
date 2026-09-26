@@ -2056,6 +2056,54 @@
           }
         }
       }
+    },
+    "/api/v1/admin/projects/{id}/files": {
+      "put": {
+        "operationId": "put_project_files",
+        "summary": "프로젝트 파일 서비스 사용 설정",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectFileSettings"
+              }
+            }
+          }
+        },
+        "description": "모든 환경에 적용. revision 충돌은 409. 끄면 API·관리·공개/공유 접근 차단. 저장 데이터·키 권한·보존 정책은 유지. 재활성화 시 유효한 링크·키 사용 재개. 중지 프로젝트의 활성화는 409."
+      }
     }
   },
   "components": {
@@ -2180,6 +2228,10 @@
           },
           "revision": {
             "type": "integer"
+          },
+          "filesEnabled": {
+            "type": "boolean",
+            "description": "프로젝트 전체 파일 서비스 사용 여부. 새 프로젝트 기본 false, 기존 프로젝트 유지."
           }
         },
         "required": [
@@ -2188,7 +2240,8 @@
           "name",
           "createdAt",
           "status",
-          "revision"
+          "revision",
+          "filesEnabled"
         ]
       },
       "Environment": {
@@ -2270,6 +2323,10 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "filesEnabled": {
+            "type": "boolean",
+            "description": "프로젝트 전체 파일 서비스 사용 여부. 새 프로젝트 기본 false, 기존 프로젝트 유지."
           }
         },
         "required": [
@@ -4119,6 +4176,22 @@
             "items": {
               "$ref": "#/components/schemas/ServiceReading"
             }
+          }
+        }
+      },
+      "ProjectFileSettings": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "revision"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

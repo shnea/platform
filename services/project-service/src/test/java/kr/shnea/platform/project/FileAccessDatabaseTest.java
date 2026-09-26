@@ -21,7 +21,7 @@ class FileAccessDatabaseTest {
         db=new JdbcTemplate(ds);
         var identity=mock(IdentityClient.class); when(identity.issuer(anyString())).thenReturn("https://example.test");
         projects=new ProjectService(db,new TransactionTemplate(new DataSourceTransactionManager(ds)),identity,"dev");
-        project=projects.createProject("files-check","파일 검증","test").id(); environment=UUID.randomUUID();
+        project=projects.createProject("files-check","파일 검증","test",true).id(); environment=UUID.randomUUID();
         db.update("INSERT INTO environments(id,project_id,code,kind,realm,registration_allowed,redirect_uris,state) VALUES (?,?,'dev','DEV',?,false,'[]','READY')", environment,project,"p-"+environment);
     }
     @AfterEach void cleanup() { if(admin!=null) admin.execute("DROP SCHEMA "+schema+" CASCADE"); }
@@ -59,5 +59,22 @@ class FileAccessDatabaseTest {
         var result=(Map<?,?>)controller.access(secret,key.apiKey(),"files:read");
         assertThat(result.get("credentialId")).isEqualTo(key.id());
         assertThat(result.get("environmentId")).isEqualTo(environment);
+    }
+    @Test void filesOptInAppliesToExistingKeysAllEnvironmentsAndHasRevisionAndAudit() {
+        assertThat(projects.createProject("no-files","파일 미사용","test").filesEnabled()).isFalse();
+        var key=projects.issueCredential(environment,null,List.of("integration:read","files:read"),"test");
+        var disabled=projects.updateFiles(project,false,0,"test");
+        assertThat(disabled.filesEnabled()).isFalse();
+        assertThat(projects.fileEnvironment(environment).get("active")).isEqualTo(false);
+        code(ApiCode.FILE_SERVICE_DISABLED,()->projects.context(key.apiKey(),"files:read"));
+        assertThat(projects.context(key.apiKey(),"integration:read").projectId()).isEqualTo(project);
+        assertThat(projects.credentialScopes(environment)).extracting(ProjectService.Scope::code).doesNotContain("files:read");
+        code(ApiCode.INVALID_CREDENTIAL_SCOPES,()->projects.issueCredential(environment,null,List.of("files:read"),"test"));
+        code(ApiCode.SETTINGS_CHANGED,()->projects.updateFiles(project,true,0,"test"));
+        projects.updateFiles(project,true,disabled.revision(),"test");
+        assertThat(projects.context(key.apiKey(),"files:read").projectId()).isEqualTo(project);
+        assertThat(db.queryForObject("SELECT count(*) FROM audit_events WHERE action LIKE 'project.files.%'",Integer.class)).isEqualTo(2);
+        db.update("UPDATE projects SET status='SUSPENDED' WHERE id=?",project);
+        code(ApiCode.PROJECT_SUSPENDED,()->projects.updateFiles(project,true,2,"test"));
     }
 }

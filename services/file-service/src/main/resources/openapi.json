@@ -2872,6 +2872,340 @@
           }
         }
       }
+    },
+    "/api/v1/files/{id}/public-share": {
+      "get": {
+        "operationId": "get_api_v1_files_id_public_share",
+        "summary": "공개 공유 미리보기 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShareSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "표준 한국어 오류. code와 requestId를 확인하세요.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scope": "files:read",
+        "description": "공개 파일의 공유 제목·설명·썸네일 사용 설정. 빈 제목은 파일명, 빈 설명은 기본 안내. 저장은 공개 파일만 허용하고 revision 충돌은 409. 외부 OG 캐시의 즉시 삭제는 보장하지 않는다."
+      },
+      "put": {
+        "operationId": "put_api_v1_files_id_public_share",
+        "summary": "공개 공유 미리보기 설정",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShareSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "표준 한국어 오류. code와 requestId를 확인하세요.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scope": "files:write",
+        "description": "공개 파일의 공유 제목·설명·썸네일 사용 설정. 빈 제목은 파일명, 빈 설명은 기본 안내. 저장은 공개 파일만 허용하고 revision 충돌은 409. 외부 OG 캐시의 즉시 삭제는 보장하지 않는다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicShareSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/{id}/public-share": {
+      "get": {
+        "operationId": "get_api_v1_files_admin_environments_environmentId_id_public_share",
+        "summary": "공개 공유 미리보기 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShareSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "표준 한국어 오류. code와 requestId를 확인하세요.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "공개 파일의 공유 제목·설명·썸네일 사용 설정. 빈 제목은 파일명, 빈 설명은 기본 안내. 저장은 공개 파일만 허용하고 revision 충돌은 409. 외부 OG 캐시의 즉시 삭제는 보장하지 않는다."
+      },
+      "put": {
+        "operationId": "put_api_v1_files_admin_environments_environmentId_id_public_share",
+        "summary": "공개 공유 미리보기 설정",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShareSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "표준 한국어 오류. code와 requestId를 확인하세요.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "공개 파일의 공유 제목·설명·썸네일 사용 설정. 빈 제목은 파일명, 빈 설명은 기본 안내. 저장은 공개 파일만 허용하고 revision 충돌은 409. 외부 OG 캐시의 즉시 삭제는 보장하지 않는다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicShareSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}/share": {
+      "get": {
+        "operationId": "get_api_v1_files_id_share",
+        "summary": "공개 파일 공유 페이지·OG",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "토큰·서버 키로 우회할 수 없는 공개 전용 페이지. 파일이 비공개·삭제·프로젝트 파일 사용 중지이면 404. 본문 자동 재생 없이 기존 뷰어로 연결한다."
+      }
+    },
+    "/api/v1/files/share-preview.png": {
+      "get": {
+        "operationId": "get_api_v1_files_share_preview_png",
+        "summary": "공통 공개 파일 OG 이미지",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/openapi": {
+      "get": {
+        "operationId": "get_admin_files_openapi",
+        "summary": "관리자 파일 API 명세",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3575,6 +3909,13 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "shareUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "공개 파일의 OG HTML 공유 URL. 비공개 파일은 null."
           }
         },
         "required": [
@@ -3591,7 +3932,8 @@
           "expiresAt",
           "video",
           "streamUrl",
-          "streamExpiresAt"
+          "streamExpiresAt",
+          "shareUrl"
         ],
         "additionalProperties": false,
         "description": "일반 비공개 보기/원본 URL은 최대 5분. streamUrl은 HLS 전용 최대 2시간이며 원본 접근 연장 권한이 아니다. 모든 조각에서 현재 공개 범위/접근 버전/프로젝트 상태를 검사한다. 영상은 화질별 완료 비율을 표시하며 전체 완료 후 제공한다."
@@ -3764,6 +4106,32 @@
           "state",
           "url"
         ]
+      },
+      "PublicShareSettings": {
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "showThumbnail",
+          "revision"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "showThumbnail": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   }

@@ -19,9 +19,11 @@ import { AlertWorkspace } from "./AlertWorkspace";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
 import { ProjectOverview } from "./ProjectOverview";
+import { ProjectFilesSettings } from "./ProjectFilesSettings";
+import { DeveloperCenter } from "./DeveloperCenter";
 import { FileWorkspace } from "./FileWorkspace";
 
-type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit";
+type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit" | "developer";
 type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
@@ -29,6 +31,7 @@ const views: { value: View; label: string; description: string }[] = [
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
   { value: "monitoring", label: "모니터링", description: "플랫폼 서비스 상태와 프로젝트별 작업 현황을 확인하세요." },
   { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
+  { value: "developer", label: "개발자 센터", description: "파일 API 명세와 서버 연동 예제로 프로젝트를 연결하세요." },
   { value: "audit", label: "감사 이력", description: "관리 작업과 인증 활동을 확인하세요. 최근 100건을 표시합니다." },
 ];
 const projectSections: { value: ProjectSection; label: string }[] = [
@@ -46,6 +49,7 @@ type Project = {
   code: string;
   name: string;
   status: "ACTIVE" | "SUSPENDED";
+  filesEnabled: boolean;
   revision: number;
 };
 type Environment = {
@@ -222,7 +226,7 @@ function Workspace() {
     [modal, setModal] = useState<Modal | null>(null);
   const [section, setSection] = useState<ProjectSection>("overview");
   const [monitoringScope, setMonitoringScope] = useState<"services" | "projects">("services");
-  const serviceView = tab === "monitoring" && monitoringScope === "services";
+  const serviceView = tab === "developer" || tab === "monitoring" && monitoringScope === "services";
   const [authSection, setAuthSection] = useState<"login" | "policy" | "social">("login");
   const [menuOpen, setMenuOpen] = useState(false);
   const pageTitle = useRef<HTMLHeadingElement>(null);
@@ -401,6 +405,7 @@ function Workspace() {
         await api("/projects", "POST", {
           name: data.get("name"),
           code: data.get("code"),
+          filesEnabled: data.get("filesEnabled") === "on",
         });
         setOffset(0);
       }
@@ -528,7 +533,7 @@ function Workspace() {
           items={[{value:"services",label:"서비스 상태"},{value:"projects",label:"프로젝트 작업"}]} />}
         <div id={tab === "monitoring" ? "monitoring-scope-panel" : undefined} role={tab === "monitoring" ? "tabpanel" : undefined}
           aria-labelledby={tab === "monitoring" ? `monitoring-scope-${monitoringScope}` : undefined}>
-        {serviceView ? <ServiceMonitoring /> : tab === "audit" ? (
+        {tab === "developer" ? <DeveloperCenter /> : serviceView ? <ServiceMonitoring /> : tab === "audit" ? (
           loading ? (
             <p role="status">이력을 불러오는 중…</p>
           ) : (
@@ -666,6 +671,7 @@ function Workspace() {
                   {project.status === "ACTIVE" ? "중지" : "재개"}
                 </button>
               </div>
+              <ProjectFilesSettings key={`${project.id}:${project.revision}`} project={project} onChanged={reload} onBusyChange={setBusy}/>
             </section> : <>
             {project.status === "SUSPENDED" && (
               <details className="scope-warning"><summary>중지된 프로젝트입니다</summary><p>
@@ -704,7 +710,8 @@ function Workspace() {
                   <>
                     {tab === "projects" && activeSection === "overview" && <ProjectOverview key={`overview:${env.id}:${refresh}`} environmentId={env.id}
                       ready={env.state === "READY"} disabled={busy} open={moveTo} />}
-                    {tab === "files" && <FileWorkspace key={`files:${env.id}:${refresh}`} environmentId={env.id}
+                    {tab === "files" && !project.filesEnabled && <p className="warning">파일 서비스 사용이 꺼져 있습니다. <button className="secondary" onClick={()=>{moveTo("projects");setSection("settings");}}>프로젝트 설정으로</button></p>}
+                    {tab === "files" && project.filesEnabled && <FileWorkspace key={`files:${env.id}:${refresh}`} environmentId={env.id}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"}
                       onBusyChange={setBusy} />}
                     {tab === "jobs" && <>
@@ -1055,6 +1062,7 @@ function Workspace() {
                     </span>
                   </label>
                 )}
+                {modal.type === "project" && <div><label className="checkbox"><input type="checkbox" name="filesEnabled" aria-describedby="new-project-files-hint"/>파일 서비스 사용</label><p className="hint" id="new-project-files-hint">업로드·미리보기·파일 공유를 사용합니다. 나중에 프로젝트 설정에서 변경할 수 있습니다.</p></div>}
                 {modal.type === "environment" && (
                   <>
                     {!modal.env && (

@@ -306,3 +306,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 ```
 
 검사는 가짜 로컬 계정에 대한 비밀번호 설정으로 길이 제한을 확인한 뒤 계정을 삭제한다. 이메일·외부 소셜 로그인은 실행하지 않으며 검사 API 키는 폐기하고 프로젝트는 중지 상태로 남긴다.
+
+## 프로젝트 파일 서비스 사용
+
+프로젝트 생성의 `filesEnabled`는 기본 false다. 기존 프로젝트는 마이그레이션으로 사용 상태를 유지한다. 관리자 `PUT /api/v1/admin/projects/{id}/files`의 `{enabled, revision}`으로 모든 환경에 적용하며 설정 충돌은 409다. 파일 권한은 사용 중일 때 발급할 수 있고 사용을 끄면 기존 키도 파일 API만 403 FILE_SERVICE_DISABLED로 차단한다. 기존 키·파일·보존 설정은 유지한다. 사용자별 업로드 권한은 호스트 서버가 담당한다. 자세한 계약은 [파일 서비스](FILES.md)를 따른다.

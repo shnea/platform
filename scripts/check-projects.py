@@ -39,7 +39,7 @@ projects = []
 environments = []
 for index in range(2):
     body = {"code": f"{run}-{index}", "name": "격리 검증 " + str(index)}
-    project = request("POST", api + "/projects", body, admin, expected=201)
+    project = request("POST", api + "/projects", dict(body, filesEnabled=True), admin, expected=201)
     projects.append(project)
     request("POST", api + "/projects", body, admin, expected=409)
     endpoint = api + "/projects/" + project["id"] + "/environments"

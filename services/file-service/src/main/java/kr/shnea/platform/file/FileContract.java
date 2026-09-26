@@ -21,4 +21,6 @@ class FileContract {
         access.require(key, "files:read");
         return specification;
     }
+    @GetMapping("/api/v1/files/admin/openapi")
+    Object administratorSpecification() { return specification; }
 }

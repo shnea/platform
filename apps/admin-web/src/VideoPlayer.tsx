@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type Hls from "hls.js";
 
 export type VideoStatus={state:string;progress:number;durationSeconds:number|null;variants:{quality:number;width:number;height:number;bandwidth:number;playlist:string}[];errorCode:string|null};
-export type FileViewsData={fileId:string;state:string;kind:string;mediaType:string;errorCode:string|null;originalUrl:string;previewUrl:string|null;thumbnailUrl:string|null;viewerUrl:string;downloadUrl:string;expiresAt:string|null;video:VideoStatus|null;streamUrl:string|null;streamExpiresAt:string|null};
+export type FileViewsData={fileId:string;state:string;kind:string;mediaType:string;errorCode:string|null;originalUrl:string;previewUrl:string|null;thumbnailUrl:string|null;viewerUrl:string;downloadUrl:string;expiresAt:string|null;video:VideoStatus|null;streamUrl:string|null;streamExpiresAt:string|null;shareUrl:string|null};
 export const videoState=(v:VideoStatus)=>({QUEUED:"스트리밍 변환 대기",PROCESSING:`스트리밍 변환 중 · 화질별 변환 ${v.progress}% 완료`,READY:"스트리밍 준비 완료",UNSUPPORTED:"스트리밍 변환 미지원",FAILED:"스트리밍 변환 실패"}[v.state]??v.state);
 export const videoReason=(code:string|null)=>({FILE_VIDEO_INPUT_LIMIT:"60분 이하, 최대 4096px·850만 화소 영상을 지원합니다.",FILE_VIDEO_UNSUPPORTED:"지원하지 않는 코덱 또는 픽셀 비율입니다.",FILE_VIDEO_TIMEOUT:"변환 제한 시간을 초과했습니다.",FILE_QUOTA_EXCEEDED:"환경의 파일 용량 한도가 부족합니다.",FILE_STORAGE_FULL:"저장 공간이 부족합니다.",FILE_VIDEO_OUTPUT_LIMIT:"변환 결과가 예약 용량을 초과했습니다.",FILE_VIDEO_INTERRUPTED:"이전 변환이 중단되었습니다."}[code??""]??"변환에 실패했습니다. 원본을 확인한 뒤 다시 시도해 주세요.");
 

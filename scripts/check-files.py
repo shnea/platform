@@ -83,7 +83,7 @@ def start():
     login(); save()
     environments = []
     for index in range(2):
-        project, _ = call('POST', ADMIN+'/projects', dict(code=state['fixture']+'-'+str(index), name='File API verification'), auth=True, expected=201)
+        project, _ = call('POST', ADMIN+'/projects', dict(code=state['fixture']+'-'+str(index), name='File API verification', filesEnabled=True), auth=True, expected=201)
         state['projects'].append(project); save()
         env, _ = call('POST', ADMIN+'/projects/'+project['id']+'/environments', dict(code='dev', kind='DEV', registrationAllowed=False,
                     redirectUris=['http://localhost:3000/callback']), auth=True, expected=201)
@@ -98,7 +98,7 @@ def start():
     old = key(environments[0], ['integration:read'])
     state.update(full=full, foreign=foreign, prod_key=prod_key, read=read, old=old)
     spec, _ = call('GET', '/api/v1/files/openapi', key=full['apiKey']); validate(spec)
-    assert sum(len(v) for v in spec['paths'].values()) == 51
+    assert sum(len(v) for v in spec['paths'].values()) == 58
     state['environments'] = environments; save()
     call('GET', '/api/v1/files', expected=401)
     call('GET', '/api/v1/files', key=old['apiKey'], expected=403)
@@ -121,6 +121,7 @@ def finish():
     full=state['full']['apiKey']; upload=state['upload']['uploadId']
     check_duplicates()
     check_shares()
+    check_public_sharing_and_settings()
     admin_path='/api/v1/files/admin/environments/'+state['environments'][0]['id']
     call('GET',admin_path,expected=401)
     call('GET',admin_path,key=full,expected=401)
@@ -174,6 +175,43 @@ def finish():
     call('POST','/api/v1/files/uploads',oversized,key=full,expected=413)
     call('GET','/internal/v1/files/environments/'+str(uuid.uuid4()),expected=404,raw=True)
     print('PASS finish: persisted resume, checksum, complete retry, public/private, scopes, project/environment isolation, revoked key, suspension, delete, empty file, 5GB limit, admin JWT and owner boundaries, single-use private ticket, HEAD without consumption')
+
+
+def check_public_sharing_and_settings():
+    full=state['full']['apiKey']; project=state['projects'][0]
+    content=b'public share verification'
+    upload,_=create_file(full,content,'public-check.txt')
+    chunk(upload['uploadId'],full,0,content)
+    file,_=call('POST','/api/v1/files/uploads/'+upload['uploadId']+'/complete',key=full)
+    path='/api/v1/files/'+file['fileId']; admin='/api/v1/files/admin/environments/'+state['environments'][0]['id']
+    spec,_=call('GET','/api/v1/files/admin/openapi',auth=True); assert sum(len(v) for v in spec['paths'].values())==58
+    example,headers=call('GET','/examples/file-client.py',raw=True)
+    assert b'class Client:' in example and b'credential' in example and headers['Content-Disposition'].startswith('attachment;')
+    call('GET','/api/v1/files/admin/openapi',expected=401)
+    metadata=dict(title='공개 검수 <script>',description='공유 설명',showThumbnail=False,revision=0)
+    call('PUT',path+'/public-share',metadata,key=state['read']['apiKey'],expected=403)
+    call('PUT',path+'/public-share',metadata,key=state['foreign']['apiKey'],expected=404)
+    saved,_=call('PUT',path+'/public-share',metadata,key=full); assert saved['revision']==1
+    call('PUT',path+'/public-share',metadata,key=full,expected=409)
+    page,hdr=call('GET',path+'/share',raw=True);assert '공개 검수 &lt;script&gt;'.encode() in page and b'og:image' in page and b'share-preview.png' in page and hdr['Cache-Control']=='no-store'
+    png,_=call('GET','/api/v1/files/share-preview.png',raw=True);assert png.startswith(b'\x89PNG')
+    for enabled in [False,True]:
+        project,_=call('PUT',ADMIN+'/projects/'+project['id']+'/files',dict(enabled=enabled,revision=project['revision']),auth=True)
+        state['projects'][0]=project;save()
+        if not enabled:
+            code,_=call('GET','/api/v1/files',key=full,expected=403);assert code['code']=='FILE_SERVICE_DISABLED'
+            call('GET','/api/v1/files',key=state['prod_key']['apiKey'],expected=403)
+            call('GET',admin,auth=True,expected=403)
+            call('GET',path+'/share',expected=404,raw=True);call('GET',path+'/content/original',expected=404)
+            call('GET','/api/v1/files',key=state['foreign']['apiKey'])
+        else:
+            call('GET',path+'/share',raw=True)
+            assert call('GET',path,key=full)[0]['fileId']==file['fileId']
+    call('PUT',path+'/visibility',dict(visibility='PRIVATE'),key=full)
+    ticket,_=call('POST',path+'/view-ticket',key=full)
+    call('GET',path+'/share?token='+ticket['viewerUrl'].split('token=')[1],key=full,expected=404,raw=True)
+    call('DELETE',path,key=full,expected=204)
+    print('PASS project file opt-in: keys/admin/DEV/PROD/public disabled, foreign project intact, re-enable preserved file; public OG: escaping/fallback/conflict/private token rejection/admin contract')
 
 
 def check_duplicates():

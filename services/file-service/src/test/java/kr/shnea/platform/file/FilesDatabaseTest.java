@@ -42,6 +42,22 @@ class FilesDatabaseTest {
     FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000);}
     FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos());}
     FileShares shares(){return new FileShares(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),views());}
+    @Test void publicShareMetadataIsScopedValidatedRevisionCheckedAndInvalidatedWithVisibility() {
+        UUID id=duplicateFixture(owner,"공개 문서.txt",bytes,"PUBLIC");var shares=new FilePublicShares(db,tx,service);
+        assertThat(shares.get(id,owner).revision()).isZero();
+        var input=new FilePublicShares.Settings("공유 제목","설명",false,0L);
+        var foreign=new FileAccess.Context(owner.projectId(),UUID.randomUUID(),UUID.randomUUID());
+        code("FILE_NOT_FOUND",()->shares.save(id,foreign,input));
+        assertThat(shares.save(id,owner,input).revision()).isEqualTo(1);
+        code("FILE_SHARE_METADATA_CHANGED",()->shares.save(id,owner,input));
+        code("FILE_SHARE_METADATA_INVALID",()->shares.save(id,owner,new FilePublicShares.Settings("x".repeat(121),"",true,1L)));
+        assertThat(views().links(id,null,null).shareUrl()).endsWith("/share");
+        service.visibility(id,owner,"PRIVATE");
+        assertThat(views().links(id,null,null).shareUrl()).isNull();
+        code("FILE_PUBLIC_REQUIRED",()->shares.save(id,owner,new FilePublicShares.Settings("","",true,1L)));
+        code("FILE_NOT_FOUND",()->views().authorize(id,null,null));
+        assertThat(db.queryForObject("SELECT count(*) FROM file_audit WHERE file_id=? AND action='file.public-share.updated'",Integer.class,id)).isEqualTo(1);
+    }
     @Test void passwordSharesArePrivateScopedHashedAndRevocableAcrossAllViews() {
         UUID id=duplicateFixture(owner,"secret.txt",bytes,"PUBLIC");var shares=shares();String password="공유 검증 비밀번호";
         code("FILE_SHARE_PRIVATE_REQUIRED",()->shares.create(id,owner,new FileShares.Create(password,7)));

@@ -5,6 +5,7 @@ import { Dialog } from "./Dialog";
 import type { RetentionPolicy } from "./RetentionPanel";
 import {VideoPlayer,videoState,videoReason,type FileViewsData} from "./VideoPlayer";
 import {FileDuplicates} from "./FileDuplicates";
+import {FilePublicShare} from "./FilePublicShare";
 import {FileShares} from "./FileShares";
 
 type Views=FileViewsData;
@@ -32,6 +33,7 @@ export function FileDetails({file,environmentId,policies,onClose,onOpen,onBusyCh
   <div className="section-line"><button className="secondary" disabled={busy} onClick={onClose}>파일 목록으로</button><button className="secondary" disabled={busy||loading} onClick={()=>void load()}>{expired?"보기 URL 재발급":"보기 정보 새로고침"}</button></div>
   <h3 className="file-detail-name" tabIndex={-1} ref={heading}>{file.originalName}</h3><p className="small muted">{fileSize(file.size)} · {file.visibility==='PUBLIC'?'공개':'비공개'} · {data?kinds[data.kind]:"형식 확인 중"}</p>
   <FileDuplicates fileId={file.fileId} environmentId={environmentId} disabled={busy} onOpen={onOpen}/>
+  <FilePublicShare file={file} environmentId={environmentId} disabled={busy} onBusyChange={setBusy}/>
   <FileShares file={file} environmentId={environmentId} disabled={busy} onBusyChange={setBusy}/>
   {loading&&<p role="status">보기 정보를 불러오는 중…</p>}{error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {expired&&<p className="warning" role="status">임시 보기 URL이 만료되었습니다. ‘보기 URL 재발급’을 눌러 다시 확인해 주세요.</p>}
@@ -50,7 +52,7 @@ export function FileDetails({file,environmentId,policies,onClose,onOpen,onBusyCh
    <h4>파일 URL</h4><p className="small muted">{data.expiresAt?`이 URL은 파일 접근 권한을 포함합니다. ${new Date(data.expiresAt).toLocaleTimeString('ko-KR')}까지 사용할 수 있으며 공개 범위 변경·삭제 시 차단됩니다. 다른 사람에게 전달할 때 주의해 주세요.`:'공개 파일의 고정 URL입니다. 비공개 전환·삭제 또는 프로젝트 중지 후에는 접근할 수 없습니다.'}</p>
    {data.streamUrl&&<p className="small muted">HLS URL은 아래 영상 재생 전용 링크입니다.{data.streamExpiresAt?` ${new Date(data.streamExpiresAt).toLocaleTimeString('ko-KR')}까지 최대 2시간 사용할 수 있으며 원본·뷰어 진입 링크와 만료 시간이 다릅니다.`:' 공개 범위 변경·삭제 시 재생이 중단됩니다.'}</p>}
    {data.streamUrl&&<label>HLS 스트리밍 URL<input readOnly value={absolute(data.streamUrl)} onFocus={e=>e.target.select()}/><button className="secondary" disabled={!!error||!!data.streamExpiresAt&&Date.parse(data.streamExpiresAt)<=Date.now()} onClick={()=>void copy(data.streamUrl!)}>HLS URL 복사</button></label>}
-   <ul className="file-url-list">{([['기본 뷰어',data.viewerUrl],['원본',data.originalUrl],['미리보기',data.previewUrl],['썸네일',data.thumbnailUrl],['다운로드',data.downloadUrl]] as [string,string|null][]).map(([label,url])=><li key={label}><label>{label} URL{url?<input readOnly value={absolute(url)} onFocus={e=>e.target.select()}/>:<span className="muted">현재 제공하지 않음</span>}</label>{url&&<div className="actions"><button className="secondary" disabled={expired||!!error} onClick={()=>void copy(url)} aria-label={`${label} URL 복사`}>복사</button>{!expired&&!error&&<a href={url} target="_blank" rel="noopener noreferrer" className="file-url-open" aria-label={`${label} 새 창에서 열기`}>열기</a>}</div>}</li>)}</ul>
+   <ul className="file-url-list">{([['공개 공유',data.shareUrl],['기본 뷰어',data.viewerUrl],['원본',data.originalUrl],['미리보기',data.previewUrl],['썸네일',data.thumbnailUrl],['다운로드',data.downloadUrl]] as [string,string|null][]).map(([label,url])=><li key={label}><label>{label} URL{url?<input readOnly value={absolute(url)} onFocus={e=>e.target.select()}/>:<span className="muted">현재 제공하지 않음</span>}</label>{url&&<div className="actions"><button className="secondary" disabled={expired||!!error} onClick={()=>void copy(url)} aria-label={`${label} URL 복사`}>복사</button>{!expired&&!error&&<a href={url} target="_blank" rel="noopener noreferrer" className="file-url-open" aria-label={`${label} 새 창에서 열기`}>열기</a>}</div>}</li>)}</ul>
   </>}
   <h4>보존·파일 정보</h4><p className="small muted">업로드 {new Date(file.createdAt).toLocaleString('ko-KR')} · 상세 진입 전 마지막 이용 {new Date(file.lastUsedAt).toLocaleString('ko-KR')}</p>
   <form className="file-retention-change" onSubmit={e=>{e.preventDefault();setConfirm(true);}}><label>파일 보존 코드<select value={code} disabled={busy} onChange={e=>setCode(e.target.value)}>{policies.filter(p=>p.enabled||p.code===current).map(p=><option key={p.code} value={p.code} disabled={!p.enabled}>{p.displayName} ({p.code}){!p.enabled?' · 사용 중지':''}</option>)}</select></label><button className="secondary" disabled={busy||code===current}>보존 코드 변경</button></form>

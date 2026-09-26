@@ -33,6 +33,8 @@ class FileAccess {
             .header("X-Platform-Key", key).POST(HttpRequest.BodyPublishers.noBody()).build();
         var result = send(request);
         if (result.statusCode() == 401) throw new FileFailure("INVALID_API_KEY", 401, "API 키의 만료·폐기 여부와 프로젝트 상태를 확인해 주세요.");
+        if (result.statusCode() == 403 && json.readTree(result.body()).path("code").asText().equals("FILE_SERVICE_DISABLED"))
+            throw new FileFailure("FILE_SERVICE_DISABLED",403,"프로젝트에서 파일 서비스를 사용하도록 설정해 주세요.");
         if (result.statusCode() == 403) throw new FileFailure("INSUFFICIENT_SCOPE", 403, "API 키에 필요한 파일 권한이 없습니다.");
         if (result.statusCode() != 200) throw FileFailure.unavailable();
         try {
@@ -56,6 +58,8 @@ class FileAccess {
         if (result.statusCode() != 200) throw FileFailure.unavailable();
         try {
             var data = json.readTree(result.body());
+            if (!data.path("filesEnabled").asBoolean(true))
+                throw new FileFailure("FILE_SERVICE_DISABLED",403,"프로젝트에서 파일 서비스를 사용하도록 설정해 주세요.");
             if (!data.path("active").asBoolean(false))
                 throw new FileFailure("FILE_ENVIRONMENT_UNAVAILABLE",409,"프로젝트가 사용 중이고 환경 설정이 완료되어야 파일을 관리할 수 있습니다.");
             return new Context(UUID.fromString(data.path("projectId").asText()),environmentId,UUID.fromString(subject),"ADMIN");

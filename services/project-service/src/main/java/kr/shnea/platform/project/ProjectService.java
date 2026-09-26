@@ -23,7 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class ProjectService {
-    record Project(UUID id, String code, String name, Instant createdAt, String status, long revision) {}
+    record Project(UUID id, String code, String name, Instant createdAt, String status, long revision, boolean filesEnabled) {}
     record Environment(UUID id, UUID projectId, String code, String kind, String realm,
                        boolean registrationAllowed, List<String> redirectUris, String state, String issuer, long revision) {}
     record Credential(UUID id, String apiKey, Instant expiresAt, List<String> scopes) {}
@@ -62,17 +62,28 @@ class ProjectService {
         if (limit < 1 || limit > 100 || offset < 0) throw ApiCode.INVALID_PAGINATION.failure();
         return db.query("SELECT * FROM projects ORDER BY created_at DESC,id LIMIT ? OFFSET ?",
             (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"),
-                rs.getString("name"), rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision")), limit, offset);
+                rs.getString("name"), rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision"), rs.getBoolean("files_enabled")), limit, offset);
     }
 
-    Project createProject(String code, String name, String actor) {
+    Project createProject(String code, String name, String actor) { return createProject(code,name,actor,false); }
+    Project createProject(String code, String name, String actor, boolean filesEnabled) {
         return tx.execute(status -> {
             UUID id = UUID.randomUUID();
             Instant created = db.queryForObject(
-                "INSERT INTO projects(id,code,name) VALUES (?,?,?) RETURNING created_at",
-                (rs, row) -> rs.getTimestamp(1).toInstant(), id, code, name.strip());
+                "INSERT INTO projects(id,code,name,files_enabled) VALUES (?,?,?,?) RETURNING created_at",
+                (rs, row) -> rs.getTimestamp(1).toInstant(), id, code, name.strip(), filesEnabled);
             audit(actor, "project.created", id);
-            return new Project(id, code, name.strip(), created, "ACTIVE", 0);
+            return new Project(id, code, name.strip(), created, "ACTIVE", 0, filesEnabled);
+        });
+    }
+
+    Project updateFiles(UUID id, boolean enabled, long revision, String actor) {
+        return tx.execute(s -> {
+            Project current=lockProject(id); checkRevision(current.revision(),revision);
+            if(enabled) requireActive(current);
+            db.update("UPDATE projects SET files_enabled=?,revision=revision+1 WHERE id=?",enabled,id);
+            audit(actor,enabled?"project.files.enabled":"project.files.disabled",id);
+            return project(id,false);
         });
     }
 
@@ -120,8 +131,10 @@ class ProjectService {
 
     List<Scope> credentialScopes(UUID environmentId) {
         Environment env = findEnvironment(environmentId);
-        return mode.equals("dev") && env.kind().equals("DEV")
-            ? List.of(READ, MOCK, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_SHARE) : List.of(READ, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_SHARE);
+        var scopes=new java.util.ArrayList<Scope>(); scopes.add(READ);
+        if(mode.equals("dev") && env.kind().equals("DEV"))scopes.add(MOCK);
+        if(project(env.projectId(),false).filesEnabled())scopes.addAll(List.of(FILE_READ,FILE_WRITE,FILE_DELETE,FILE_SHARE));
+        return List.copyOf(scopes);
     }
 
     Credential issueCredential(UUID id, Instant expiresAt, List<String> requestedScopes, String actor) {
@@ -173,6 +186,8 @@ class ProjectService {
         Context context = rows.stream().findFirst().orElseThrow(ProjectService::unauthorized);
         if (!context.scopes().contains(requiredScope))
             throw ApiCode.INSUFFICIENT_SCOPE.failure();
+        if(requiredScope.startsWith("files:") && !project(context.projectId(),false).filesEnabled())
+            throw ApiCode.FILE_SERVICE_DISABLED.failure();
         return context;
     }
 
@@ -326,7 +341,7 @@ class ProjectService {
     java.util.Map<String, Object> fileEnvironment(UUID id) {
         Environment env = findEnvironment(id);
         Project project = project(env.projectId(), false);
-        return java.util.Map.of("projectId", project.id(), "active", project.status().equals("ACTIVE") && env.state().equals("READY"));
+        return java.util.Map.of("projectId", project.id(), "filesEnabled", project.filesEnabled(), "active", project.filesEnabled() && project.status().equals("ACTIVE") && env.state().equals("READY"));
     }
 
     AuthenticationPolicy updateAuthenticationPolicy(UUID id, ProjectController.AuthenticationSettings request, String actor) {
@@ -416,7 +431,7 @@ class ProjectService {
     private Project project(UUID id, boolean lock) {
         return db.query("SELECT * FROM projects WHERE id=?" + (lock ? " FOR UPDATE" : ""),
             (rs, row) -> new Project(rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("name"),
-                rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision")), id)
+                rs.getTimestamp("created_at").toInstant(), rs.getString("status"), rs.getLong("revision"), rs.getBoolean("files_enabled")), id)
             .stream().findFirst().orElseThrow(ProjectService::notFound);
     }
     private static void requireActive(Project project) {
