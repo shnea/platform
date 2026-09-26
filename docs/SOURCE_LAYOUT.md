@@ -13,6 +13,9 @@
 | `apps/admin-web/demo.html` | 인증 모듈과 분리된 공개 체험 시작점 |
 | `apps/admin-web/public/assets/demo/` | 직접 제작한 공개 샘플과 제작 기록 |
 | `packages/editor/src/index.ts` | 호스트가 사용하는 코어 API |
+| `packages/editor/src/bindings/` | React·Vue 편집/읽기 연결과 문서 갱신·해제 수명 주기 |
+| `packages/editor/src/browser.ts`, `packages/editor/scripts/` | 프레임워크 없는 번들·라이선스 고지·실행 예제 빌드 |
+| `packages/editor/examples/`, `packages/editor/INTEGRATION.md` | React·Vue·일반 JS·JSP 예제와 배포 가능한 연동 지침 |
 | `packages/editor/src/document/` | 문서 계약·검증·이전·Markdown·스키마 |
 | `packages/editor/src/editing/` | 슬래시·붙여넣기 UI, 표 조작과 최상위 블록 이동 |
 | `packages/editor/src/media/` | 첨부 업로드·조회·미디어 줄·크기 조절 |

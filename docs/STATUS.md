@@ -2,6 +2,17 @@
 
 ## 현재 단계
 
+### 에디터 React·Vue·일반 JS·JSP 연결과 실행 예제 완료 (2026-09-27)
+
+- **패키지:** `@shnea/editor@0.1.0-alpha.6`, 문서 version 3 유지. 선택적 `/react`·`/vue`의 `ShneaEditor`·`ShneaViewer`, 프레임워크 없는 `/browser` ES 모듈·CSS를 제공한다. 일반 JS 번들에는 React/Vue·CDN 의존이 없으며 실제 포함된 의존성의 라이선스 원문을 고지 파일로 생성한다. 공개 npm 발행·운영 레지스트리 게시 없음.
+- **연결 계약:** 편집 결과가 다시 전달돼도 같은 문서는 교체하지 않아 실행 취소·업로드를 유지한다. 문서 키 변경과 외부 값 교체·설정 변경·해제를 구분하고, 최신 콜백·잘못된 입력 보존·React StrictMode·DOM 없는 서버 import를 검증했다. 모양은 편집/읽기 옵션이며 본문 JSON에 저장하지 않는다. 실제 저장·조회·사용자 권한·첨부 서버 연결은 호스트 책임이다.
+- **화면·지침:** 관리자 **개발자 센터 → 에디터 연동**에 실행 예제와 [연동 지침](../packages/editor/INTEGRATION.md) 다운로드를 추가했다. 공개 `/examples/editor/`에서 React/Vue/JS를 실행하며 운영 API·인증·실제 업로드 호출은 없다. 메모리 보관·새 문서·복원·해제/재연결·읽기·JSON을 확인한다. JSP는 `dist/jsp`를 Tomcat에 배치해 실행하며 공개 정적 경로에는 JSP 원본을 배포하지 않는다. 관리자·게스트와 같은 색상/편집 UI를 사용하고 시스템 테마를 따른다.
+- **자동 검증:** `cd packages/editor; npm.cmd test` 41개, `cd apps/admin-web; npm.cmd test` 2개 통과. `npm.cmd run example:build` 및 관리자 Docker TypeScript/Vite 빌드 통과, DEV admin-web·nginx 반영 완료. 확장한 `docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps smoke` 16항목 통과(예제/CSP/번들/지침·JSP 원본/없는 자산 차단 포함). 기존 HLS 청크 경고·jsdom media.pause 안내 외 테스트 실패 없음.
+- **배포 검증:** 실제 `npm.cmd pack --pack-destination ../../output/playwright --json`의 47개 파일에 JS·타입·CSS·연동 지침·라이선스 포함, 예제 실행 산출물·JSP 제외 확인. 별도 임시 프로젝트에 tgz와 React 19.3.0·Vue 3.5.43을 설치하고 공개 진입점의 strict TypeScript 검사 통과. React 18 등 하위 버전 전체를 실행 검증한 것은 아니다. 패키지 파일·소비자 검증 데이터는 무시된 output 아래에만 둔다.
+- **브라우저 검증:** 실제 Chromium에서 React/Vue/JS와 Tomcat 11/JRE 21의 JSP를 열어 입력·실행 취소·Markdown 붙여넣기·굵게/기울임·중첩 목록·표·코드·한글/이모지, JSON 메모리 보관→교체→복원·읽기 일치·해제/재연결 PASS. 1440px 밝음·390px 어두움과 관리자 연동 탭을 확인했고 가로 넘침·페이지 오류·예제의 API/인증 요청 0. 초기 검증 도구의 URL 전역 참조로 세션이 종료된 문제와 테마 전환 중간 프레임 캡처는 검사 코드에서 수정했다. 새 UI detector 1회 `[]`, 최종 캡처 11개 독립 검수 ship. 디자인 문서는 기존 토큰을 보존했다.
+- **정리:** 관리자 로그아웃·전용 브라우저 2개 종료. `platform-editor-jsp-example` 임시 Tomcat을 정지해 로컬 전용 30142 포트 제거 완료(`--rm`). 실제 서비스 프로젝트·파일·회원 데이터는 생성하지 않았다. 신규 상주 서비스·외부 공개 포트·운영 배포 없음.
+- **남은 검수·다음:** 실제 호스트 서버의 본문 저장/인증/권한/첨부 통합과 물리 모바일·한글 IME·Safari·스크린리더·앱 WebView는 미검증이다. 기본 연동·문서 왕복 자동 검증은 완료했으며 다음 기능 단위는 공통 로그의 수집·프로젝트/환경 격리·조회와 관리자 로그 메뉴다. 이후 남은 알림/웹훅·운영 백업/복원 검수로 이어간다. 에디터 첫 출시 전체 완료로 표시하지 않는다.
+
 ### 에디터 블록 이동·모양 설정·굵게/기울임 수정 완료 (2026-09-27)
 
 - **서식 수정:** `/bold`·`/italic`의 서식과 JSON은 유지됐지만 전역 `font-synthesis: none` 때문에 한글 대체 글꼴에서 굵기·기울기가 제대로 보이지 않았다. 에디터·읽기 본문에만 글꼴 합성과 명시적 굵기/기울기를 적용했다. 실제 관리자에서 선택한 글자에 두 명령을 적용하고 읽기 화면까지 확인했다.

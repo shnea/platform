@@ -27,7 +27,22 @@ with urlopen(base + "/", timeout=10) as response:
     assert response.headers["Cache-Control"] == "no-store"
 print("PASS admin HTML and security/cache headers")
 
-for path in ("/actuator/env", "/api/projects/actuator/env", "/api/files/upload", "/unknown", "/internal/v1/monitoring"):
+for suffix in ("", "react/", "vue/", "vanilla/"):
+    with urlopen(base + "/examples/editor/" + suffix, timeout=10) as response:
+        assert "text/html" in response.headers["Content-Type"]
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert "connect-src 'none'" in response.headers["Content-Security-Policy"]
+        assert 'lang="ko"' in response.read().decode("utf-8")
+print("PASS public editor examples and isolated network policy")
+
+for suffix, expected in (("browser/editor.js", "javascript"), ("browser/editor.css", "text/css"), ("INTEGRATION.md", "@shnea/editor/react")):
+    with urlopen(base + "/examples/editor/" + suffix, timeout=10) as response:
+        body = response.read().decode("utf-8")
+        assert expected in (body if suffix.endswith(".md") else response.headers["Content-Type"])
+print("PASS standalone editor assets and integration guide")
+
+for path in ("/actuator/env", "/api/projects/actuator/env", "/api/files/upload", "/unknown", "/internal/v1/monitoring", "/examples/editor/jsp/index.jsp", "/examples/editor/missing.js"):
     try:
         urlopen(base + path, timeout=10)
     except HTTPError as error:

@@ -304,6 +304,7 @@ F-04의 썸네일·미리보기·동일 내용 감지, F-07의 모니터링·운
 **설계 제안:**
 
 - 하나의 편집 코어·문서 형식·공통 UI를 만들고 React·Vue 연결 코드는 얇게 유지한다. 일반 JS는 `mount`·값 읽기/쓰기·변경 이벤트·`destroy` 형태로 제공한다. JSP는 생성한 HTML에서 일반 JS 번들을 로딩한다.
+- **2026-09-27 연결 구현:** React의 value/onChange와 Vue의 v-model은 같은 코어를 사용하며 편집 결과의 되돌림으로 인스턴스·실행 취소·업로드를 초기화하지 않는다. 다른 문서는 documentKey로 교체하고 해제 시 자원을 정리한다. 일반 JS/JSP에는 프레임워크 없는 ES 모듈 번들을 제공한다. 관리자 개발자 센터에서 공개 실행 예제·다운로드 가능한 연동 지침을 제공하며 예제는 메모리 보관만 사용하고 운영 API·실제 업로드를 호출하지 않는다. 실제 호스트 저장/권한/파일 API와 물리 모바일 검수는 별도로 남는다.
 - Tiptap/ProseMirror 기반을 우선 후보로 둔다. Tiptap은 React·Vue·일반 JS 통합을 지원하지만 노션형 메뉴·레이아웃·드래그 UI는 별도로 구현할 부분이 있다. React 기반 BlockNote도 비교 후보이나 여러 프레임워크 배포에서 React 런타임 포함 여부를 고려한다. [Tiptap](https://tiptap.dev/docs/editor/getting-started/overview), [BlockNote](https://www.blocknotejs.org/docs/getting-started)
 - 라이브러리 버전·라이선스·유료 확장 의존 여부를 기능별로 확인한 뒤 채택한다. 모든 고급 기능이 기본 제공이라고 가정하지 않는다.
 - 표 셀의 긴 글·공백 없는 URL은 셀 너비 안에서 여러 줄로 표시하고 편집·읽기에 같은 규칙을 적용한다.

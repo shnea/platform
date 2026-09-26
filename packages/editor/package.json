@@ -1,12 +1,15 @@
 {
   "name": "@shnea/editor",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "private": true,
   "type": "module",
   "description": "SHNEA 공통 에디터의 문서 계약과 편집 코어",
   "files": [
     "dist",
+    "!dist/examples/**",
+    "!dist/jsp/**",
     "README.md",
+    "INTEGRATION.md",
     "src/styles/editor.css",
     "LICENSE-LUCIDE",
     "src/icons/icons.css"
@@ -29,13 +32,20 @@
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/icons/index.js"
     },
-    "./icons.css": "./src/icons/icons.css"
+    "./icons.css": "./src/icons/icons.css",
+    "./react": {"types":"./dist/bindings/react.d.ts","import":"./dist/bindings/react.js"},
+    "./vue": {"types":"./dist/bindings/vue.d.ts","import":"./dist/bindings/vue.js"},
+    "./browser": {"types":"./dist/browser.d.ts","import":"./dist/browser/editor.js"},
+    "./browser/style.css": "./dist/browser/editor.css"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/build-browser.mjs",
+    "example:build": "npm run build && node scripts/build-examples.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
     "prepack": "npm run build"
   },
+  "peerDependencies": {"react": ">=18 <20", "vue": "^3.5.0"},
+  "peerDependenciesMeta": {"react":{"optional":true},"vue":{"optional":true}},
   "dependencies": {
     "@tiptap/core": "3.31.3",
     "@tiptap/extension-list": "3.31.3",
@@ -45,7 +55,12 @@
     "markdown-it": "15.0.2"
   },
   "devDependencies": {
+    "@types/react": "19.3.0",
+    "esbuild": "0.28.2",
     "jsdom": "30.1.1",
-    "typescript": "7.0.2"
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "7.0.2",
+    "vue": "3.5.43"
   }
 }

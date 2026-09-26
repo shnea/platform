@@ -42,7 +42,7 @@ export const editorCommands:Item[]=[
  {id:'redo',label:'다시 실행',keyword:'redo',category:'편집'}
 ];
 const commandIcons:Record<Action,IconName>={"file": "file", "image": "image", "video": "video", "audio": "music", "paragraph": "file-text", "h1": "heading", "h2": "heading", "h3": "heading", "blockquote": "quote", "codeBlock": "code-xml", "horizontalRule": "minus", "bulletList": "list", "orderedList": "list-ordered", "taskList": "list-checks", "indent": "indent-increase", "outdent": "indent-decrease", "bold": "bold", "italic": "italic", "underline": "underline", "strike": "strikethrough", "code": "code-xml", "link": "link", "unlink": "unlink", "clear": "remove-formatting", "table": "table", "addRow": "rows-3", "deleteRow": "rows-3", "addColumn": "columns-3", "deleteColumn": "columns-3", "deleteTable": "trash-2", "undo": "undo-2", "redo": "redo-2"};
-type UIOptions=Omit<CoreOptions,'onKeyDown'|'onStateChange'|'onBeforeInput'|'onMarkdownPaste'|'blockControls'>&{appearance?:EditorAppearance};
+export type UIOptions=Omit<CoreOptions,'onKeyDown'|'onStateChange'|'onBeforeInput'|'onMarkdownPaste'|'blockControls'>&{appearance?:EditorAppearance};
 let instance=0;
 
 /** One selection-preserving palette, opened by slash or the mobile insertion menu. */

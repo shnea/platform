@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>일반 JS 에디터 연결 · SHNEA</title><link rel="icon" href="data:,"><link rel="stylesheet" href="../browser/editor.css"><link rel="stylesheet" href="./example.css"></head>
+<body><main><a href="../">에디터 연동 예제</a><h1>일반 JS 에디터 연결</h1><p>입력 → 메모리에 보관 → 문서 교체 → 다시 불러오기 → 읽기 결과를 확인하세요. 실제 서비스에서는 보관·불러오기를 호스트 API로 교체합니다. 첨부 업로드는 연결하지 않았습니다.</p>
+<div class="actions"><button id="save">메모리에 보관</button><button id="load" disabled>보관한 문서 불러오기</button><button id="new">새 문서</button><button id="undo">실행 취소</button><button id="toggle">에디터 해제</button></div>
+<p id="notice" role="status">작성한 내용은 이 페이지 메모리에만 보관합니다.</p><p id="error" role="alert"></p><div id="editor"></div><h2>읽기 결과</h2><div id="viewer"></div><details><summary>호스트에 전달되는 문서 JSON</summary><pre id="json"></pre></details></main><script type="module" src="./main.js"></script></body></html>

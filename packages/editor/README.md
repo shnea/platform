@@ -1,6 +1,6 @@
 # SHNEA 에디터·뷰어
 
-`@shnea/editor@0.1.0-alpha.5` — 편집 엔진·문서 계약·공통 슬래시 UI의 내부 검증용 패키지다. React/Vue 연결 컴포넌트·일반 JS/JSP 실행 예제 등이 남아 있어 첫 출시 전체 완료는 아니다. 공개 레지스트리에 발행하지 않았으며 `private: true`를 유지한다.
+`@shnea/editor@0.1.0-alpha.6` — 편집 엔진·문서 계약·공통 UI와 React/Vue 연결, 일반 JS/JSP 번들을 제공하는 내부 검증용 패키지다. 실제 호스트 인증·저장·업로드 및 모바일 검수가 남아 있어 첫 출시 전체 완료는 아니다. 공개 레지스트리에 발행하지 않았으며 `private: true`를 유지한다.
 
 ## 실행
 
@@ -8,9 +8,10 @@
 npm ci
 npm test
 npm run build
+npm run example:build
 ```
 
-브라우저 번들러에서 사용한다. React·Vue에 종속되지 않는다. `dist`는 ES 모듈과 타입 선언이며 의존성을 포함한 일반 JS/JSP용 단일 번들은 아직 제공하지 않는다.
+번들러에서는 코어·UI·선택적 `@shnea/editor/react`·`@shnea/editor/vue`를 사용한다. 프레임워크 없이 쓰려면 `dist/browser` 전체를 정적 자산으로 복사한다. 이 ES 모듈 번들은 편집 의존성을 포함하고 React/Vue·CDN은 필요 없다. 라이선스·고지 파일을 함께 배포한다. [연동 지침](INTEGRATION.md)에 설치, 값 갱신, 수명 주기, 첨부 교체와 JSP 실행을 정리했다. `example:build`는 React/Vue/JS 예제와 Tomcat용 `dist/jsp`를 생성한다.
 
 ```js
 import {createEditorCore, fromMarkdown, renderViewer} from '@shnea/editor';

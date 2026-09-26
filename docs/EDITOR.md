@@ -14,14 +14,14 @@
 | 파일 식별자 기반 네 종류 첨부·업로드·붙여넣기·드롭 | 구현·관리자 파일 서비스 연결 |
 | 이미지 한 줄 1~3개·옆에 추가·개별 삭제·모바일 세로 배치 | 구현 |
 | 변환 상태 갱신·본문 내 HLS·오디오·공통 이미지 확대 | 구현 |
-| React/Vue 연결 컴포넌트·일반 JS/JSP 정적 번들·실행 예제 | 미구현 |
+| React/Vue 연결 컴포넌트·일반 JS/JSP 정적 번들·실행 예제 | 구현·Chromium 및 Tomcat 실행 검증 |
 | 실제 한글 IME·휴대폰 키보드·스크린리더·OS 클립보드 | 미검증; Chromium 자동 입력·붙여넣기 이벤트·390px 화면은 검증 |
 
 첫 출시의 전체 요구사항은 [REQUIREMENTS.md의 F-11](REQUIREMENTS.md#블록-에디터뷰어--f-11)을 유지한다.
 
 ## 버전과 문서
 
-내부 패키지는 `@shnea/editor@0.1.0-alpha.5`, 문서 버전은 `3`다. version 1·2 문서를 입력하면 구조를 보존해 3으로 반환한다. version 2의 imageRow는 mediaRow로 이전한다. 첨부 노드는 2부터 허용하며 이전 패키지는 새 문서를 거부한다. 알파 단계이며 외부 운영 도입을 권장하는 배포본은 아니다. 문서 형식과 패키지 버전은 별개다.
+내부 패키지는 `@shnea/editor@0.1.0-alpha.6`, 문서 버전은 `3`다. version 1·2 문서를 입력하면 구조를 보존해 3으로 반환한다. version 2의 imageRow는 mediaRow로 이전한다. 첨부 노드는 2부터 허용하며 이전 패키지는 새 문서를 거부한다. 알파 단계이며 외부 운영 도입을 권장하는 배포본은 아니다. 문서 형식과 패키지 버전은 별개다.
 
 ```json
 {
@@ -107,6 +107,14 @@ editor.setAppearance(); // 호스트 기본 모양으로 복원
 관리자·게스트의 접힌 **에디터 모양 설정**에서 편집/읽기에 같은 옵션을 전달한다. 모양은 페이지 메모리에서만 유지한다. 코어만 사용하는 호스트는 자체 스타일/UI를 연결한다.
 
 ## 호스트 적용과 검증
+
+### React·Vue·일반 JS·JSP 연결
+
+설치와 코드 예제는 패키지에 동봉되는 [INTEGRATION.md](../packages/editor/INTEGRATION.md)를 따른다. 관리자 **개발자 센터 → 에디터 연동**에서 지침을 내려받고 [공개 실행 예제](https://platform.shnea.kr/examples/editor/)를 열 수 있다. 실제 운영 데이터·인증·파일 업로드는 예제에 연결하지 않는다.
+
+`@shnea/editor/react`·`@shnea/editor/vue`는 각각 `ShneaEditor`, `ShneaViewer`를 제공하며 같은 코어와 공통 UI를 사용한다. React는 `value`·`onChange`, Vue는 `v-model`로 문서를 주고받는다. 편집 이벤트가 되돌아와도 같은 문서는 교체하지 않으므로 실행 취소·진행 중 업로드를 유지한다. 다른 게시글에는 `documentKey`를 변경하고, 어댑터 객체는 안정적으로 유지한다. 해제 시 엔진·이벤트·진행 중 작업을 정리한다.
+
+`npm run build`는 React/Vue가 들어 있지 않은 `dist/browser/editor.js`·CSS·라이선스 고지를 생성한다. `npm run example:build`는 세 정적 실행 예제와 `dist/jsp`를 생성한다. JSP는 같은 번들을 로딩하며 본문 JSON을 HTML에 직접 끼워 넣지 않는다. 프레임워크·브라우저 하위 버전과 실제 호스트의 저장/권한/첨부는 별도 검수한다.
 
 ### 공통 UI와 관리자 체험
 
