@@ -6,7 +6,7 @@ const states: Record<string, string> = {
   SUCCEEDED: "완료", FAILED: "최종 실패", CANCELLED: "취소됨",
 };
 export function ProjectOverview({ environmentId, ready, disabled, open }: {
-  environmentId: string; ready: boolean; disabled: boolean; open: (view: "jobs" | "alerts") => void;
+  environmentId: string; ready: boolean; disabled: boolean; open: (view: "files" | "jobs" | "alerts") => void;
 }) {
   const [summary, setSummary] = useState<{ job: string | null; unread: boolean } | null>(null);
   const [error, setError] = useState("");
@@ -30,6 +30,9 @@ export function ProjectOverview({ environmentId, ready, disabled, open }: {
     {error ? <div className="alert" role="alert">{error} <button className="secondary" disabled={disabled} onClick={() => setReload(n => n + 1)}>현황 다시 조회</button></div>
       : !summary ? <p role="status">운영 현황을 불러오는 중…</p> : null}
     <div className="overview-links">
+      <button className="overview-link" disabled={disabled} onClick={() => open("files")}>
+        <span><strong>파일</strong><span className="small muted">파일 업로드·재개와 공개 범위 관리</span></span><span>파일 보기</span>
+      </button>
       <button className="overview-link" disabled={disabled} onClick={() => open("jobs")}>
         <span><strong>비동기 작업</strong><span className="small muted">{summary
           ? summary.job ? `최근 작업 · ${states[summary.job] ?? summary.job}` : "등록된 작업이 없습니다."

@@ -178,4 +178,35 @@ class FilesDatabaseTest {
         assertThat(service.downloadable(id).state()).isEqualTo("READY");
         assertThat(Files.exists(store.path(id))).isTrue();
     }
+    @Test void adminAndCredentialSubjectsCannotShareSessionsEvenWithTheSameUuid() {
+        var administrator=new FileAccess.Context(owner.projectId(),owner.environmentId(),owner.credentialId(),"ADMIN");
+        var input=input(bytes);
+        UUID keySession=service.create(owner,input).uploadId();
+        UUID adminSession=service.create(administrator,input).uploadId();
+        assertThat(keySession).isNotEqualTo(adminSession);
+        code("FILE_NOT_FOUND",()->service.status(keySession,administrator));
+        code("FILE_NOT_FOUND",()->service.status(adminSession,owner));
+        assertThat(service.resumable(administrator)).extracting(x -> x.upload().uploadId()).containsExactly(adminSession);
+        assertThat(service.resumable(administrator)).extracting(FilesService.Resumable::requestId).containsExactly(input.requestId());
+        var another=new FileAccess.Context(owner.projectId(),owner.environmentId(),UUID.randomUUID(),"ADMIN");
+        assertThat(service.resumable(another)).isEmpty();
+        code("FILE_NOT_FOUND",()->service.cancel(adminSession,another));
+        assertThat(db.queryForObject("SELECT actor FROM file_audit WHERE file_id=?",String.class,adminSession)).startsWith("admin:");
+    }
+    @Test void ticketsAreSingleUseExpireAndAreRevokedByVisibilityOrDeletion() {
+        var tickets=new DownloadTickets(db,tx,service);
+        UUID id=create().uploadId(); append(id,0,bytes); service.complete(id,owner);
+        var ticket=tickets.create(id,owner,java.time.Instant.now().plusSeconds(300));
+        String token=ticket.downloadUrl().substring(ticket.downloadUrl().lastIndexOf('/')+1);
+        assertThat(tickets.consume(token)).isEqualTo(id);
+        code("FILE_NOT_FOUND",()->tickets.consume(token));
+        var hidden=tickets.create(id,owner,java.time.Instant.now().plusSeconds(300));
+        service.visibility(id,owner,"PRIVATE");
+        code("FILE_NOT_FOUND",()->tickets.consume(hidden.downloadUrl().substring(hidden.downloadUrl().lastIndexOf('/')+1)));
+        var expired=tickets.create(id,owner,java.time.Instant.now().plusSeconds(300));
+        db.update("UPDATE file_download_tickets SET expires_at=now()-interval '1 second'");
+        code("FILE_NOT_FOUND",()->tickets.consume(expired.downloadUrl().substring(expired.downloadUrl().lastIndexOf('/')+1)));
+        var deleted=tickets.create(id,owner,java.time.Instant.now().plusSeconds(300)); service.delete(id,owner);
+        code("FILE_NOT_FOUND",()->tickets.consume(deleted.downloadUrl().substring(deleted.downloadUrl().lastIndexOf('/')+1)));
+    }
 }

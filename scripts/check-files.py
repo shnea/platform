@@ -98,7 +98,8 @@ def start():
     old = key(environments[0], ['integration:read'])
     state.update(full=full, foreign=foreign, prod_key=prod_key, read=read, old=old)
     spec, _ = call('GET', '/api/v1/files/openapi', key=full['apiKey']); validate(spec)
-    assert sum(len(v) for v in spec['paths'].values()) == 11
+    assert sum(len(v) for v in spec['paths'].values()) == 22
+    state['environments'] = environments; save()
     call('GET', '/api/v1/files', expected=401)
     call('GET', '/api/v1/files', key=old['apiKey'], expected=403)
     upload, body = create_file(full['apiKey'], PAYLOAD)
@@ -118,6 +119,10 @@ def start():
 def finish():
     state.update(json.loads(STATE.read_text(encoding='utf-8'))); login(state['refresh']); save()
     full=state['full']['apiKey']; upload=state['upload']['uploadId']
+    admin_path='/api/v1/files/admin/environments/'+state['environments'][0]['id']
+    call('GET',admin_path,expected=401)
+    call('GET',admin_path,key=full,expected=401)
+    call('GET',admin_path+'/uploads/'+upload,auth=True,expected=404)
     result, _ = call('GET','/api/v1/files/uploads/'+upload,key=full)
     assert result['receivedBytes'] == len(CHUNK)
     tail=PAYLOAD[len(CHUNK):]
@@ -126,16 +131,24 @@ def finish():
     chunk(upload,full,len(CHUNK),tail)
     file, _ = call('POST','/api/v1/files/uploads/'+upload+'/complete',key=full)
     again, _ = call('POST','/api/v1/files/uploads/'+upload+'/complete',key=full); assert again == file
+    ticket,_=call('POST',admin_path+'/'+file['fileId']+'/download-ticket',auth=True)
+    body,_=call('GET',ticket['downloadUrl'],raw=True); assert body == PAYLOAD
+    call('GET',ticket['downloadUrl'],expected=404)
+    call('POST','/api/v1/files/admin/environments/'+state['environments'][1]['id']+'/'+file['fileId']+'/download-ticket',auth=True,expected=404)
     spec, _ = call('GET','/api/v1/files/openapi',key=full)
     Draft202012Validator(dict(spec['components']['schemas']['FileInfo'],components=spec['components']),format_checker=FormatChecker()).validate(file)
     body, hdr = call('GET',file['downloadUrl'],raw=True)
     assert body == PAYLOAD and hdr['Cache-Control'] == 'no-store' and hdr['Content-Disposition'].startswith('attachment;')
     assert hdr['X-Content-Type-Options'] == 'nosniff' and hdr['Content-Type'] == 'application/octet-stream'
-    listing, _ = call('GET','/api/v1/files',key=full); assert len(listing) == 1
+    listing, _ = call('GET','/api/v1/files',key=full); assert any(item['fileId']==file['fileId'] for item in listing)
     path='/api/v1/files/'+file['fileId']
     call('DELETE',path,key=state['read']['apiKey'],expected=403)
     call('PUT',path+'/visibility',dict(visibility='PRIVATE'),key=full)
     call('GET',file['downloadUrl'],expected=404)
+    ticket,_=call('POST',admin_path+'/'+file['fileId']+'/download-ticket',auth=True)
+    call('HEAD',ticket['downloadUrl'],raw=True,expected=405)
+    body,_=call('GET',ticket['downloadUrl'],raw=True); assert body == PAYLOAD
+    call('GET',ticket['downloadUrl'],expected=404)
     body, _ = call('GET',file['downloadUrl'],key=state['read']['apiKey'],raw=True); assert body == PAYLOAD
     for other in [state['foreign'],state['prod_key']]:
         call('GET',path,key=other['apiKey'],expected=404)
@@ -158,11 +171,22 @@ def finish():
     oversized=dict(requestId=str(uuid.uuid4()),originalName='oversized',size=5000000001,sha256='0'*64)
     call('POST','/api/v1/files/uploads',oversized,key=full,expected=413)
     call('GET','/internal/v1/files/environments/'+str(uuid.uuid4()),expected=404,raw=True)
-    print('PASS finish: persisted resume, checksum, complete retry, public/private, scopes, project/environment isolation, revoked key, suspension, delete, empty file, 5GB limit')
+    print('PASS finish: persisted resume, checksum, complete retry, public/private, scopes, project/environment isolation, revoked key, suspension, delete, empty file, 5GB limit, admin JWT and owner boundaries, single-use private ticket, HEAD without consumption')
 
 
 def cleanup():
     errors=[]
+    # All environments below were created by this run; remove browser-created fixtures too.
+    for env in state.get('environments',[]):
+        try:
+            path='/api/v1/files/admin/environments/'+env['id']
+            pending,_=call('GET',path+'/uploads',auth=True)
+            for item in pending: call('DELETE',path+'/uploads/'+item['upload']['uploadId'],auth=True,expected=204)
+            while True:
+                rows,_=call('GET',path,auth=True)
+                if not rows: break
+                for item in rows: call('DELETE',path+'/'+item['fileId'],auth=True,expected=204)
+        except Exception: errors.append('admin file cleanup: '+env['id'])
     for upload in state.get('uploads',[]):
         try:
             result,_=call('GET','/api/v1/files/uploads/'+upload['id'],key=upload['key'])

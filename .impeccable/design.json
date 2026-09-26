@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T10:58:19.000Z",
+  "generatedAt": "2026-09-26T12:22:02.000Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -21,7 +21,7 @@
       {
         "name": "monitoring-stack",
         "value": "1100px",
-        "purpose": "서비스 상태의 세 열과 오류율·평균 처리 시간 및 작업 현황의 두 열을 한 열로 전환한다."
+        "purpose": "서비스 상태의 세 열과 오류율·평균 처리 시간 및 작업 현황의 두 열을 한 열로 전환한다. 파일 목록 행의 동작도 파일 설명 아래로 이동한다."
       },
       {
         "name": "compact",
@@ -78,7 +78,7 @@
       "name": "현재 메뉴",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "프로젝트·비동기 작업·모니터링·운영 알림·감사 이력의 주요 메뉴. 현재 위치는 배경·강조색과 aria-current로 구분하고 모바일에서는 현재 메뉴 이름이 있는 버튼으로 펼치거나 접는다.",
+      "description": "프로젝트·파일·비동기 작업·모니터링·운영 알림·감사 이력의 주요 메뉴. 현재 위치는 배경·강조색과 aria-current로 구분하고 모바일에서는 현재 메뉴 이름이 있는 버튼으로 펼치거나 접는다.",
       "html": "<nav aria-label=\"관리 메뉴\"><button class=\"ds-nav\" aria-current=\"page\">프로젝트</button></nav>",
       "css": ".ds-nav{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;border:1px solid transparent;border-radius:6px;padding:9px 15px;min-height:44px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s;background:var(--raised,#202d29);color:var(--accent,#b0e1c7);text-align:left}.ds-nav:hover{filter:brightness(1.1)}.ds-nav:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav{transition:none}}"
     },
@@ -104,6 +104,13 @@
       "description": "최근 24시간 완료·최종 실패·취소를 0 기준의 공통 눈금으로 비교한다. 기존 상태 색과 한국어 이름·정확한 건수를 함께 표시한다.",
       "html": "<figure class=\"ds-job-chart\" aria-label=\"최근 24시간 처리 건수 비교\"><figcaption>최근 24시간 처리 결과 · 완료 시각 기준</figcaption><div class=\"ds-job-scale\" aria-hidden=\"true\"><span>0</span><span>5건</span></div><dl><div><dt>완료</dt><dd><span class=\"ds-job-track\" aria-hidden=\"true\"><span class=\"ds-job-bar ds-job-completed\" style=\"width:100%\"></span></span><span class=\"ds-job-count\">5건</span></dd></div><div><dt>최종 실패</dt><dd><span class=\"ds-job-track\" aria-hidden=\"true\"><span class=\"ds-job-bar ds-job-failed\" style=\"width:80%\"></span></span><span class=\"ds-job-count\">4건</span></dd></div><div><dt>취소</dt><dd><span class=\"ds-job-track\" aria-hidden=\"true\"><span class=\"ds-job-bar ds-job-cancelled\" style=\"width:40%\"></span></span><span class=\"ds-job-count\">2건</span></dd></div></dl></figure>",
       "css": ".ds-job-chart{margin:0;font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;color:var(--text,#e8eee8)}.ds-job-chart figcaption,.ds-job-scale{font-size:13px;color:var(--muted,#a5b7ae)}.ds-job-scale{display:flex;justify-content:space-between;margin:24px 64px 0 80px}.ds-job-chart dl>div{display:grid;grid-template-columns:64px minmax(0,1fr);gap:16px;align-items:center;padding-block:20px}.ds-job-chart dd{display:flex;align-items:center;gap:12px;margin:0;min-width:0}.ds-job-track{display:block;flex:1;min-width:0;height:24px;background:var(--raised,#202d29)}.ds-job-bar{display:block;height:100%}.ds-job-completed{background:var(--accent,#b0e1c7)}.ds-job-failed{background:var(--danger,#ffada5)}.ds-job-cancelled{background:var(--muted,#a5b7ae)}.ds-job-count{flex:0 0 52px;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}"
+    },
+    {
+      "name": "파일 업로드 진행",
+      "kind": "custom",
+      "description": "기존 구분선 행과 강조색 진행 막대에 한국어 상태·실제 전송량·백분율을 함께 표시한다. 원본 확인과 전송을 구분하고 실패 안내·같은 원본 선택·재시도·취소는 해당 행에 둔다. 화면 복귀 후 원본을 다시 선택해 재개하며 생성 응답이 끊겨도 같은 세션은 한 행으로 연결한다.",
+      "html": "<section class=\"ds-file-upload\" aria-label=\"파일 업로드 현황\"><div class=\"ds-file-heading\"><strong>한글 안내문.txt</strong><span>일시정지</span></div><div class=\"ds-file-meta\"><span>8.4 MB / 17.8 MB · 공개</span><span>47%</span></div><progress aria-label=\"한글 안내문.txt 전송 진행률\" max=\"100\" value=\"47\"></progress><p>화면으로 돌아온 뒤에는 같은 원본을 다시 선택해 이어 올리세요.</p><button class=\"ds-file-resume\">이어서 올리기</button></section>",
+      "css": ".ds-file-upload{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;color:var(--text,#e8eee8);border-block:1px solid var(--line,#34443e);padding:24px 0}.ds-file-heading{display:flex;justify-content:space-between;gap:16px}.ds-file-heading strong{min-width:0;overflow-wrap:anywhere}.ds-file-heading>span{color:var(--accent,#b0e1c7);white-space:nowrap}.ds-file-meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin:12px 0 8px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted,#a5b7ae)}.ds-file-upload progress{display:block;appearance:none;width:100%;height:8px;border:0;border-radius:4px;overflow:hidden;background:var(--raised,#202d29);accent-color:var(--accent,#b0e1c7)}.ds-file-upload progress::-webkit-progress-bar{background:var(--raised,#202d29)}.ds-file-upload progress::-webkit-progress-value{background:var(--accent,#b0e1c7)}.ds-file-upload progress::-moz-progress-bar{background:var(--accent,#b0e1c7)}.ds-file-upload p{font-size:13px;color:var(--muted,#a5b7ae)}.ds-file-resume{font-family:inherit;font-size:15px;line-height:1.6;min-height:44px;padding:9px 15px;border:1px solid var(--line,#34443e);border-radius:6px;background:transparent;color:var(--text,#e8eee8);font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}.ds-file-resume:hover:not(:disabled){filter:brightness(1.1)}.ds-file-resume:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}.ds-file-resume:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-file-resume{transition:none}}"
     }
   ],
   "narrative": {

@@ -139,6 +139,8 @@ services:
       - file-data:/app/storage
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_file
+      PLATFORM_MODE: ${PLATFORM_MODE:-prod}
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL}
       PLATFORM_FILES_SECRET: ${PLATFORM_FILES_SECRET:-}
       FILE_ENVIRONMENT_QUOTA: ${FILE_ENVIRONMENT_QUOTA:-50000000000}
       FILE_PENDING_LIMIT: ${FILE_PENDING_LIMIT:-20}

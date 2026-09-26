@@ -24,3 +24,4 @@ output/playwright/
 output/job-checks/
 .recovery/
 .playwright-cli/
+.impeccable/review/

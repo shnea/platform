@@ -12,7 +12,11 @@ import org.slf4j.MDC;
 
 @Component
 class FileAccess {
-    record Context(UUID projectId, UUID environmentId, UUID credentialId) {}
+    record Context(UUID projectId, UUID environmentId, UUID credentialId, String ownerKind) {
+        Context(UUID projectId, UUID environmentId, UUID credentialId) { this(projectId, environmentId, credentialId, "CREDENTIAL"); }
+        Context { if (ownerKind == null) ownerKind = "CREDENTIAL"; }
+        String actor() { return ownerKind.toLowerCase(java.util.Locale.ROOT) + ":" + credentialId; }
+    }
     private final String secret;
     private final String base;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2))
@@ -43,6 +47,18 @@ class FileAccess {
         if (result.statusCode() != 200) throw FileFailure.unavailable();
         try {
             if (!json.readTree(result.body()).path("active").asBoolean(false)) throw FileFailure.missing();
+        } catch (FileFailure e) { throw e; }
+        catch (RuntimeException e) { throw FileFailure.unavailable(); }
+    }
+    Context administrator(UUID environmentId, String subject) {
+        var result = send(request("/internal/v1/files/environments/" + environmentId).GET().build());
+        if (result.statusCode() == 404) throw FileFailure.missing();
+        if (result.statusCode() != 200) throw FileFailure.unavailable();
+        try {
+            var data = json.readTree(result.body());
+            if (!data.path("active").asBoolean(false))
+                throw new FileFailure("FILE_ENVIRONMENT_UNAVAILABLE",409,"프로젝트가 사용 중이고 환경 설정이 완료되어야 파일을 관리할 수 있습니다.");
+            return new Context(UUID.fromString(data.path("projectId").asText()),environmentId,UUID.fromString(subject),"ADMIN");
         } catch (FileFailure e) { throw e; }
         catch (RuntimeException e) { throw FileFailure.unavailable(); }
     }

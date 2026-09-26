@@ -34,6 +34,6 @@ class FileAccessController {
     @GetMapping("/internal/v1/files/environments/{id}")
     Object active(@PathVariable UUID id, @RequestHeader(value="X-Platform-Files-Key", required=false) String secret) {
         authorize(secret);
-        return Map.of("active", projects.emailContext(id).get("active"));
+        return projects.fileEnvironment(id);
     }
 }

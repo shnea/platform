@@ -22,7 +22,8 @@ class FilesService {
                     String retentionCode, Instant createdAt, Instant lastUsedAt, String downloadUrl) {}
     record Row(UUID id, UUID project, UUID environment, UUID owner, String name, long size, String hash,
                long offset, String state, String visibility, String retention, Instant expires,
-               Instant completed, Instant used) {}
+               Instant completed, Instant used, String ownerKind) {}
+    record Resumable(Upload upload, String originalName, String sha256, String visibility, String retentionCode, UUID requestId) {}
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final FileStore store;
@@ -43,8 +44,8 @@ class FilesService {
         return tx.execute(status -> {
             // Short creation lock accounts for pending reservations across this shared storage volume.
             db.execute("SELECT pg_advisory_xact_lock(736452918)");
-            var previous = db.query("SELECT * FROM files WHERE environment_id=? AND owner_credential_id=? AND request_id=?",
-                this::row, context.environmentId(), context.credentialId(), input.requestId());
+            var previous = db.query("SELECT * FROM files WHERE environment_id=? AND owner_kind=? AND owner_credential_id=? AND request_id=?",
+                this::row, context.environmentId(), context.ownerKind(), context.credentialId(), input.requestId());
             if (!previous.isEmpty()) {
                 var old = previous.getFirst();
                 if (!old.name().equals(input.originalName()) || old.size() != input.size() || !old.hash().equals(input.sha256())
@@ -67,15 +68,20 @@ class FilesService {
             UUID id = UUID.randomUUID();
             db.update("""
                 INSERT INTO files(id,project_id,environment_id,owner_credential_id,request_id,original_name,size_bytes,
-                    expected_sha256,visibility,upload_visibility,retention_code,upload_expires_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours')
+                    expected_sha256,visibility,upload_visibility,retention_code,owner_kind,upload_expires_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours')
                 """, id, context.projectId(), context.environmentId(), context.credentialId(), input.requestId(),
-                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention);
+                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, context.ownerKind());
             audit(id, context, "upload.created");
             return upload(get(id, false));
         });
     }
     Upload status(UUID id, FileAccess.Context context) { return upload(owned(id, context, false)); }
+    List<Resumable> resumable(FileAccess.Context context) {
+        return db.query("SELECT * FROM files WHERE environment_id=? AND project_id=? AND owner_kind=? AND owner_credential_id=? AND state='UPLOADING' AND upload_expires_at>now() ORDER BY created_at DESC LIMIT 100",
+            (rs,n) -> { var row=row(rs,n); return new Resumable(upload(row),row.name(),row.hash(),row.visibility(),row.retention(),rs.getObject("request_id",UUID.class)); },
+            context.environmentId(),context.projectId(),context.ownerKind(),context.credentialId());
+    }
     Upload append(UUID id, FileAccess.Context context, long offset, long length, String hash, InputStream input) {
         if (offset < 0 || hash == null || !hash.matches("[a-f0-9]{64}")) throw FileFailure.invalid();
         return tx.execute(status -> {
@@ -122,6 +128,7 @@ class FilesService {
             Row row = managed(id, context, true);
             if (!row.visibility().equals(visibility)) {
                 db.update("UPDATE files SET visibility=? WHERE id=?", visibility, id);
+                db.update("DELETE FROM file_download_tickets WHERE file_id=?", id);
                 audit(id, context, "file.visibility." + visibility.toLowerCase(Locale.ROOT));
             }
             return info(get(id, false));
@@ -134,6 +141,7 @@ class FilesService {
             if (row.state().equals("DELETED")) return;
             if (!row.state().equals("READY")) throw FileFailure.missing();
             db.update("UPDATE files SET state='DELETED' WHERE id=?", id);
+            db.update("DELETE FROM file_download_tickets WHERE file_id=?", id);
             audit(id, context, "file.deleted");
         });
     }
@@ -148,6 +156,7 @@ class FilesService {
     }
     @Scheduled(fixedDelayString="${platform.files.cleanup-ms:60000}", initialDelay=10000)
     void cleanup() {
+        db.update("DELETE FROM file_download_tickets WHERE expires_at<=now()");
         // Durable terminal states retry physical deletion after restarts; never expire READY files here.
         var ids = db.queryForList("SELECT id FROM files WHERE purged_at IS NULL AND (state IN ('CANCELLED','EXPIRED','DELETED') OR (state='UPLOADING' AND upload_expires_at<=now())) ORDER BY upload_expires_at LIMIT 100", UUID.class);
         for (UUID id : ids) {
@@ -156,7 +165,7 @@ class FilesService {
                     Row row = get(id, true);
                     if (row.state().equals("UPLOADING") && !row.expires().isAfter(Instant.now())) {
                         db.update("UPDATE files SET state='EXPIRED' WHERE id=?", id);
-                        audit(id, new FileAccess.Context(row.project(), row.environment(), row.owner()), "upload.expired");
+                        audit(id, new FileAccess.Context(row.project(), row.environment(), row.owner(), row.ownerKind()), "upload.expired");
                     } else if (!Set.of("CANCELLED", "EXPIRED", "DELETED").contains(row.state())) return;
                     store.delete(id);
                     db.update("UPDATE files SET purged_at=coalesce(purged_at,now()) WHERE id=?", id);
@@ -174,7 +183,7 @@ class FilesService {
     private Row owned(UUID id, FileAccess.Context context, boolean lock) {
         Row row = get(id, lock);
         sameEnvironment(row, context);
-        if (!row.owner().equals(context.credentialId())) throw FileFailure.missing();
+        if (!row.owner().equals(context.credentialId()) || !row.ownerKind().equals(context.ownerKind())) throw FileFailure.missing();
         return row;
     }
     private Row managed(UUID id, FileAccess.Context context, boolean lock) {
@@ -197,7 +206,7 @@ class FilesService {
     }
     private void audit(UUID id, FileAccess.Context context, String action) {
         db.update("INSERT INTO file_audit(file_id,environment_id,actor,action,request_id) VALUES (?,?,?,?,?)",
-            id, context.environmentId(), "credential:" + context.credentialId(), action, MDC.get("requestId"));
+            id, context.environmentId(), context.actor(), action, MDC.get("requestId"));
     }
     private static void validate(Create input) {
         if (input == null || input.requestId() == null || input.originalName() == null || input.originalName().isBlank()
@@ -213,6 +222,6 @@ class FilesService {
         return new Row(rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class), rs.getObject("environment_id", UUID.class),
             rs.getObject("owner_credential_id", UUID.class), rs.getString("original_name"), rs.getLong("size_bytes"), rs.getString("expected_sha256"),
             rs.getLong("received_bytes"), rs.getString("state"), rs.getString("visibility"), rs.getString("retention_code"),
-            rs.getTimestamp("upload_expires_at").toInstant(), completed == null ? null : completed.toInstant(), used == null ? null : used.toInstant());
+            rs.getTimestamp("upload_expires_at").toInstant(), completed == null ? null : completed.toInstant(), used == null ? null : used.toInstant(),rs.getString("owner_kind"));
     }
 }

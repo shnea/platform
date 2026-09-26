@@ -1,0 +1,38 @@
+.file-workspace { min-width: 0; }
+.file-workspace h3 { margin: 0; }
+.file-workspace .section-line { margin-top: 24px; }
+.file-list, .file-upload-list { padding: 0; margin: 24px 0; list-style: none; border-top: 1px solid var(--line); }
+.file-list > li { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.file-description { min-width: 0; display: grid; gap: 8px; }
+.file-description strong, .file-upload-heading strong, .file-confirm-name { overflow-wrap: anywhere; }
+.file-actions { flex-shrink: 0; }
+.file-workspace button, .file-reselect { min-height: 44px; }
+.file-drop { border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); padding: 32px 24px; text-align: center; margin: 24px 0; }
+.file-drop.is-dragging { border-color: var(--accent); background: var(--raised); }
+.file-drop p { margin: 8px 0 24px; }
+.file-visibility { max-width: 440px; }
+.file-guidance { max-width: 70ch; margin-block: 16px 32px; }
+.file-upload-list > li { border-bottom: 1px solid var(--line); padding: 24px 0; }
+.file-upload-heading { display: flex; justify-content: space-between; gap: 16px; }
+.file-upload-heading strong { min-width: 0; }
+.file-stage { color: var(--accent); white-space: nowrap; }
+.file-progress-meta { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-block: 12px 8px; }
+.file-workspace progress { display: block; appearance: none; border: 0; width: 100%; height: 8px; background: var(--raised); accent-color: var(--accent); border-radius: 4px; overflow: hidden; }
+.file-workspace progress::-webkit-progress-bar { background: var(--raised); }
+.file-workspace progress::-webkit-progress-value { background: var(--accent); }
+.file-workspace progress::-moz-progress-bar { background: var(--accent); }
+.file-upload-actions { margin-top: 16px; }
+.file-reselect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; margin: 0; }
+.file-reselect input { padding: 8px; height: auto; max-width: 100%; width: min(320px,100%); font-size: 13px; }
+.file-workspace .pagination { align-items: center; }
+@media (max-width: 1100px) {
+  .file-list > li { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .file-actions { flex-wrap: wrap; }
+}
+@media (max-width: 600px) {
+  .file-workspace .section-line { align-items: flex-start; flex-direction: column; }
+  .file-drop { padding: 24px 16px; }
+  .file-progress-meta { flex-wrap: wrap; gap: 4px; }
+  .file-upload-heading { align-items: flex-start; }
+  .file-workspace .actions { gap: 8px; flex-wrap: wrap; }
+}

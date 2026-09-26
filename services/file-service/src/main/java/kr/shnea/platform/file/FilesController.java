@@ -1,10 +1,8 @@
 package kr.shnea.platform.file;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import jakarta.servlet.http.*;
-import org.springframework.http.ContentDisposition;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -71,14 +69,6 @@ class FilesController {
             if (key == null) throw FileFailure.missing();
             files.sameEnvironment(current, access.require(key, "files:read"));
         }
-        try (var input = store.open(id)) {
-            response.setContentType("application/octet-stream");
-            response.setHeader("Content-Disposition", ContentDisposition.attachment().filename(row.name(), StandardCharsets.UTF_8).build().toString());
-            response.setContentLengthLong(row.size());
-            if (request.getMethod().equals("HEAD")) return;
-            input.transferTo(response.getOutputStream());
-            response.flushBuffer();
-            files.used(id);
-        }
+        FileDelivery.send(files,store,current,request,response);
     }
 }

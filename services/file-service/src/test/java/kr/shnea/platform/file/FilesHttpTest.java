@@ -22,7 +22,7 @@ class FilesHttpTest {
     }
     FilesService.Row row(String visibility) {
         return new FilesService.Row(id, context.projectId(), context.environmentId(), context.credentialId(), "안전.html", 3,
-            "0".repeat(64), 3, "READY", visibility, "default", Instant.now(), Instant.now(), Instant.now());
+            "0".repeat(64), 3, "READY", visibility, "default", Instant.now(), Instant.now(), Instant.now(), "CREDENTIAL");
     }
     @Test void publicDownloadIsAttachmentNoStoreAndHeadDoesNotExtendRetention() throws Exception {
         when(files.downloadable(id)).thenReturn(row("PUBLIC"));

@@ -19,11 +19,13 @@ import { AlertWorkspace } from "./AlertWorkspace";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
 import { ProjectOverview } from "./ProjectOverview";
+import { FileWorkspace } from "./FileWorkspace";
 
-type View = "projects" | "jobs" | "monitoring" | "alerts" | "audit";
+type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit";
 type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
+  { value: "files", label: "파일", description: "프로젝트와 환경을 선택해 파일을 올리고 공개 범위와 다운로드를 관리하세요." },
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
   { value: "monitoring", label: "모니터링", description: "플랫폼 서비스 상태와 프로젝트별 작업 현황을 확인하세요." },
   { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
@@ -702,6 +704,9 @@ function Workspace() {
                   <>
                     {tab === "projects" && activeSection === "overview" && <ProjectOverview key={`overview:${env.id}:${refresh}`} environmentId={env.id}
                       ready={env.state === "READY"} disabled={busy} open={moveTo} />}
+                    {tab === "files" && <FileWorkspace key={`files:${env.id}:${refresh}`} environmentId={env.id}
+                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"}
+                      onBusyChange={setBusy} />}
                     {tab === "jobs" && <>
                     <JobPanel key={`jobs:${env.id}`} environmentId={env.id} initialState={jobInitialState}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`}

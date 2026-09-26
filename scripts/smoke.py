@@ -48,7 +48,7 @@ for service in ("project-service", "file-service", "notification-service"):
     try:
         urlopen(f"http://{service}:8080/actuator/env", timeout=10)
     except HTTPError as error:
-        assert error.code == {"project-service": 401, "notification-service": 403, "file-service": 404}[service]
+        assert error.code == {"project-service": 401, "notification-service": 403, "file-service": 401}[service]
     else:
         raise AssertionError(service + " exposed actuator env")
 print("PASS internal actuator exposure")

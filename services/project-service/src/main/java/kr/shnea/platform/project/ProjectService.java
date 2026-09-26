@@ -322,6 +322,12 @@ class ProjectService {
             "active", project.status().equals("ACTIVE") && env.state().equals("READY"));
     }
 
+    java.util.Map<String, Object> fileEnvironment(UUID id) {
+        Environment env = findEnvironment(id);
+        Project project = project(env.projectId(), false);
+        return java.util.Map.of("projectId", project.id(), "active", project.status().equals("ACTIVE") && env.state().equals("READY"));
+    }
+
     AuthenticationPolicy updateAuthenticationPolicy(UUID id, ProjectController.AuthenticationSettings request, String actor) {
         return tx.execute(transaction -> {
             Project project = lockProject(findEnvironment(id).projectId());
