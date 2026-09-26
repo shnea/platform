@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,8 +21,16 @@ import kr.shnea.platform.http.RequestTrace;
 class OperationalAlertController {
     record Alert(UUID id, UUID projectId, UUID environmentId, UUID jobId, String code, String errorCode,
                  String requestId, Instant occurredAt, Instant createdAt, Instant acknowledgedAt,
-                 String acknowledgedBy, String acknowledgementRequestId) {}
+                 String acknowledgedBy, String acknowledgementRequestId, UUID recoveredBy, UUID relatedAlertId, String emailDecision) {}
     record Acknowledge(UUID projectId, UUID environmentId, String actor, String requestId) {}
+    record EmailSettings(boolean enabled,String recipient,int suppressionMinutes,boolean recoveryEnabled,long revision,
+                         String deliveryMode,Instant updatedAt,String updatedBy,String requestId) {}
+    record EmailSettingsUpdate(boolean enabled,@NotNull @Email @Size(max=320) String recipient,@Min(1) @Max(1440) int suppressionMinutes,
+                               boolean recoveryEnabled,@Min(0) long revision) {}
+    record EmailSave(UUID projectId,UUID environmentId,String environmentKind,boolean enabled,String recipient,
+                     int suppressionMinutes,boolean recoveryEnabled,long revision,String actor,String requestId) {}
+    record EmailDelivery(UUID eventId,String code,String recipient,String state,Instant createdAt,Instant startedAt,
+                         Instant finishedAt,String providerId) {}
     private final ProjectService projects;
     private final RestClient http;
     OperationalAlertController(ProjectService projects,@Value("${PLATFORM_EVENTS_SECRET:}") String secret,
@@ -57,5 +67,40 @@ class OperationalAlertController {
             if(error.getStatusCode().value()==404)throw ApiCode.RESOURCE_NOT_FOUND.failure();
             throw error;
         }
+    }
+    @GetMapping("/api/v1/admin/environments/{id}/operational-alerts/email-settings")
+    EmailSettings emailSettings(@PathVariable UUID id) {
+        var env=projects.findEnvironment(id);
+        var result=http.get().uri(b->b.path("/internal/v1/operational-alerts/email-settings")
+            .queryParam("projectId",env.projectId()).queryParam("environmentId",id).queryParam("environmentKind",env.kind()).build())
+            .retrieve().body(EmailSettings.class);
+        if(result==null)throw ApiCode.UPSTREAM_UNAVAILABLE.failure();
+        return result;
+    }
+    @PutMapping("/api/v1/admin/environments/{id}/operational-alerts/email-settings")
+    EmailSettings saveEmailSettings(@PathVariable UUID id,@Valid @RequestBody EmailSettingsUpdate settings,
+            @AuthenticationPrincipal Jwt actor,HttpServletRequest request) {
+        var env=projects.findEnvironment(id);
+        try {
+            var result=http.put().uri("/internal/v1/operational-alerts/email-settings").body(new EmailSave(env.projectId(),id,env.kind(),
+                settings.enabled(),settings.recipient(),settings.suppressionMinutes(),settings.recoveryEnabled(),settings.revision(),
+                actor.getSubject(),RequestTrace.id(request))).retrieve().body(EmailSettings.class);
+            if(result==null)throw ApiCode.UPSTREAM_UNAVAILABLE.failure();
+            return result;
+        } catch(RestClientResponseException error) {
+            if(error.getStatusCode().value()==409)throw ApiCode.SETTINGS_CHANGED.failure();
+            if(error.getStatusCode().value()==400)throw ApiCode.INVALID_REQUEST.failure();
+            throw error;
+        }
+    }
+    @GetMapping("/api/v1/admin/environments/{id}/operational-alerts/email-deliveries")
+    List<EmailDelivery> emailDeliveries(@PathVariable UUID id,@RequestParam(defaultValue="20") int limit,
+            @RequestParam(defaultValue="0") int offset) {
+        if(limit<1 || limit>100 || offset<0 || offset>1_000_000)throw ApiCode.INVALID_PAGINATION.failure();
+        var env=projects.findEnvironment(id);
+        var result=http.get().uri(b->b.path("/internal/v1/operational-alerts/email-deliveries").queryParam("projectId",env.projectId())
+            .queryParam("environmentId",id).queryParam("limit",limit).queryParam("offset",offset).build()).retrieve().body(EmailDelivery[].class);
+        if(result==null)throw ApiCode.UPSTREAM_UNAVAILABLE.failure();
+        return List.of(result);
     }
 }

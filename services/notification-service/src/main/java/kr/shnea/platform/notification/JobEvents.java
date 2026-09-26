@@ -34,6 +34,7 @@ class JobEvents {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         String envelope=json.writeValueAsString(event);
         return tx.execute(status -> {
+            AlertEmail.lock(db,event.environmentId());
             int inserted=db.update("""
                 INSERT INTO received_job_events(id,project_id,environment_id,target_id,event_type,envelope,occurred_at)
                 VALUES (?,?,?,?,?,?::jsonb,?) ON CONFLICT DO NOTHING
@@ -43,11 +44,7 @@ class JobEvents {
                 Boolean same=db.queryForObject("SELECT EXISTS(SELECT 1 FROM received_job_events WHERE id=? AND envelope=?::jsonb)",
                     Boolean.class,event.id(),envelope);
                 if (!Boolean.TRUE.equals(same)) throw new ResponseStatusException(HttpStatus.CONFLICT);
-            } else if (event.type().equals("job.failed")) {
-                // The receipt and effect commit together. No external sending takes place in this consumer.
-                db.update("INSERT INTO operational_alerts(event_id,project_id,environment_id,code) VALUES (?,?,?,'JOB_FAILED')",
-                    event.id(),event.projectId(),event.environmentId());
-            }
+            } else JobAlertEffects.apply(db,event);
             return new Receipt(event.id(),"ACCEPTED");
         });
     }

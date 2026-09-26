@@ -44,11 +44,15 @@ class NcpMail {
     }
     record Outcome(String state, String providerId) {}
     Outcome send(EmailController.Message message) {
+        return send(message.recipient(),message.subject(),message.textBody(),message.htmlBody());
+    }
+    Outcome send(String recipient,String subject,String textBody) { return send(recipient,subject,textBody,""); }
+    private Outcome send(String recipient,String subject,String textBody,String htmlBody) {
         try {
             String timestamp = Long.toString(System.currentTimeMillis());
-            var body = Map.of("senderAddress", sender, "senderName", senderName, "title", message.subject(),
-                "body", message.htmlBody().isBlank() ? escape(message.textBody()) : message.htmlBody(),
-                "recipients", List.of(Map.of("address", message.recipient(), "type", "R")),
+            var body = Map.of("senderAddress", sender, "senderName", senderName, "title", subject,
+                "body", htmlBody.isBlank() ? escape(textBody) : htmlBody,
+                "recipients", List.of(Map.of("address", recipient, "type", "R")),
                 "individual", true, "advertising", false);
             var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(15))
                 .header("Content-Type", "application/json").header("x-ncp-iam-access-key", access)

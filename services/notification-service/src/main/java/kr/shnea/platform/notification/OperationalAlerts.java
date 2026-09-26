@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 class OperationalAlerts {
     record Alert(UUID id, UUID projectId, UUID environmentId, UUID jobId, String code, String errorCode,
                  String requestId, Instant occurredAt, Instant createdAt, Instant acknowledgedAt,
-                 String acknowledgedBy, String acknowledgementRequestId) {}
+                 String acknowledgedBy, String acknowledgementRequestId, UUID recoveredBy, UUID relatedAlertId, String emailDecision) {}
     record Acknowledge(@NotNull UUID projectId, @NotNull UUID environmentId,
                        @NotBlank @Size(max=200) String actor, @NotNull @Pattern(regexp="[a-f0-9]{32}") String requestId) {}
     private final JdbcTemplate db;
@@ -55,6 +55,7 @@ class OperationalAlerts {
     private static Alert map(ResultSet rs) throws SQLException {
         return new Alert(rs.getObject("event_id",UUID.class),rs.getObject("project_id",UUID.class),rs.getObject("environment_id",UUID.class),
             rs.getObject("target_id",UUID.class),rs.getString("code"),rs.getString("error_code"),rs.getString("request_id"),
-            instant(rs,"occurred_at"),instant(rs,"created_at"),instant(rs,"acknowledged_at"),rs.getString("actor"),rs.getString("acknowledgement_request_id"));
+            instant(rs,"occurred_at"),instant(rs,"created_at"),instant(rs,"acknowledged_at"),rs.getString("actor"),rs.getString("acknowledgement_request_id"),
+            rs.getObject("recovered_by",UUID.class),rs.getObject("related_alert_id",UUID.class),rs.getString("email_decision"));
     }
 }

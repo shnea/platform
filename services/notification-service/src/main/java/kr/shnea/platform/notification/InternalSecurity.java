@@ -30,6 +30,7 @@ class InternalSecurity extends OncePerRequestFilter {
         String path = request.getRequestURI();
         if (path.startsWith("/actuator/health")) { chain.doFilter(request, response); return; }
         if (path.equals("/internal/v1/events/jobs") || path.equals("/internal/v1/operational-alerts") ||
+                path.equals("/internal/v1/operational-alerts/email-settings") || path.equals("/internal/v1/operational-alerts/email-deliveries") ||
                 path.matches("/internal/v1/operational-alerts/[a-fA-F0-9-]{36}/acknowledge")) {
             String provided=request.getHeader("X-Platform-Event-Key");
             if (eventsSecret.length<32 || provided==null || !MessageDigest.isEqual(eventsSecret,provided.getBytes(StandardCharsets.UTF_8))) {

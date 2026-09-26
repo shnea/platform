@@ -1653,7 +1653,7 @@
       "get": {
         "operationId": "get_environment_operational_alerts",
         "summary": "환경 운영 알림 조회",
-        "description": "선택한 환경의 Job 최종 실패 알림을 조회합니다. 확인 처리는 문제 해결과 다릅니다.",
+        "description": "선택한 환경의 Job 최종 실패·복구 알림을 조회합니다. 확인 상태와 복구 상태는 독립적입니다. 이메일 생략 이유도 기록합니다.",
         "security": [
           {
             "adminBearer": []
@@ -1763,6 +1763,149 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/operational-alerts/email-settings": {
+      "get": {
+        "operationId": "get_environment_AlertEmailSettings",
+        "summary": "운영 알림 이메일 수신 설정 조회",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEmailSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "put_environment_AlertEmailSettings",
+        "summary": "운영 알림 이메일 수신 설정 변경",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEmailSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "관리자 전용. revision으로 동시 변경을 검사하며 충돌은 SETTINGS_CHANGED(409)입니다. 수신 주소 1개와 1~1440분의 간격을 지정합니다. 변경은 감사에 기록하고 기존 PENDING을 취소합니다. 진행 중 발송은 취소하지 않습니다. 과거 알림은 발송하지 않습니다. dev/DEV는 MOCK, prod/PROD는 준비된 NCP만 사용합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertEmailSettingsUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/environments/{id}/operational-alerts/email-deliveries": {
+      "get": {
+        "operationId": "get_environment_AlertEmailDelivery",
+        "summary": "운영 알림 이메일 발송 이력 조회",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AlertEmailDelivery"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
       }
     }
   },
@@ -3252,7 +3395,10 @@
           "acknowledgementRequestId",
           "occurredAt",
           "createdAt",
-          "acknowledgedAt"
+          "acknowledgedAt",
+          "recoveredBy",
+          "relatedAlertId",
+          "emailDecision"
         ],
         "properties": {
           "id": {
@@ -3309,6 +3455,178 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "recoveredBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "relatedAlertId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "emailDecision": {
+            "type": "string"
+          }
+        }
+      },
+      "AlertEmailSettingsUpdate": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "recipient",
+          "suppressionMinutes",
+          "recoveryEnabled",
+          "revision"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recipient": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "suppressionMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "recoveryEnabled": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AlertEmailSettings": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "recipient",
+          "suppressionMinutes",
+          "recoveryEnabled",
+          "revision",
+          "deliveryMode",
+          "updatedAt",
+          "updatedBy",
+          "requestId"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "recipient": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "suppressionMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "recoveryEnabled": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deliveryMode": {
+            "type": "string",
+            "enum": [
+              "MOCK",
+              "NCP",
+              "BLOCKED"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AlertEmailDelivery": {
+        "type": "object",
+        "required": [
+          "eventId",
+          "code",
+          "recipient",
+          "state",
+          "createdAt",
+          "startedAt",
+          "finishedAt",
+          "providerId"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SENDING",
+              "MOCK",
+              "ACCEPTED",
+              "FAILED",
+              "UNKNOWN",
+              "CANCELLED",
+              "BLOCKED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "providerId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

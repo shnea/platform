@@ -13,7 +13,7 @@ import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 import { MemberPanel } from "./MemberPanel";
 import { JobPanel } from "./JobPanel";
-import { OperationalAlertsPanel } from "./OperationalAlertsPanel";
+import { AlertWorkspace } from "./AlertWorkspace";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
 import { ProjectOverview } from "./ProjectOverview";
@@ -699,7 +699,7 @@ function Workspace() {
                       }} />
                     </>}
                     {tab === "alerts" && <>
-                    <OperationalAlertsPanel key={`alerts:${env.id}`} environmentId={env.id}
+                    <AlertWorkspace key={`alerts:${env.id}`} environmentId={env.id}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy} onBusyChange={setBusy} />
                     </>}
                     {tab === "projects" && activeSection === "auth" && <>

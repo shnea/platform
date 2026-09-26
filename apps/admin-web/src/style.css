@@ -708,6 +708,9 @@ textarea::placeholder {
   flex-direction: row;
   align-items: center;
 }
+.alert-email-form {
+  max-width: 68ch;
+}
 .checkbox input {
   width: 18px;
   height: 18px;
