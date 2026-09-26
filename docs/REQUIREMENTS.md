@@ -723,7 +723,8 @@ Keycloak·MSA·Docker Compose·Gradle·에디터 배포 방식은 확정이다. 
 
 - 개발과 운영은 Docker를 기본으로 한다.
 - 운영 서버에는 원칙적으로 `compose.yml`과 환경변수 파일을 배포하고 이미지를 받아 실행한다.
-- 자체 이미지 이름은 `register.shnea.kr/platform-이미지명:태그` 형식을 따른다.
+- 자체 이미지 이름은 `registry.shnea.kr/platform-이미지명:태그` 형식을 따른다.
+- `.env.dev`·`.env.build`·`.env.prod`를 각각 로컬 개발·이미지 빌드/업로드·NAS 운영에 사용한다. 레지스트리·태그는 `IMAGE_REGISTRY`·`IMAGE_TAG`, 구성은 `COMPOSE_FILE`·`COMPOSE_PATH_SEPARATOR`로 지정한다. 각 명령은 `--env-file`로 해당 파일을 선택하며 NAS 복사 시 `.env.prod` 이름을 유지한다. 빌드 구성은 자체 이미지 8개만 포함하고 비밀값·포트·데이터 볼륨을 포함하지 않는다. NAS 저장 디렉터리 준비와 Keycloak 준비 후 인증 초기화를 의존 순서에 포함하며 기존 데이터·관리자 비밀번호·MFA를 초기화하지 않는다.
 - macOS와 Windows를 번갈아 사용해 개발할 수 있어야 한다.
 - 운영 서버는 Linux다.
 - 운영 도메인은 `platform.shnea.kr`이며 공개 기준 주소는 `https://platform.shnea.kr`이다. 관리자 웹은 `/`, 플랫폼 API는 `/api/v1`, Keycloak은 `/auth` 경로를 사용한다. 로컬 개발 주소와 운영 주소는 환경변수로 분리한다.

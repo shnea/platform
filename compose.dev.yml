@@ -1,7 +1,7 @@
 services:
   external-check:
     profiles: [test]
-    image: register.shnea.kr/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     networks: [app]
     environment:
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
@@ -94,7 +94,7 @@ services:
 
   api-check:
     profiles: [test]
-    image: register.shnea.kr/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     build: ./infra/contract-check
     networks: [app]
     environment:
@@ -108,7 +108,7 @@ services:
 
   file-check:
     profiles: [test]
-    image: register.shnea.kr/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     networks: [app]
     environment:
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
@@ -120,7 +120,7 @@ services:
 
   db-check:
     profiles: [test]
-    image: register.shnea.kr/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
     pull_policy: never
     networks: [database]
     environment:

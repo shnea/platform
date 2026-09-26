@@ -18,7 +18,7 @@
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
 | 인증 초기화 도구 | tools | DB 직접 접근 없음 | setup 프로필로만 실행, 관리자 realm·서비스 계정 설정 |
 
-자체 이미지는 `register.shnea.kr/platform-접미사:IMAGE_TAG`로 빌드한다. Loki는 고정 버전 외부 이미지를 사용한다. 현재 로컬 태그는 `0.1.0-dev`다. 레지스트리에 게시한 상태는 아니다.
+자체 이미지는 `registry.shnea.kr/platform-접미사:IMAGE_TAG`로 빌드한다. Loki는 고정 버전 외부 이미지를 사용한다. 현재 로컬 태그는 `0.1.0-dev`다. 레지스트리에 게시한 상태는 아니다.
 
 하나의 PostgreSQL 서버에 별도 DB와 비밀번호를 둔다. 서비스 계정에는 다른 DB의 CONNECT 권한이 없다. DB 관리자와 Docker 호스트 관리자는 모든 DB를 관리할 수 있으므로 물리적인 장애·관리자 격리는 아니다. 서비스에는 자기 비밀번호만 전달한다. Keycloak DB에 접근하는 신규 업무 코드는 만들지 않는다.
 
@@ -53,7 +53,8 @@ Keycloak은 [공식 컨테이너 빌드 방식](https://www.keycloak.org/server/
 ## 실행·설정 경계
 
 - `compose.yml`: 이미지·환경변수·영속 볼륨으로 실행. 소스 파일이 없어도 구성 해석 가능.
-- `compose.dev.yml`: 빌드 경로, 개발 DB 포트, 선택 실행하는 검증 컨테이너.
+- `compose.dev.yml`: 빌드 경로, 개발 DB 포트, 선택 실행하는 검증 컨테이너. 로컬 `.env`의 `COMPOSE_FILE=compose.yml|compose.dev.yml`, `COMPOSE_PATH_SEPARATOR=|`로 기본 명령에 포함한다.
+- `compose.nas.yml`: NAS `.env`의 `COMPOSE_FILE=compose.yml|compose.nas.yml`로 선택한다. 데이터 루트 아래 세 볼륨을 연결하고 네트워크 없는 일회성 `storage-init`이 빈 디렉터리만 준비한다. 인증 초기화는 Keycloak health 성공 후 실행하고 project-service는 성공 완료를 기다린다. 사용자 비밀번호·기존 데이터는 재설정하지 않는다.
 - `.env.example`: 비밀값 없는 설정 목록. 생성기는 기존 `.env`를 덮어쓰지 않는다.
 - 자원 설정은 환경변수로 조정한다. JVM 최대 힙 기본값은 컨테이너 메모리의 60%이며 나머지 공간은 JVM의 힙 외 메모리 등에 사용한다. 전체 서버 메모리를 고정하지 않는다.
 - 컨테이너 로그는 파일당 10MB, 3개로 회전한다. Spring 로그는 구조화 JSON이며 DB 접속 비밀번호는 출력하지 않는다.

@@ -7,7 +7,7 @@ test -d /volume2 || { echo '/volume2 is not mounted.' >&2; exit 1; }
 test -f .env || { echo 'Generate .env first.' >&2; exit 1; }
 release_tag=$(sed -n 's/^IMAGE_TAG=//p' .env | tr -d '\r')
 case "$release_tag" in ''|*[!a-zA-Z0-9_.-]*) echo 'Invalid IMAGE_TAG.' >&2; exit 1;; esac
-file_image="register.shnea.kr/platform-file-service:$release_tag"
+file_image="registry.shnea.kr/platform-file-service:$release_tag"
 file_uid=$(docker run --rm --network none --entrypoint id "$file_image" -u app)
 file_gid=$(docker run --rm --network none --entrypoint id "$file_image" -g app)
 loki_uid=$(docker image inspect grafana/loki:3.7.0 --format '{{.Config.User}}')

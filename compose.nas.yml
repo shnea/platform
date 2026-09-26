@@ -1,21 +1,28 @@
 # Use only with compose.yml on the NAS. Application files live on volume1;
-# every persistent data volume binds to an explicit directory on volume2.
-volumes:
-  postgres-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /volume2/homes/platform/postgres
-  file-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /volume2/homes/platform/files
-  log-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /volume2/homes/platform/loki
+# every persistent data directory binds to an explicit directory on volume2.
+services:
+  storage-init:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-tools:${IMAGE_TAG:?Set IMAGE_TAG}
+    user: "0:0"
+    restart: "no"
+    network_mode: none
+    read_only: true
+    mem_limit: 64m
+    entrypoint: [python, /tools/prepare-storage.py]
+    volumes:
+      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}:/data
+  db:
+    volumes:
+      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/postgres:/var/lib/postgresql/data
+    depends_on:
+      storage-init: {condition: service_completed_successfully}
+  file-service:
+    volumes:
+      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/files:/app/storage
+    depends_on:
+      storage-init: {condition: service_completed_successfully}
+  loki:
+    volumes:
+      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/loki:/loki
+    depends_on:
+      storage-init: {condition: service_completed_successfully}

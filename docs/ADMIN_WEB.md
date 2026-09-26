@@ -86,7 +86,7 @@ http://localhost:30140/ 에서 접속한다. 최초 플랫폼 관리자 계정�
 
 ## 배포와 제한
 
-웹 이미지 `register.shnea.kr/platform-admin-web:태그`는 React·TypeScript·Vite 빌드 결과를 제공한다. `compose.yml`만 사용하는 운영에서는 소스 마운트가 없으며 30140의 Nginx를 통해 접속한다. 메모리·CPU는 `ADMIN_WEB_MEMORY`, `ADMIN_WEB_CPUS`로 조정한다.
+웹 이미지 `registry.shnea.kr/platform-admin-web:태그`는 React·TypeScript·Vite 빌드 결과를 제공한다. `compose.yml`만 사용하는 운영에서는 소스 마운트가 없으며 30140의 Nginx를 통해 접속한다. 메모리·CPU는 `ADMIN_WEB_MEMORY`, `ADMIN_WEB_CPUS`로 조정한다.
 
 `PLATFORM_WEB_URL`은 경로 없는 정확한 origin이다. 개발 기본값은 `http://localhost:30140`, 운영 값은 `https://platform.shnea.kr`이다. 운영 `KEYCLOAK_PUBLIC_URL`은 `https://platform.shnea.kr/auth`로 설정한다. 변경 후 `identity-setup`을 다시 실행하면 관리자 로그인·로그아웃 콜백이 `https://platform.shnea.kr/`로 등록된다. IP 주소로 임의 접속하면 허용된 콜백과 달라 로그인할 수 없다. 실제 DNS·TLS 배포는 아직 검증하지 않았다.
 

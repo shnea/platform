@@ -73,7 +73,7 @@ docker compose -f compose.yml -f compose.dev.yml build project-service
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm admin-check npm test
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-api-contract.py
 docker compose -f compose.yml -f compose.dev.yml --profile test run --build --rm api-check
-docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint sh register.shnea.kr/platform-nginx:0.1.0-dev /checks/check-gateway-errors.sh
+docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint sh registry.shnea.kr/platform-nginx:0.1.0-dev /checks/check-gateway-errors.sh
 ```
 
 서버 빌드는 기존 단위 검사와 오류 계약 검사를 실행한다. 통합 검사는 개발 모드의 실제 Nginx·인증·업무 API를 사용하며 프로젝트/회원 데이터는 변경하지 않는다. 자체 관리자 세션은 종료한다. 잘못된 입력·인증·권한·404·405·415·외부 요청 ID 덮어쓰기와 OAuth 오류 보존을 확인한다. 409·502·500의 원문 배제와 MDC 정리는 단위 검사로 확인한다.

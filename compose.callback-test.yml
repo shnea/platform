@@ -1,7 +1,7 @@
 # Isolated test realm/database and dummy credentials; no host ports or production volumes.
 services:
   callback-keycloak:
-    image: register.shnea.kr/platform-keycloak:${IMAGE_TAG:-0.1.0-dev}
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-keycloak:${IMAGE_TAG:-0.1.0-dev}
     command: [start-dev, --db=dev-mem]
     mem_limit: 1024m
     environment:

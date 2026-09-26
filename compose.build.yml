@@ -1,0 +1,39 @@
+# Build/push only. No runtime ports, volumes, credentials or third-party images.
+services:
+  admin-web:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-admin-web:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+  db:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
+    build: ./infra/postgres
+  keycloak:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-keycloak:${IMAGE_TAG:?Set IMAGE_TAG}
+    build: ./infra/keycloak
+  project-service:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-project-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: project-service}
+  file-service:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-file-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: file-service}
+  notification-service:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-notification-service:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: infra/java/Dockerfile
+      args: {SERVICE: notification-service}
+  nginx:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-nginx:${IMAGE_TAG:?Set IMAGE_TAG}
+    build: ./infra/nginx
+  identity-setup:
+    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-tools:${IMAGE_TAG:?Set IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: infra/tools/Dockerfile

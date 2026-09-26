@@ -119,7 +119,7 @@ Remove-NetFirewallRule -Name Platform30140AllowNpm,Platform30140BlockOtherSource
 프로젝트 루트의 PowerShell에서 빌드한 이미지 태그로 실행한다. 호스트 포트를 열거나 실제 계정을 사용하지 않는다. 원본 Nginx 설정의 Keycloak 목적지만 컨테이너 내부 확인 서버로 바꿔 검증한다.
 
 ```powershell
-docker run --rm --entrypoint sh --mount "type=bind,source=$($PWD.Path)/scripts,target=/checks,readonly" register.shnea.kr/platform-nginx:0.1.0-dev /checks/check-proxy-ip.sh
+docker run --rm --entrypoint sh --mount "type=bind,source=$($PWD.Path)/scripts,target=/checks,readonly" registry.shnea.kr/platform-nginx:0.1.0-dev /checks/check-proxy-ip.sh
 ```
 
 일반 인증·공통 소셜 콜백 두 경로에서 신뢰/비신뢰 연결 상대, IPv4/IPv6, 누락/잘못된 IP, 가짜 주소 목록과 TLS 관련 헤더를 검사한다. 이 검사는 플랫폼 Nginx 동작 검증이며 NAS·NPM의 올바른 설정을 대신하지 않는다.

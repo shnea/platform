@@ -16,14 +16,13 @@ Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gra
 
 ```sh
 docker run --rm --mount "type=bind,source=${PWD},target=/workspace" -w /workspace python:3.13-alpine python scripts/init-env.py
-docker compose -f compose.yml -f compose.dev.yml config --quiet
-docker compose -f compose.yml -f compose.dev.yml up -d --build --wait --wait-timeout 300
-docker compose -f compose.yml -f compose.dev.yml --profile setup run --rm --build identity-setup
+python scripts/prepare-environments.py
+docker compose --env-file .env.dev up -d --build
 ```
 
 첫 명령은 서로 다른 무작위 개발 비밀번호로 `.env`를 만든다. 기존 파일이 있으면 덮어쓰지 않고 종료하므로, 재실행 때는 첫 명령을 생략한다. `.env`는 커밋하지 않는다.
 
-이전 실행 기반에서 업데이트했다면 첫 명령의 끝에 `--upgrade`를 붙여 새 환경변수만 추가한 뒤 나머지 명령을 실행한다. 기존 DB·관리자 비밀번호는 보존한다. `identity-setup`은 플랫폼 관리자 realm과 제한된 서비스 계정을 설정하며 기존 사용자 비밀번호를 재설정하지 않는다.
+환경 파일은 `.env.dev`(개발)·`.env.build`(빌드/업로드)·`.env.prod`(NAS 운영)로 구분한다. `prepare-environments.py`는 최초 준비 시 기존 `.env`의 비밀번호·내부 키·NCP·소셜 값을 그대로 반영하고 운영 주소·모드를 구분한다. 이미 운영 중인 설정을 재생성하는 명령이 아니다. 빌드와 운영 태그는 `.env.build` 기준으로 맞춘다. `identity-setup`은 Keycloak 준비 후 자동 실행되며 완료 상태 `Exited (0)`이 정상이다. [복사 후 실행할 명령](docs/NAS_DEPLOYMENT.md)을 따른다.
 
 | 주소 | 현재 동작 |
 |---|---|
@@ -80,7 +79,7 @@ NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프�
 - 인증: Keycloak, 프로젝트별 회원 분리·가입 방식 설정.
 - 구조: MSA, Docker 기반 개발과 운영, Compose 배포.
 - 외부 진입: Nginx `30140`; DB 외부 접근이 필요하면 `30141`; 추가 포트는 `30142`부터 순차 배정.
-- 이미지: `register.shnea.kr/platform-이미지명:태그`.
+- 이미지: `registry.shnea.kr/platform-이미지명:태그`.
 - 에디터: 첫 출시부터 React·Vue 패키지 및 JSP·일반 JS용 자산 제공. 본문은 각 서비스가 저장.
 - Markdown 문서 붙여넣기를 블록·서식으로 변환하고 에디터·뷰어에서 올바르게 렌더링.
 - 파일: 최대 5GB, 멀티·드래그·분할·재개 업로드, 기본 공개와 별도 비공개/비밀번호 공유.
