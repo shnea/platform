@@ -14,14 +14,16 @@ services:
     volumes: ["./scripts:/checks:ro"]
     command: [python, /checks/check-ncp-live.py, --help]
   admin-web:
-    build: ./apps/admin-web
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
     pull_policy: build
   admin-check:
     profiles: [test]
     image: node:24-alpine
-    working_dir: /app
-    volumes: ["./apps/admin-web:/app"]
-    command: [npm, run, build]
+    working_dir: /workspace/apps/admin-web
+    volumes: ["./apps/admin-web:/workspace/apps/admin-web", "./packages/editor:/workspace/packages/editor"]
+    command: [sh, -c, "cd /workspace/packages/editor && npm ci && npm run build && cd /workspace/apps/admin-web && npm ci && npm run build"]
   db:
     build: ./infra/postgres
     pull_policy: build

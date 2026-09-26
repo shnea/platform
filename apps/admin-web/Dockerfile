@@ -1,9 +1,14 @@
 FROM node:24-alpine AS build
-WORKDIR /app
-COPY package*.json ./
+WORKDIR /workspace/packages/editor
+COPY packages/editor/package*.json ./
 RUN npm ci
-COPY . .
+COPY packages/editor/ ./
+RUN npm run build
+WORKDIR /workspace/apps/admin-web
+COPY apps/admin-web/package*.json ./
+RUN npm ci
+COPY apps/admin-web/ ./
 RUN npm run build
 FROM nginx:1.30.5-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY apps/admin-web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /workspace/apps/admin-web/dist /usr/share/nginx/html

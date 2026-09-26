@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T15:14:47.686Z",
+  "generatedAt": "2026-09-26T17:22:31.648Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -8,6 +8,11 @@
         "name": "dialog",
         "value": "0 24px 90px #0005",
         "purpose": "확인 대화상자"
+      },
+      {
+        "name": "editor-popup",
+        "value": "0 8px 32px #0003",
+        "purpose": "문서 캐럿 주변의 슬래시·붙여넣기 선택 팝업"
       }
     ],
     "motion": [
@@ -40,6 +45,13 @@
     ]
   },
   "components": [
+    {
+      "name": "에디터 슬래시 메뉴",
+      "kind": "custom",
+      "description": "독립 에디터 메뉴는 메모리 문서의 편집·읽기와 접힌 JSON 입출력을 제공한다. 상단 서식 도구막대 없이 /로 전체·본문·목록·글자 서식·표·편집 종류와 검색 목록을 연다. 검색은 전체 종류에서 찾으며 선택 글자를 보존한다. 화면 경계 안의 팝업에서 방향키·Enter·Esc를 지원하고 현재 위치 사용 불가를 문구로 표시한다. Markdown 붙여넣기는 원문·서식·취소를 고른다. 표 가장자리 추가·선택 행/열 삭제는 편집에만 표시하고 읽기와 본문·표 너비를 공유한다. 파일 업로드·드롭·HLS·이미지 나란히 배치는 후속 범위다. 아래는 메뉴 일부의 정적 시각 예시다.",
+      "html": "<section class=\"ds-editor-menu\" aria-label=\"편집 기능 메뉴 예시\"><label>편집 기능 검색<input placeholder=\"명령 검색 · /table, /굵게\" /></label><div class=\"ds-editor-categories\"><button type=\"button\" aria-pressed=\"true\">전체</button><button type=\"button\">본문</button><button type=\"button\">목록</button><button type=\"button\">글자 서식</button><button type=\"button\">표</button><button type=\"button\">편집</button></div><div class=\"ds-editor-commands\"><button type=\"button\">제목 1<small>/h1</small></button><button type=\"button\">표 삽입<small>/table</small></button></div><p>↑↓ 이동 · Enter 선택 · Esc 닫기 · // 문자 입력</p></section>",
+      "css": ".ds-editor-menu{max-width:460px;display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--accent,#b0e1c7);border-radius:8px;background:var(--surface,#182220);color:var(--text,#e8eee8);box-shadow:0 8px 32px #0003;font:16px/1.7 \"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif}.ds-editor-menu label{display:grid;gap:6px;font-size:14px}.ds-editor-menu input,.ds-editor-menu button{font:inherit;color:inherit;background:var(--surface,#182220);border:1px solid var(--line,#34443e);border-radius:6px;min-height:44px;padding:8px 12px;min-width:0}.ds-editor-menu button{font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}.ds-editor-categories{display:flex;flex-wrap:wrap;gap:4px}.ds-editor-categories button{padding:6px 10px;font-size:13px}.ds-editor-menu [aria-pressed=true]{background:var(--raised,#202d29);border-color:var(--accent,#b0e1c7);color:var(--accent,#b0e1c7)}.ds-editor-commands{display:flex;flex-direction:column;gap:4px}.ds-editor-commands button{display:flex;justify-content:space-between;gap:12px;text-align:left}.ds-editor-menu small,.ds-editor-menu p{font-size:12px;font-weight:400;color:var(--muted,#a5b7ae)}.ds-editor-menu p{margin:0}.ds-editor-menu button:hover{background:var(--raised,#202d29)}.ds-editor-menu :is(input,button):focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-editor-menu button{transition:none}}"
+    },
     {
       "name": "비밀번호 공유 관리",
       "kind": "custom",

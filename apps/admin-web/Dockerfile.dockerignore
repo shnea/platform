@@ -1,0 +1,12 @@
+**
+!apps/
+!apps/admin-web/
+!apps/admin-web/**
+!packages/
+!packages/editor/
+!packages/editor/**
+**/node_modules/
+**/dist/
+**/__pycache__/
+**/.env*
+**/*.tgz

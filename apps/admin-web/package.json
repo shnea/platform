@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@shnea/editor": "file:../../packages/editor",
     "hash-wasm": "4.12.0",
     "hls.js": "1.7.3",
     "keycloak-js": "26.2.4",

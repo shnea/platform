@@ -1,0 +1,57 @@
+.shnea-editor,.shnea-viewer{--se-bg:var(--surface,#fff);--se-text:var(--text,#183126);--se-muted:var(--muted,#52695c);--se-line:var(--line,#cdd7ce);--se-accent:var(--accent,#245c43);--se-raised:var(--raised,#edf2ed);color:var(--se-text);font-family:inherit;font-size:16px;line-height:1.7;min-width:0;text-align:left}
+.shnea-editor *,.shnea-viewer *{box-sizing:border-box}.shnea-editor [hidden]{display:none!important}
+.shnea-editor{border:1px solid var(--se-line);border-radius:8px;background:var(--se-bg)}
+.shnea-editor button,.shnea-editor select,.shnea-editor input{font:inherit;color:var(--se-text);background:var(--se-bg);border:1px solid var(--se-line);border-radius:6px;min-height:44px;padding:8px 12px;margin:0;max-width:100%;letter-spacing:normal}
+.shnea-editor button{cursor:pointer;white-space:nowrap;font-weight:600;font-size:14px;transition:background .15s}
+.shnea-editor button:hover:not(:disabled){background:var(--se-raised);filter:none}.shnea-editor button:disabled{opacity:.5;cursor:not-allowed}
+.shnea-editor button[aria-pressed=true],.shnea-editor .se-chosen{background:var(--se-raised);border-color:var(--se-accent);color:var(--se-accent)}
+.shnea-editor :is(button,select,input,summary):focus-visible,.shnea-editor .tiptap:focus-visible{outline:3px solid var(--se-accent);outline-offset:3px}
+.shnea-editor .se-insert-menu{position:fixed;z-index:60;padding:12px;border:1px solid var(--se-accent);border-radius:8px;background:var(--se-bg);box-shadow:0 8px 32px #0003;display:flex;flex-direction:column;gap:10px;overflow:auto;white-space:normal}
+.shnea-editor .se-menu-header{display:flex;gap:8px;align-items:center}.shnea-editor .se-menu-header input{width:0;flex:1;min-width:0}
+.shnea-editor .se-menu-tabs{display:flex;gap:4px;flex-wrap:wrap}.shnea-editor .se-menu-tabs button{padding:6px 10px;font-size:13px}
+.shnea-editor .se-menu-tabs [aria-selected=true]{color:var(--se-accent);border-color:var(--se-accent);background:var(--se-raised)}
+.shnea-editor .se-insert-menu [role=tabpanel]{min-height:0;overflow:auto}
+.shnea-editor .se-command-list{display:flex;flex-direction:column;gap:4px}
+.shnea-editor .se-command-list button{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;white-space:normal;flex-shrink:0}
+.shnea-editor .se-command-list small{font-size:12px;font-weight:400;color:var(--se-muted);text-align:right}.shnea-editor .se-command-list [aria-disabled=true]{opacity:.55;cursor:not-allowed}
+.shnea-editor .se-menu-help{margin:0;font-size:12px;color:var(--se-muted)}
+.shnea-editor .se-link-form{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.shnea-editor .se-link-form label{display:flex;flex-direction:column;gap:6px;margin:0;flex:1 1 240px;font-size:14px}.shnea-editor .se-link-form input{width:100%}
+.shnea-editor .se-paste-choice{display:flex;flex-wrap:wrap;gap:8px}.shnea-editor .se-paste-choice p{flex-basis:100%;margin:0 0 8px;font-size:15px}
+:is(.shnea-editor,.shnea-viewer) .se-table{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:4px;margin:20px 0;white-space:normal}
+.shnea-editor .se-table-tools{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:4px;font-size:12px;color:var(--se-muted)}
+.shnea-editor .se-table-tools span{margin-right:auto}.shnea-editor .se-table-tools button{font-size:12px;padding:6px 8px}
+:is(.shnea-editor,.shnea-viewer) .se-table-scroll{min-width:0;overflow:auto}:is(.shnea-editor .tiptap,.shnea-viewer) .se-table table{display:table;margin:0;width:100%!important;white-space:pre-wrap}
+.shnea-editor .se-table-add-column{grid-column:2;grid-row:2;align-self:stretch;padding:0;font-size:22px}
+.shnea-editor .se-table-add-row{grid-column:1;justify-self:stretch;font-size:13px}
+.shnea-editor .se-hint,.shnea-editor .se-message{margin:0;padding:12px 20px;font-size:14px;color:var(--se-muted);border-top:1px solid var(--se-line)}
+.shnea-editor .se-message{color:var(--se-text)}
+.shnea-editor .tiptap,.shnea-viewer{padding:32px;min-height:320px;overflow-wrap:anywhere;caret-color:var(--se-accent);scrollbar-color:var(--se-line) var(--se-bg)}
+.shnea-editor .tiptap{outline:none;position:relative;white-space:pre-wrap}.shnea-viewer{white-space:pre-wrap}.shnea-editor .tiptap>:first-child,.shnea-viewer>:first-child{margin-top:0}
+.shnea-editor .ProseMirror-selectednode{outline:2px solid var(--se-accent)}.shnea-editor .ProseMirror-gapcursor{display:none;pointer-events:none;position:absolute}.shnea-editor .ProseMirror-focused .ProseMirror-gapcursor{display:block}.shnea-editor .ProseMirror-gapcursor:after{content:'';display:block;position:absolute;top:-2px;width:20px;border-top:1px solid var(--se-text)}.shnea-editor img.ProseMirror-separator{display:inline!important;border:0!important;margin:0!important}
+:is(.shnea-editor .tiptap,.shnea-viewer) :is(h1,h2,h3,h4,h5,h6){color:inherit;line-height:1.35;font-weight:700;letter-spacing:-.025em;margin:1.2em 0 .5em;text-wrap:balance;word-break:keep-all}
+:is(.shnea-editor .tiptap,.shnea-viewer) h1{font-size:28px}:is(.shnea-editor .tiptap,.shnea-viewer) h2{font-size:24px}:is(.shnea-editor .tiptap,.shnea-viewer) h3{font-size:20px}
+:is(.shnea-editor .tiptap,.shnea-viewer) p{margin:0 0 1em;min-height:1.7em;max-width:75ch}
+:is(.shnea-editor .tiptap,.shnea-viewer) :is(ul,ol){display:block;padding-left:28px;margin:12px 0;list-style-position:outside}
+:is(.shnea-editor .tiptap,.shnea-viewer) ul{list-style-type:disc}:is(.shnea-editor .tiptap,.shnea-viewer) ol{list-style-type:decimal}
+:is(.shnea-editor .tiptap,.shnea-viewer) li{display:list-item;padding:0;margin:4px 0;border:0}:is(.shnea-editor .tiptap,.shnea-viewer) li p{margin:0}
+:is(.shnea-editor .tiptap,.shnea-viewer) ul[data-type=taskList]{list-style:none;padding-left:0}
+:is(.shnea-editor .tiptap,.shnea-viewer) li[data-type=taskItem]{display:flex;align-items:flex-start;gap:12px}
+:is(.shnea-editor .tiptap,.shnea-viewer) li[data-type=taskItem]>label{margin:0;display:inline-flex;min-height:32px;align-items:center;flex-shrink:0}
+:is(.shnea-editor .tiptap,.shnea-viewer) li[data-type=taskItem]>div{flex:1;min-width:0}
+:is(.shnea-editor .tiptap,.shnea-viewer) input[type=checkbox]{width:18px;height:18px;min-height:0;margin:0;accent-color:var(--se-accent)}
+:is(.shnea-editor .tiptap,.shnea-viewer) blockquote{margin:20px 0;padding:12px 20px;border:1px solid var(--se-line);font-style:italic}
+:is(.shnea-editor .tiptap,.shnea-viewer) :is(pre,code){font-family:ui-monospace,Consolas,monospace;font-size:14px;background:var(--se-raised);border-radius:4px}
+:is(.shnea-editor .tiptap,.shnea-viewer) pre{padding:16px;white-space:pre;overflow:auto;max-width:100%;margin:16px 0}:is(.shnea-editor .tiptap,.shnea-viewer) code{padding:2px 4px}:is(.shnea-editor .tiptap,.shnea-viewer) pre code{padding:0;background:none}
+:is(.shnea-editor .tiptap,.shnea-viewer) a{color:var(--se-accent);text-decoration:underline;text-underline-offset:3px}
+:is(.shnea-editor .tiptap,.shnea-viewer) table{border-collapse:collapse;width:100%;display:block;overflow:auto;margin:20px 0;table-layout:fixed}
+:is(.shnea-editor .tiptap,.shnea-viewer) :is(th,td){position:relative;border:1px solid var(--se-line);padding:10px;min-width:100px;vertical-align:top;font-size:inherit;text-transform:none;letter-spacing:normal}
+:is(.shnea-editor .tiptap,.shnea-viewer) th{background:var(--se-raised);font-weight:700}
+:is(.shnea-editor .tiptap,.shnea-viewer) img{max-width:100%;height:auto;border-radius:4px}
+:is(.shnea-editor .tiptap,.shnea-viewer) hr{border:0;border-top:1px solid var(--se-line);margin:24px 0}
+.shnea-editor .selectedCell:after{position:absolute;inset:0;content:'';background:var(--se-accent);opacity:.15;pointer-events:none}
+.shnea-editor ::selection,.shnea-viewer ::selection{background:var(--se-accent);color:var(--se-bg)}
+.shnea-viewer{border:1px solid var(--se-line);border-radius:8px;background:var(--se-bg)}
+.shnea-viewer>:is(h1,h2,h3,h4,h5,h6):first-child{margin-top:0}
+@media(max-width:600px){.shnea-editor .tiptap,.shnea-viewer{padding:20px;min-height:300px}.shnea-editor .se-toolbar{padding:10px;gap:8px}.shnea-editor .se-hint{padding:12px 16px}}
+@media(prefers-reduced-motion:reduce){.shnea-editor button{transition:none}}

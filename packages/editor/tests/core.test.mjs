@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 
 const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'https://editor.example',pretendToBeVisual:true});
-for(const key of ['window','document','navigator','Node','HTMLElement','Element','MutationObserver','DOMParser','getComputedStyle'])Object.defineProperty(globalThis,key,{configurable:true,value:typeof dom.window[key]==='function'&&key==='getComputedStyle'?dom.window[key].bind(dom.window):dom.window[key]});
+for(const key of ['window','document','navigator','Node','HTMLElement','HTMLSelectElement','Element','MutationObserver','DOMParser','getComputedStyle'])Object.defineProperty(globalThis,key,{configurable:true,value:typeof dom.window[key]==='function'&&key==='getComputedStyle'?dom.window[key].bind(dom.window):dom.window[key]});
 globalThis.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);globalThis.cancelAnimationFrame=dom.window.cancelAnimationFrame.bind(dom.window);
 const {emptyDocument,parseDocument,fromMarkdown,createEditorCore,renderViewer,EditorError}=await import('@shnea/editor');
+const {mountEditor}=await import('@shnea/editor/ui');
 after(()=>dom.window.close());
 const target=()=>{const node=document.createElement('div');document.body.append(node);return node;};
 const rejects=(fn,code='DOCUMENT_INVALID')=>assert.throws(fn,error=>error instanceof EditorError&&error.code===code);
@@ -75,4 +76,56 @@ test('Markdown 붙여넣기는 한 번에 취소되고 코드 안에서는 원�
   paste('# 붙여넣기\n\n**본문**');assert.ok(node.querySelector('h1'));assert.equal(editor.undo(),true);assert.equal(node.textContent,'');
   editor.setValue(fromMarkdown('```text\n코드\n```'));paste('# 원문');assert.equal(node.querySelectorAll('h1').length,0);assert.match(node.querySelector('code').textContent,/# 원문/);
   editor.destroy();node.remove();
+});
+
+test('공통 UI의 슬래시 삽입·닫기·문서 교체와 두 인스턴스가 분리된다',()=>{
+ const one=target(),two=target(),a=mountEditor({element:one}),b=mountEditor({element:two});
+ a.insertText('/h2');assert.equal(one.querySelector('.se-insert-menu').hidden,false);assert.equal(two.querySelector('.se-insert-menu').hidden,true);
+ one.querySelector('[role=combobox]').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.ok(one.querySelector('h2'));assert.equal(one.querySelector('h2').textContent,'');
+ a.setValue(null);a.insertText('/');one.querySelector('[role=combobox]').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(one.querySelector('.se-insert-menu').hidden,true);
+ a.setValue(fromMarkdown('문서'));assert.equal(a.undo(),false);assert.deepEqual(b.getValue(),parseDocument(null));
+ a.destroy();a.destroy();b.destroy();assert.equal(one.childElementCount,0);one.remove();two.remove();
+});
+test('원문 붙여넣기 선택은 변환을 끄고 읽기 문서는 편집 명령을 거부한다',()=>{
+ const node=target(),editor=createEditorCore({element:node});editor.setPasteMode('text');
+ const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{getData:type=>type==='text/plain'?'# 원문':'',files:[]}});node.querySelector('[contenteditable]').dispatchEvent(event);
+ assert.equal(node.querySelector('h1'),null);assert.equal(node.textContent,'# 원문');editor.destroy();node.remove();
+ const read=target(),reader=createEditorCore({element:read,editable:false});rejects(()=>reader.run('bold'),'EDITOR_READ_ONLY');reader.destroy();read.remove();
+});
+
+test('슬래시 검색은 모든 종류를 찾고 beforeinput·조합 중 입력·원문 슬래시를 구분한다',()=>{
+ const node=target(),editor=mountEditor({element:node}),body=node.querySelector('.tiptap'),search=node.querySelector('[role=combobox]');
+ body.dispatchEvent(new window.InputEvent('beforeinput',{inputType:'insertText',data:'/',bubbles:true,cancelable:true,isComposing:true}));assert.equal(node.querySelector('[role=dialog]').hidden,true);
+ body.dispatchEvent(new window.InputEvent('beforeinput',{inputType:'insertText',data:'/',bubbles:true,cancelable:true}));assert.equal(node.querySelector('[role=dialog]').hidden,false);
+ assert.equal(node.querySelectorAll('[role=tab]').length,6);assert.equal(node.querySelector('[role=toolbar]'),null);
+ search.value='table';search.dispatchEvent(new window.Event('input'));assert.match(node.querySelector('[aria-selected=true][role=option]').textContent,/표 삽입/);
+ search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.equal(node.querySelectorAll('tr').length,3);assert.doesNotMatch(JSON.stringify(editor.getValue()),/\/table/);
+ editor.setValue(null);body.dispatchEvent(new window.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true}));search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true}));assert.equal(body.textContent,'/');assert.equal(node.querySelector('[role=dialog]').hidden,true);
+ editor.destroy();node.remove();
+});
+
+test('Markdown 붙여넣기는 선택 전 문서를 보존하며 원문·변환·취소를 적용한다',()=>{
+ const node=target(),editor=mountEditor({element:node});
+ const paste=source=>{const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{getData:type=>type==='text/plain'?source:'',files:[]}});node.querySelector('.tiptap').dispatchEvent(event);};
+ paste('# 제목');assert.deepEqual(editor.getValue(),emptyDocument());assert.equal(node.querySelector('.se-paste-choice').hidden,false);
+ [...node.querySelectorAll('button')].find(x=>x.textContent==='원문 그대로').click();assert.equal(node.querySelector('.tiptap').textContent,'# 제목');assert.equal(node.querySelector('h1'),null);
+ editor.setValue(null);paste('# 제목');[...node.querySelectorAll('button')].find(x=>x.textContent==='Markdown 서식 적용').click();assert.equal(node.querySelector('h1').textContent,'제목');assert.equal(editor.undo(),true);assert.deepEqual(editor.getValue(),emptyDocument());
+ paste('**취소**');[...node.querySelectorAll('button')].find(x=>x.textContent==='취소').click();assert.deepEqual(editor.getValue(),emptyDocument());
+ paste('일반 텍스트');assert.equal(node.querySelector('[role=dialog]').hidden,true);assert.equal(node.querySelector('.tiptap').textContent,'일반 텍스트');editor.destroy();node.remove();
+});
+
+test('브라우저 선택 변경 직후 슬래시를 열어도 선택 글자가 서식 대상에서 사라지지 않는다',()=>{
+ const node=target(),editor=mountEditor({element:node,value:fromMarkdown('선택할 글자')}),body=node.querySelector('.tiptap');body.focus();
+ const range=document.createRange();range.selectNodeContents(body.querySelector('p'));window.getSelection().removeAllRanges();window.getSelection().addRange(range);
+ body.dispatchEvent(new window.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true}));const search=node.querySelector('[role=combobox]');search.value='bold';search.dispatchEvent(new window.Event('input'));search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+ assert.equal(body.querySelector('strong').textContent,'선택할 글자');assert.equal(body.textContent,'선택할 글자');editor.destroy();node.remove();
+});
+
+test('표 가장자리 추가는 해당 표의 끝에 적용되고 선택 삭제·뷰어 분리가 동작한다',()=>{
+ const node=target(),editor=mountEditor({element:node,value:fromMarkdown('| A | B |\n| --- | --- |\n| C | D |\n\n문단\n\n| E | F |\n| --- | --- |\n| G | H |')});
+ const tables=node.querySelectorAll('.se-table');tables[1].querySelector('.se-table-add-column').click();assert.equal(tables[0].querySelectorAll('tr:first-child>*').length,2);assert.equal(tables[1].querySelectorAll('tr:first-child>*').length,3);
+ tables[1].querySelector('.se-table-add-row').click();assert.equal(tables[1].querySelectorAll('tr').length,3);assert.equal(tables[1].querySelector('tr:last-child').textContent,'');
+ [...tables[1].querySelectorAll('button')].find(x=>x.textContent==='선택 행 삭제').click();assert.equal(tables[1].querySelectorAll('tr').length,2);
+ const read=target(),dispose=renderViewer(read,editor.getValue());assert.equal(read.querySelector('button'),null);assert.equal(read.querySelectorAll('table').length,2);
+ dispose();editor.destroy();node.remove();read.remove();
 });

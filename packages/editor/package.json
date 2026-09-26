@@ -1,18 +1,20 @@
 {
   "name": "@shnea/editor",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "type": "module",
   "description": "SHNEA 공통 에디터의 문서 계약과 편집 코어",
   "files": [
     "dist",
-    "README.md"
+    "README.md", "src/editor.css"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./ui": {"types":"./dist/ui.d.ts","import":"./dist/ui.js"},
+    "./style.css":"./src/editor.css"
   },
   "scripts": {
     "build": "tsc",

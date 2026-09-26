@@ -2,6 +2,7 @@ import {Node, getSchema, type JSONContent} from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import {TableKit} from '@tiptap/extension-table';
 import {TaskList, TaskItem} from '@tiptap/extension-list';
+import {EditorTable} from './table.js';
 
 // Relative image sources stay in the document, but are never resolved against the host URL.
 export function safeLink(value: string): boolean {
@@ -26,7 +27,7 @@ const ExternalImage = Node.create({
 
 export function extensions(){return [
   StarterKit.configure({link:{openOnClick:false,autolink:false,linkOnPaste:false,isAllowedUri:safeLink},trailingNode:false}),
-  TableKit.configure({table:{resizable:false}}), TaskList, TaskItem.configure({nested:true,a11y:{checkboxLabel:node=>`완료 여부: ${node.textContent||'빈 항목'}`}}), ExternalImage
+  TableKit.configure({table:false}), EditorTable, TaskList, TaskItem.configure({nested:true,HTMLAttributes:{'data-type':'taskItem'},a11y:{checkboxLabel:node=>`완료 여부: ${node.textContent||'빈 항목'}`}}), ExternalImage
 ];}
 export const schema=getSchema(extensions());
 export const emptyContent=():JSONContent=>({type:'doc',content:[{type:'paragraph'}]});

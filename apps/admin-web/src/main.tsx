@@ -21,13 +21,15 @@ import { SectionTabs } from "./SectionTabs";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectFilesSettings } from "./ProjectFilesSettings";
 import { DeveloperCenter } from "./DeveloperCenter";
+import { EditorEntry } from "./EditorEntry";
 import { FileWorkspace } from "./FileWorkspace";
 
-type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit" | "developer";
+type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
 type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
   { value: "files", label: "파일", description: "파일을 올리고 썸네일·미리보기·URL과 보존 정책을 관리하세요." },
+  { value: "editor", label: "에디터", description: "문서를 직접 편집하고 읽기 화면과 연동 데이터를 확인하세요." },
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
   { value: "monitoring", label: "모니터링", description: "플랫폼 서비스 상태와 프로젝트별 작업 현황을 확인하세요." },
   { value: "alerts", label: "운영 알림", description: "작업의 최종 실패 알림을 확인하고 처리 기록을 남기세요." },
@@ -215,6 +217,7 @@ function App() {
   );
 }
 function Workspace() {
+  const editorDraft=useRef<unknown>(undefined);
   const [projects, setProjects] = useState<Project[]>([]),
     [offset, setOffset] = useState(0),
     [selected, setSelected] = useState<string | null>(null);
@@ -226,7 +229,7 @@ function Workspace() {
     [modal, setModal] = useState<Modal | null>(null);
   const [section, setSection] = useState<ProjectSection>("overview");
   const [monitoringScope, setMonitoringScope] = useState<"services" | "projects">("services");
-  const serviceView = tab === "developer" || tab === "monitoring" && monitoringScope === "services";
+  const serviceView = tab === "editor" || tab === "developer" || tab === "monitoring" && monitoringScope === "services";
   const [authSection, setAuthSection] = useState<"login" | "policy" | "social">("login");
   const [menuOpen, setMenuOpen] = useState(false);
   const pageTitle = useRef<HTMLHeadingElement>(null);
@@ -246,6 +249,7 @@ function Workspace() {
   const project = projects.find((p) => p.id === selected),
     env = envs.find((e) => e.id === envId);
   const view = views.find(item => item.value === tab)!;
+  useEffect(()=>{document.title=`${view.label} · SHNEA Platform`;},[view.label]);
   const activeSection = section === "test" && (mode !== "dev" || env?.kind !== "DEV") ? "overview" : section;
   function moveTo(next: View) {
     if (busy) return;
@@ -533,7 +537,7 @@ function Workspace() {
           items={[{value:"services",label:"서비스 상태"},{value:"projects",label:"프로젝트 작업"}]} />}
         <div id={tab === "monitoring" ? "monitoring-scope-panel" : undefined} role={tab === "monitoring" ? "tabpanel" : undefined}
           aria-labelledby={tab === "monitoring" ? `monitoring-scope-${monitoringScope}` : undefined}>
-        {tab === "developer" ? <DeveloperCenter /> : serviceView ? <ServiceMonitoring /> : tab === "audit" ? (
+        {tab === "editor" ? <EditorEntry draft={editorDraft}/> : tab === "developer" ? <DeveloperCenter /> : serviceView ? <ServiceMonitoring /> : tab === "audit" ? (
           loading ? (
             <p role="status">이력을 불러오는 중…</p>
           ) : (
