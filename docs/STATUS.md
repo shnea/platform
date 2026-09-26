@@ -2,6 +2,16 @@
 
 ## 현재 단계
 
+### 환경 반영 Job 백엔드·명세 보완과 동작 검증 완료 (2026-09-26)
+
+- 앞서 로컬에 남긴 Job 초안을 검증해 개발 스택에 반영했다. 관리자 JWT 전용 접수·목록·상세/시도 이력·취소·최종 실패 재접수 API 5개, 프로세스 내부 워커, V7 Job/시도/Outbox 테이블이 포함된다. 환경당 활성 작업 하나, 3회 시도·10초/30초 대기·60초 점유, 실행 중 행 잠금·점유 토큰으로 중복/이전 실행자의 상태 갱신을 제한한다. 기존 동기 API는 유지한다. 상세 정책과 재현 명령은 [Job 지침](JOBS.md)에 정리했다.
+- OpenAPI에 Job API 5개와 응답 모델 3개를 추가했다. 현재 DEV 30개 경로/35개 작업, PROD 25개 경로/30개 작업이다. 명세 검사는 서비스 컨트롤러를 자동 탐색해 수동 목록 누락을 방지한다. 탐색 초기에는 DEV 조건부 컨트롤러가 빠져 검사가 실패했으며, 검사 환경에 개발 모드를 명시해 해결했다. 오류 코드 3개·워커 환경변수·운영 지침을 함께 문서화했다.
+- **격리 DB 검증:** `docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check` 최종 서버 테스트 29개 모두 통과(생략 0). 이 중 PostgreSQL V1~V7 실제 적용과 Job 동작 9개, 실제 보안 필터로 5개 API의 비로그인 401·일반 사용자 403을 검사하는 테스트 1개를 추가했다. 중복 접수/동시 점유, 실제 실행 중 점유 만료, 실패 대기·최종 실패·수동 재시도, 복구·이전 점유 차단, 취소/revision 변경, Outbox 기록 실패 시 업무·감사 롤백, 중지 프로젝트 보호와 로그 문맥 복원을 확인했다. DB는 실제 PostgreSQL이며 인증 서버만 모의 처리했다. 복구 검사는 새 워커 객체로 재개하는 방식이며 OS 프로세스 강제 종료는 수행하지 않았다.
+- **빌드·실제 API 검증:** `docker build --build-arg SERVICE=project-service -t register.shnea.kr/platform-project-service:0.1.0-dev -f infra/java/Dockerfile .` 통과. `docker compose -f compose.yml -f compose.dev.yml up -d --no-build --pull never --no-deps --wait project-service`로 프로젝트 서비스만 반영했고 V7 적용 후 healthy 확인. `... --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py`에서 실제 관리자 인증·202 접수·스케줄러 성공·조회 스키마·요청 ID·필터·감사·400/401/404/409 통과. READY 환경의 작업 완료를 검증했으며, 실패/복구는 앞의 격리 검사 범위다. 자체 `job-check-bf8408ea9c` 프로젝트는 중지했고 Job/감사 이력은 보존했다. 자체 관리자 세션은 종료했다.
+- `... --profile test run --rm --no-deps api-check` 명세 공식 규격/실제 응답 검사, `... project-check python /checks/check-api-contract.py` 기존 오류 계약 검사, `... smoke` 11개 기본 점검 통과. 같은 관리자 계정으로 병렬 실행한 계약 검사는 한 번 로그인 실패했으며, 세션 종료 후 단독 실행에서는 통과했다. 이후 같은 관리자 계정의 검사는 순차 실행한다. Python 문법 검사와 `git diff --check`도 통과했다.
+- **검증 중 복구 기록:** 첫 임시 DB 실행에서 `.env`의 `COMPOSE_PROJECT_NAME`이 Compose의 `name`보다 우선해 개발 DB 컨테이너가 임시 DB로 교체됐다. 즉시 검사를 중단하고 기존 영속 데이터 볼륨으로 원래 DB 컨테이너를 복구했다. 이후 서비스 7개 healthy·기본 점검 11개와 기존 데이터 API 조회를 확인했다. 테스트 DB 서비스 이름을 `job-test-db`로 분리하고 실행 명령에 `-p platform-job-checks`를 명시했다. 잘못 생성한 테스트 컨테이너·캐시와 정상 검증의 임시 DB/네트워크는 정리했다. 재사용 가능한 테스트 Gradle 캐시만 남고 새 상시 서비스는 없다.
+- **남은 범위:** Job 관리 화면·기간/프로젝트 필터·이력 보존 정책, Outbox 전달 워커/소비자·운영 알림은 아직 미구현이다. Outbox는 최종 상태와 함께 PENDING으로 저장하는 단계이며 이벤트 버스 전체 완료가 아니다. 파일 처리·미리보기·모니터링·개발자 센터 UI·에디터도 후속 범위다. 다음에는 관리자 Job 화면을 연결하고 실제 실패/복구 이력 확인 흐름을 구현한다. AC-32 전체(관리 화면 포함)와 AC-36은 아직 완료로 표시하지 않는다.
+
 ### 비동기 Job 초안 검증 후 중단 (2026-09-26)
 
 - 사용자 요청에 따라 현재 작성분의 검증까지만 진행하고 추가 구현·수정·배포는 중단했다. 아래 OpenAPI 완료 기록은 기존 배포분 기준이다. OpenAPI는 플랫폼 API 명세 형식이며 OpenAI/AI 연동 기능은 추가하지 않았다.

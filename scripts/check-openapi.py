@@ -37,7 +37,7 @@ def main():
         spec, _ = call('GET', '/api/v1/admin/openapi', headers)
         validate(spec)
         assert spec == json.loads(Path('/contracts/project.json').read_text())
-        assert len(spec['paths']) == 25 and sum(len(v) for v in spec['paths'].values()) == 30
+        assert len(spec['paths']) == 30 and sum(len(v) for v in spec['paths'].values()) == 35
         assert not any(path.startswith('/internal') for path in spec['paths'])
 
         def verify(schema, value):
@@ -51,6 +51,7 @@ def main():
             return value, hdr
 
         get('/api/v1/config')
+        get('/api/v1/admin/jobs')
         projects, _ = get('/api/v1/admin/projects')
         get('/api/v1/admin/audit-events')
         for project in projects:

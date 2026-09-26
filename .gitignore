@@ -21,5 +21,6 @@ data/
 uploads/
 
 output/playwright/
+output/job-checks/
 .recovery/
 .playwright-cli/

@@ -5,6 +5,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 // Public machine codes: keep meanings stable even when Korean wording changes.
 enum ApiCode {
+    JOB_STATE_CHANGED(409, "작업 상태가 변경되었습니다. 작업 목록을 다시 확인해 주세요."),
+    JOB_NOT_CANCELLABLE(409, "대기 중이거나 재시도를 기다리는 작업만 취소할 수 있습니다."),
+    JOB_NOT_RETRYABLE(409, "최종 실패한 작업만 다시 시도할 수 있습니다."),
     INVALID_REQUEST(400, "요청 형식과 입력값을 확인해 주세요."),
     VALIDATION_FAILED(400, "입력 조건에 맞지 않는 항목을 확인해 주세요."),
     AUTHENTICATION_REQUIRED(401, "인증이 필요합니다. 다시 로그인해 주세요."),

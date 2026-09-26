@@ -7,6 +7,9 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
 import tools.jackson.databind.json.JsonMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,8 +20,17 @@ class OpenApiTest {
         var dev = new OpenApiController(json, "dev").specification().getBody();
         var prod = new OpenApiController(json, "prod").specification().getBody();
         Set<String> actual = new HashSet<>(), documented = new HashSet<>();
-        for (Class<?> controller : new Class<?>[]{ProjectController.class, PublicConfigController.class,
-                EmailController.class, MockController.class, OpenApiController.class}) {
+        var scanner = new ClassPathScanningCandidateComponentProvider(false);
+        var environment = new org.springframework.core.env.StandardEnvironment();
+        environment.getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource(
+            "contract-mode", Map.of("platform.mode", "dev")));
+        scanner.setEnvironment(environment);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
+        for (var bean : scanner.findCandidateComponents("kr.shnea.platform.project")) {
+            Class<?> controller = Class.forName(bean.getBeanClassName());
+            // Test fixture controllers share this package but are not shipped in the service.
+            if (!controller.getProtectionDomain().getCodeSource().getLocation()
+                    .equals(ProjectController.class.getProtectionDomain().getCodeSource().getLocation())) continue;
             for (var method : controller.getDeclaredMethods()) {
                 var mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
                 if (mapping == null) continue;
@@ -40,14 +52,16 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(25);
-        assertThat(prod.path("paths").size()).isEqualTo(20);
+        assertThat(dev.path("paths").size()).isEqualTo(30);
+        assertThat(prod.path("paths").size()).isEqualTo(25);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 
     @Test void recordFieldsAndSchemaPropertiesStayInSync() throws Exception {
         var schemas = new OpenApiController(json, "dev").specification().getBody().path("components").path("schemas");
         var models = Map.ofEntries(
+            Map.entry("Job", ProvisionJobs.Job.class), Map.entry("JobAttempt", ProvisionJobs.Attempt.class),
+            Map.entry("JobDetail", ProvisionJobs.Detail.class),
             Map.entry("Project", ProjectService.Project.class), Map.entry("Environment", ProjectService.Environment.class),
             Map.entry("Credential", ProjectService.Credential.class), Map.entry("Context", ProjectService.Context.class),
             Map.entry("Member", Member.class), Map.entry("MemberPage", Member.Page.class),

@@ -6,7 +6,7 @@
 
 Nginx의 `/api/v1/`에서 자체 생성한 413/502/503/504도 표준 본문을 반환한다. 업스트림 서비스가 반환한 오류 본문은 유지한다. `/auth/`의 표준 인증 오류와 프록시의 다른 경로는 바꾸지 않는다. 관리자 웹은 표준 본문이 없는 응답에도 한국어 기본 안내를 제공한다. 아직 업무 API가 없는 파일 서비스와 향후 API는 구현 시 같은 계약을 적용한다. 개발자 센터 화면은 후속 작업이다.
 
-현재 외부 API의 [OpenAPI 3.1.1 명세](../services/project-service/src/main/resources/openapi.json)는 관리자 JWT로 `GET /api/v1/admin/openapi`에서 조회한다. DEV 25개 경로/30개 작업을 문서화하며 PROD에서는 개발 전용 5개 작업/경로를 제거한다. 내부 이메일 API와 Keycloak OAuth/OIDC는 노출하지 않는다. 인증·본문·응답·필드 조건·부분 실패와 재시도 주의점을 명시했고 Gradle 검사에서 경로/모델 변경을 대조한다. [OpenAPI 공식 규격](https://spec.openapis.org/oas/v3.1.1.html)을 기준으로 검증한다.
+현재 외부 API의 [OpenAPI 3.1.1 명세](../services/project-service/src/main/resources/openapi.json)는 관리자 JWT로 `GET /api/v1/admin/openapi`에서 조회한다. Job API를 포함해 DEV 30개 경로/35개 작업을 문서화하며 PROD에서는 개발 전용 5개 작업/경로를 제거한다. 내부 이메일 API와 Keycloak OAuth/OIDC는 노출하지 않는다. 인증·본문·응답·필드 조건·부분 실패와 재시도 주의점을 명시했고 Gradle 검사에서 컨트롤러를 자동 탐색해 경로/모델 변경을 대조한다. [OpenAPI 공식 규격](https://spec.openapis.org/oas/v3.1.1.html)을 기준으로 검증한다.
 
 Keycloak OAuth/OIDC 오류와 `/api/v1/dev/login`의 의도된 모의 로그인 결과는 기존 계약을 유지한다. 관리자 모의 로그인은 HTTP 200 안에 `httpStatus`와 `result`를 반환하며 업무 API 예외와 구분한다.
 
@@ -62,7 +62,7 @@ Nginx가 `/api/v1/` 요청마다 `$request_id`를 생성해 호출자의 `X-Requ
 
 프로젝트 서비스는 ID를 요청 속성과 MDC에 설정하고 응답 헤더·오류 본문·ECS 로그에 포함한다. `api_request` 로그에는 메서드·매핑된 라우트 템플릿·상태·소요 시간(ms)을 남기고 종료 후 MDC를 복원한다. 알 수 없는 경로는 `unmatched`로 기록한다. 쿼리·원문 경로·본문·토큰·비밀번호·API 키는 이 로그에 기록하지 않는다. 예상하지 못한 예외는 메시지/원인/스택 없이 클래스만 기록한다.
 
-요청 ID는 상관관계를 찾는 값이며 인증 정보·멱등성 키가 아니다. Nginx→프로젝트와 프로젝트↔알림 내부 호출에 적용했다. 외부 NCP에는 내부 ID를 전송하지 않는다. 감사 DB·Keycloak·비동기 작업의 연계는 후속 범위다. 오류 직렬화·요청 ID 필터/전달은 `libraries:http`를 두 서비스가 공유하며 업무 코드·인증 정책·DB 소유권은 각 서비스에 남긴다.
+요청 ID는 상관관계를 찾는 값이며 인증 정보·멱등성 키가 아니다. Nginx→프로젝트와 프로젝트↔알림 내부 호출에 적용했다. 외부 NCP에는 내부 ID를 전송하지 않는다. [환경 반영 Job](JOBS.md)은 접수 ID를 DB·실행 로그·Outbox에 이어 준다. 일반 감사 DB의 요청 ID 필드와 Keycloak 연계는 후속 범위다. 오류 직렬화·요청 ID 필터/전달은 `libraries:http`를 두 서비스가 공유하며 업무 코드·인증 정책·DB 소유권은 각 서비스에 남긴다.
 
 Nginx API 경로는 쿼리가 포함될 수 있는 일반 프록시 오류 로그를 억제하고 구조화 서비스 로그와 응답 ID로 진단한다. Nginx API 이외의 경로·실제 IP 신뢰 설정은 유지한다. 프록시 자체 오류를 지표로 집계하는 기능은 모니터링 단계에서 연결한다.
 
@@ -86,8 +86,11 @@ docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint
 
 기준 구현은 [`ApiCode.java`](../services/project-service/src/main/java/kr/shnea/platform/project/ApiCode.java)다. 표와 실제 구현은 함께 갱신한다. 한국어 문구는 개선할 수 있지만 코드의 의미·HTTP 상태 변경은 API 호환성 검토 대상이다.
 
-| ?? | HTTP | ?? |
+| 코드 | HTTP | 안내 |
 | --- | --- | --- |
+| `JOB_STATE_CHANGED` | 409 | 작업 상태가 변경되었습니다. 작업 목록을 다시 확인해 주세요. |
+| `JOB_NOT_CANCELLABLE` | 409 | 대기 중이거나 재시도를 기다리는 작업만 취소할 수 있습니다. |
+| `JOB_NOT_RETRYABLE` | 409 | 최종 실패한 작업만 다시 시도할 수 있습니다. |
 | `INVALID_REQUEST` | 400 | 요청 형식과 입력값을 확인해 주세요. |
 | `VALIDATION_FAILED` | 400 | 입력 조건에 맞지 않는 항목을 확인해 주세요. |
 | `AUTHENTICATION_REQUIRED` | 401 | 인증이 필요합니다. 다시 로그인해 주세요. |

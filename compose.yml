@@ -117,6 +117,7 @@ services:
     cpus: ${PROJECT_CPUS:-1.0}
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_project
+      PLATFORM_JOBS_ENABLED: ${PLATFORM_JOBS_ENABLED:-true}
       PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
       DB_USERNAME: platform_project
       DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
