@@ -2,6 +2,13 @@
 
 ## 현재 단계
 
+### 외부 프로젝트 서비스 연결 지침 작성 완료 (2026-09-27)
+
+- **전달 문서:** [SERVICE_INTEGRATION.md](SERVICE_INTEGRATION.md)에 서비스 선택, 관리자 준비, 환경별 키·권한, 연결 점검 Python 예제, OIDC 로그인, 분할 업로드·보기·공유·보존, 에디터 본문/첨부 연결, 오류·요청 ID와 DEV 검수 순서를 정리했다. 다른 개발자/AI에게 복사해 전달할 설정 양식도 포함하며 실제 비밀값은 없다.
+- **경계:** 일반 알림 업무 API·외부 웹훅·공통 로그·범용 Job API의 미제공 범위를 구분했다. 외부 도메인 뷰어 iframe/CORS 제한, 호스트 API용 audience 미설정, 서버 키와 이용자 권한의 차이, 비공개 URL 만료를 명시했다. 에디터 연동 지침에도 iframe 제한을 보완하고 README에서 새 지침으로 연결하며 오래된 에디터/파일 제공 범위를 바로잡았다.
+- **검증:** `python -X utf8 output/playwright/check-service-integration-doc.py` 통과. 로컬 문서 링크, 명시한 API 메서드·경로 16개와 OpenAPI 대조, Python 문법, 연결 예제의 성공·환경 불일치·401·통신 실패 4개 오프라인 검사와 리다이렉트 차단·키 미출력을 확인했다. 검사 도구의 handler 클래스 처리 오류를 수정한 후 통과했다. `python apps/admin-web/public/examples/file-client.py upload --help`로 CLI 옵션 대조, `git diff --check` 통과. 실제 외부 프로젝트 로그인·업로드·운영 연결을 새로 실행한 것은 아니다.
+- **정리·다음:** 문서만 변경했으며 실행 서비스·DB·키·포트 변경, 재배포·패키지 재발행은 없다. 새 지침의 전달 원본은 저장소 파일이며 공개 다운로드 경로를 추가하지 않았다. 다음 기능 단위는 기존 계획대로 공통 로그 수집·프로젝트/환경 격리·조회와 관리자 로그 메뉴다.
+
 ### 에디터 React·Vue·일반 JS·JSP 연결과 실행 예제 완료 (2026-09-27)
 
 - **패키지:** `@shnea/editor@0.1.0-alpha.6`, 문서 version 3 유지. 선택적 `/react`·`/vue`의 `ShneaEditor`·`ShneaViewer`, 프레임워크 없는 `/browser` ES 모듈·CSS를 제공한다. 일반 JS 번들에는 React/Vue·CDN 의존이 없으며 실제 포함된 의존성의 라이선스 원문을 고지 파일로 생성한다. 공개 npm 발행·운영 레지스트리 게시 없음.
