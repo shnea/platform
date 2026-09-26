@@ -4,15 +4,13 @@
 
 ## 설치와 전달
 
-```sh
-# 플랫폼 저장소에서
-cd packages/editor
-npm ci
-npm test
-npm run example:build
-npm pack
+패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.6.tgz
 
-# 사용하는 프로젝트에서: 생성한 tgz를 복사한 뒤
+SHA-256: https://platform.shnea.kr/integrations/checksums.json
+
+패키지를 내려받아 체크섬을 확인한 뒤 호스트 프로젝트에서 설치한다. 플랫폼 저장소는 필요 없다.
+
+```sh
 npm install ./shnea-editor-0.1.0-alpha.6.tgz
 ```
 
@@ -71,7 +69,7 @@ const value = shallowRef(emptyDocument());
 
 ## 일반 JS
 
-`dist/browser` 폴더 전체를 호스트 정적 자산으로 복사한다. React/Vue·CDN·import map 없이 사용한다. `editor.js`, `editor.css`, 라이선스 파일과 `THIRD-PARTY-NOTICES.txt`를 함께 배포한다.
+받은 tgz를 풀어 `package/dist/browser` 폴더 전체를 호스트 정적 자산의 `browser` 폴더로 복사한다. React/Vue·CDN·import map 없이 사용한다. `editor.js`, `editor.css`, 라이선스 파일과 `THIRD-PARTY-NOTICES.txt`를 함께 배포한다.
 
 ```html
 <link rel="stylesheet" href="./browser/editor.css">
@@ -94,19 +92,9 @@ const disposeViewer = renderViewer(document.querySelector('#viewer'), editor.get
 
 ## JSP 실행
 
-JSP는 같은 일반 JS 번들을 로딩한다. `npm run example:build`가 만든 `dist/jsp`를 Tomcat 웹앱의 루트로 배치하면 `/jsp/index.jsp`를 실행할 수 있다. 컨텍스트 경로가 있어도 상대 자산 경로를 유지한다.
+JSP도 위 일반 JS 코드를 사용한다. 받은 패키지의 browser 폴더를 JSP 옆 정적 경로에 두고 같은 상대 경로로 모듈과 CSS를 불러온다. JSP 서버(Tomcat 등)에서 HTTP(S)로 제공한다.
 
-PowerShell에서 임시 실행하는 예:
-
-```powershell
-# packages/editor 디렉터리에서 실행. 30142가 비어 있는지 확인한다.
-$examplePath = (Resolve-Path dist/jsp).Path
-docker run --rm -d --name platform-editor-jsp-example -p 127.0.0.1:30142:8080 --mount "type=bind,source=$examplePath,target=/usr/local/tomcat/webapps/ROOT,readonly" tomcat:11-jre21
-# http://127.0.0.1:30142/jsp/index.jsp
-docker stop platform-editor-jsp-example
-```
-
-본문 JSON을 JSP의 `<script>` 문자열에 직접 삽입하지 않는다. 예제의 `#editor`에 호스트가 소유한 고정 상대 주소 `data-document-url="../api/articles/1"`를 지정하면 같은 출처의 JSON API를 조회·검증한다. API는 호스트 인증·조회 권한을 적용한다. 조회 실패나 잘못된 문서는 오류로 표시하며 빈 문서로 덮어쓰지 않는다. 동적 HTML 속성에는 호스트 템플릿의 적절한 이스케이프를 적용한다.
+본문 JSON을 JSP의 script 문자열에 직접 삽입하지 않는다. 호스트의 인증된 JSON API로 조회하고 parseDocument로 검증한 뒤 편집기에 전달한다. 조회 실패 시 현재 문서를 보존한다. 동적 HTML 속성에는 호스트 템플릿의 이스케이프를 적용한다.
 
 ## 첨부 업로드 연결
 
@@ -136,9 +124,9 @@ const attachments = {
 };
 ```
 
-호스트 서버가 프로젝트·환경·사용자 권한·용량·형식을 검사하고 플랫폼 파일 API를 호출한다. 같은 requestId 재시도는 중복 파일을 만들지 않도록 처리한다. 큰 파일은 기존 분할/재개 업로드 어댑터를 연결한다. 위 FormData 예제는 대용량 분할 전송을 구현하지 않는다. 영상은 호스트의 `attachments.video(element, data)`로 HLS 플레이어를 연결할 수 있고, 생략하면 `viewerUrl`의 기본 뷰어를 iframe으로 연다. 영상 변환·URL 접근 권한은 파일 서비스가 담당한다. 자세한 첨부 계약은 저장소 `docs/EDITOR.md`를 따른다.
+호스트 서버가 프로젝트·환경·사용자 권한·용량·형식을 검사하고 플랫폼 파일 API를 호출한다. 같은 requestId 재시도는 중복 파일을 만들지 않도록 처리한다. 큰 파일은 기존 분할/재개 업로드 어댑터를 연결한다. 위 FormData 예제는 대용량 분할 전송을 구현하지 않는다. 영상은 호스트의 `attachments.video(element, data)`로 HLS 플레이어를 연결할 수 있고, 생략하면 `viewerUrl`의 기본 뷰어를 iframe으로 연다. 영상 변환·URL 접근 권한은 파일 서비스가 담당한다. 상세 타입은 받은 패키지의 `AttachmentAdapter`·`AttachmentRef`·`AttachmentViews` 선언을 사용한다.
 
-외부 도메인에서 플랫폼 파일 서비스를 쓸 때는 플랫폼 저장소의 `docs/SERVICE_INTEGRATION.md`에서 파일 연결 제한도 확인한다. 현재 플랫폼 기본 뷰어는 `frame-ancestors 'self'`이므로 다른 도메인에서 iframe으로 바로 표시할 수 없으며 파일 API의 임의 출처 CORS도 제공하지 않는다. 새 탭의 기본 뷰어로 먼저 확인하고, 본문 내 재생은 호스트 플레이어와 인증된 같은 출처 중계 또는 별도로 합의한 허용 출처/임베드 정책이 필요하다. 위 기본 iframe 동작은 이 제한을 우회하지 않는다. 패키지만 전달받았다면 운영자에게 서비스 연결 지침도 요청한다.
+현재 플랫폼 기본 뷰어는 `frame-ancestors 'self'`이므로 다른 도메인에서 iframe으로 바로 표시할 수 없으며 파일 API의 임의 출처 CORS도 제공하지 않는다. 새 탭의 기본 뷰어로 먼저 확인하고, 본문 내 재생은 호스트 플레이어와 인증된 같은 출처 중계 또는 별도로 합의한 허용 출처/임베드 정책이 필요하다. 위 기본 iframe 동작은 이 제한을 우회하지 않는다. 다른 서비스의 연결 계약은 https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md 에서 찾는다.
 
 ## 검수와 공식 참고
 
