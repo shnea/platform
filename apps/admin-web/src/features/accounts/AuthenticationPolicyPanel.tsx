@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/auth";
 import { EmailInbox } from "../testing/EmailInbox";
@@ -105,9 +106,7 @@ export function AuthenticationPolicyPanel({
             setMessage("");
             setReload((value) => value + 1);
           }}
-        >
-          정책 새로고침
-        </button>
+         aria-label="정책 새로고침" title="정책 새로고침" data-tooltip="정책 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
       </div>
       <p className="small muted">
         일반 회원가입 허용은 위쪽 로그인 설정에서 관리합니다. 아래 정책은 현재
@@ -199,7 +198,7 @@ export function AuthenticationPolicyPanel({
                   가입·비밀번호 변경과 재설정에 적용합니다. 기존 비밀번호를
                   강제로 변경하거나 세션을 종료하지 않습니다.
                 </p>
-                <button type="submit">
+                <button type="submit"><Icon name="save"/>
                   {busy ? "저장 중…" : "가입·복구 정책 저장"}
                 </button>
               </fieldset>

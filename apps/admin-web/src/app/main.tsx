@@ -1,3 +1,4 @@
+import {Icon} from '../shared/Icon';
 import { createRoot } from "react-dom/client";
 import {
   useEffect,
@@ -26,6 +27,7 @@ import { FileWorkspace } from "../features/files/FileWorkspace";
 
 type View = "projects" | "files" | "jobs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
 type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
+const viewIcons = {projects:'folder',files:'file',editor:'pencil',jobs:'list-checks',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
   { value: "files", label: "파일", description: "파일을 올리고 썸네일·미리보기·URL과 보존 정책을 관리하세요." },
@@ -154,14 +156,11 @@ function App() {
         <div className="header-actions">
           <button
             className="quiet"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            {theme === "dark" ? "밝은 화면" : "어두운 화면"}
+            aria-label={theme === "dark" ? "밝은 화면" : "어두운 화면"} title={theme === "dark" ? "밝은 화면" : "어두운 화면"} data-tooltip={theme === "dark" ? "밝은 화면" : "어두운 화면"} data-icon-only="true" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          ><Icon name={theme === 'dark' ? 'sun' : 'moon'}/>
           </button>
           {ready && auth.authenticated && (
-            <button className="quiet" onClick={() => void auth.accountManagement()}>
-              내 계정
-            </button>
+            <button className="quiet" onClick={() => void auth.accountManagement()} aria-label="내 계정" title="내 계정" data-tooltip="내 계정" data-icon-only="true"><Icon name="user-round"/></button>
           )}
           {ready && auth.authenticated && (
             <button
@@ -169,9 +168,7 @@ function App() {
               onClick={() =>
                 void auth.logout({ redirectUri: location.origin + "/" })
               }
-            >
-              로그아웃
-            </button>
+             aria-label="로그아웃" title="로그아웃" data-tooltip="로그아웃" data-icon-only="true"><Icon name="log-out"/></button>
           )}
         </div>
       </header>
@@ -179,7 +176,7 @@ function App() {
         <main id="main" className="welcome">
           <h1>연결을 확인해 주세요</h1>
           <p role="alert">{bootError}</p>
-          <button onClick={() => location.reload()}>다시 시도</button>
+          <button onClick={() => location.reload()} aria-label="다시 시도" title="다시 시도" data-tooltip="다시 시도" data-icon-only="true"><Icon name="refresh-cw"/></button>
         </main>
       ) : !ready ? (
         <main id="main" className="welcome" aria-busy="true">
@@ -203,8 +200,8 @@ function App() {
             onClick={() =>
               void auth.login({ redirectUri: location.origin + "/" })
             }
-          >
-            관리자 로그인 <span aria-hidden="true">↗</span>
+          ><Icon name="log-in"/>
+            관리자 로그인
           </button>
           <p className="small muted">
             Keycloak 관리자 계정으로 안전하게 연결합니다.
@@ -474,7 +471,7 @@ function Workspace() {
     <div className="shell">
       <aside className={menuOpen ? "menu-open" : ""}>
         <button ref={menuButton} className="secondary mobile-menu" aria-expanded={menuOpen} aria-controls="workspace-menu"
-          disabled={busy} onClick={() => setMenuOpen(value => !value)}>{view.label} · {menuOpen ? "메뉴 닫기" : "메뉴 열기"}</button>
+          disabled={busy} onClick={() => setMenuOpen(value => !value)}><Icon name={menuOpen ? 'x' : 'menu'}/>{view.label} · {menuOpen ? "메뉴 닫기" : "메뉴 열기"}</button>
         <div id="workspace-menu" className="workspace-menu" onKeyDown={event => {
           if (event.key === "Escape") { setMenuOpen(false); menuButton.current?.focus(); }
         }}>
@@ -482,7 +479,7 @@ function Workspace() {
           <nav aria-label="관리 메뉴">
             {views.map(item => <button key={item.value} className={tab === item.value ? "nav active" : "nav"}
               disabled={busy} aria-current={tab === item.value ? "page" : undefined}
-              onClick={() => moveTo(item.value)}>{item.label}</button>)}
+              onClick={() => moveTo(item.value)}><Icon name={viewIcons[item.value]}/>{item.label}</button>)}
           </nav>
         </div>
         <div className="workspace-note">
@@ -514,12 +511,10 @@ function Workspace() {
               className="secondary"
               disabled={busy || loading}
               onClick={reload}
-            >
-              새로고침
-            </button>}
+             aria-label="새로고침" title="새로고침" data-tooltip="새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>}
             {tab === "projects" && !project && (
-              <button disabled={busy} onClick={() => open({ type: "project" })}>
-                프로젝트 만들기 <span aria-hidden="true">+</span>
+              <button disabled={busy} onClick={() => open({ type: "project" })}><Icon name="plus"/>
+                프로젝트 만들기
               </button>
             )}
           </div>
@@ -623,14 +618,14 @@ function Workspace() {
                 className="secondary"
                 disabled={busy || loading || offset === 0}
                 onClick={() => setOffset(offset - 20)}
-              >
+              ><Icon name="chevron-left"/>
                 이전
               </button>
               <button
                 className="secondary"
                 disabled={busy || loading || projects.length < 20}
                 onClick={() => setOffset(offset + 20)}
-              >
+              ><Icon name="chevron-right"/>
                 다음
               </button>
             </div>
@@ -638,11 +633,11 @@ function Workspace() {
         ) : (
           <>
             <div className="project-toolbar">
-              <button className="quiet" disabled={busy} onClick={() => chooseProject(null)}>
+              <button className="quiet" disabled={busy} onClick={() => chooseProject(null)}><Icon name="folders"/>
                 다른 프로젝트 선택
               </button>
               <div className="actions scope-caption">{tab !== "projects" && <strong>{project.name}</strong>}<State value={project.status} />
-                {tab !== "projects" && <button className="secondary" disabled={busy} onClick={() => moveTo("projects")}>프로젝트로 이동</button>}
+                {tab !== "projects" && <button className="secondary" disabled={busy} onClick={() => moveTo("projects")}><Icon name="folder"/>프로젝트로 이동</button>}
               </div>
             </div>
             {tab === "projects" && <SectionTabs id="project-section" label="프로젝트 기능" value={activeSection} disabled={busy}
@@ -661,7 +656,7 @@ function Workspace() {
                   className="secondary"
                   disabled={busy}
                   onClick={() => open({ type: "edit", project })}
-                >
+                ><Icon name="pencil"/>
                   이름 변경
                 </button>
                 <button
@@ -672,7 +667,7 @@ function Workspace() {
                   }
                   disabled={busy}
                   onClick={() => open({ type: "status", project })}
-                >
+                ><Icon name={project.status === 'ACTIVE' ? 'pause' : 'play'}/>
                   {project.status === "ACTIVE" ? "중지" : "재개"}
                 </button>
               </div>
@@ -697,7 +692,7 @@ function Workspace() {
                   DEV 또는 PROD 환경을 만들면 독립된 로그인 영역이 준비됩니다.
                 </p>
                 {tab === "projects" && <button className="secondary" disabled={busy || project.status !== "ACTIVE"}
-                  onClick={() => open({ type: "environment" })}>환경 만들기</button>}
+                  onClick={() => open({ type: "environment" })}><Icon name="plus"/>환경 만들기</button>}
               </div>
             ) : (
               <>
@@ -709,13 +704,13 @@ function Workspace() {
                   }}>{envs.map(item => <option key={item.id} value={item.id}>{item.code} ({item.kind})</option>)}</select></label>
                   {env && <State value={env.state} />}
                   {tab === "projects" && activeSection === "overview" && <button className="secondary"
-                    disabled={busy || project.status !== "ACTIVE"} onClick={() => open({ type: "environment" })}>환경 만들기</button>}
+                    disabled={busy || project.status !== "ACTIVE"} onClick={() => open({ type: "environment" })}><Icon name="plus"/>환경 만들기</button>}
                 </div>
                 {env && (
                   <>
                     {tab === "projects" && activeSection === "overview" && <ProjectOverview key={`overview:${env.id}:${refresh}`} environmentId={env.id}
                       ready={env.state === "READY"} disabled={busy} open={moveTo} />}
-                    {tab === "files" && !project.filesEnabled && <p className="warning">파일 서비스 사용이 꺼져 있습니다. <button className="secondary" onClick={()=>{moveTo("projects");setSection("settings");}}>프로젝트 설정으로</button></p>}
+                    {tab === "files" && !project.filesEnabled && <p className="warning">파일 서비스 사용이 꺼져 있습니다. <button className="secondary" onClick={()=>{moveTo("projects");setSection("settings");}}><Icon name="settings"/>프로젝트 설정으로</button></p>}
                     {tab === "files" && project.filesEnabled && <FileWorkspace key={`files:${env.id}:${refresh}`} environmentId={env.id}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"}
                       onBusyChange={setBusy} />}
@@ -764,7 +759,7 @@ function Workspace() {
                                 reload();
                               }, "반영 요청을 처리했습니다. 환경 상태를 확인해 주세요.")
                             }
-                          >
+                          ><Icon name="refresh-cw"/>
                             다시 반영
                           </button>
                         </div>
@@ -795,7 +790,7 @@ function Workspace() {
                         className="secondary"
                         disabled={busy}
                         onClick={() => open({ type: "environment", env })}
-                      >
+                      ><Icon name="settings"/>
                         설정 변경
                       </button>
                     </section>
@@ -857,8 +852,8 @@ function Workspace() {
                           onClick={() =>
                             open({ type: "issue", environmentId: env.id })
                           }
-                        >
-                          키 발급 +
+                        ><Icon name="key-round"/>
+                          키 발급
                         </button>
                       </div>
                       {keysLoading ? (
@@ -894,7 +889,7 @@ function Workspace() {
                                   busy || !!key.revoked_at || keyExpired(key)
                                 }
                                 onClick={() => open({ type: "revoke", key })}
-                              >
+                              ><Icon name="ban"/>
                                 {key.revoked_at
                                   ? "폐기됨"
                                   : keyExpired(key)
@@ -958,10 +953,8 @@ function Workspace() {
                       await navigator.clipboard.writeText(modal.secret);
                     }, "API 키를 복사했습니다.")
                   }
-                >
-                  복사
-                </button>
-                <button className="secondary" onClick={() => setModal(null)}>
+                 aria-label="복사" title="복사" data-tooltip="복사" data-icon-only="true"><Icon name="copy"/></button>
+                <button className="secondary" onClick={() => setModal(null)}><Icon name="check"/>
                   확인하고 닫기
                 </button>
               </div>
@@ -1160,7 +1153,7 @@ function Workspace() {
                       setModal(null);
                       setError("");
                     }}
-                  >
+                  ><Icon name="x"/>
                     취소
                   </button>
                   <button
@@ -1171,7 +1164,7 @@ function Workspace() {
                         ? "destructive"
                         : ""
                     }
-                  >
+                  ><Icon name="check"/>
                     {busy
                       ? "처리 중…"
                       : modal.type === "status"

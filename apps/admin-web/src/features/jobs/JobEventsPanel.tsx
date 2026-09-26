@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -76,7 +77,7 @@ export function JobEventsPanel({ jobId, jobState, environmentLabel, auto, paused
   }
   return <section className="job-events" aria-labelledby="job-events-title">
     <div className="section-line"><h4 id="job-events-title" ref={heading} tabIndex={-1}>이벤트 전달</h4>
-      <button className="secondary" disabled={paused || busy || loading} onClick={() => setReload(n => n + 1)}>전달 상태 새로고침</button></div>
+      <button className="secondary" disabled={paused || busy || loading} onClick={() => setReload(n => n + 1)} aria-label="전달 상태 새로고침" title="전달 상태 새로고침" data-tooltip="전달 상태 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="small muted">작업 결과를 알림 서비스에 전달한 기록입니다. 전달 완료는 수신 기록 저장을 뜻하며, 외부 이메일 발송 결과는 아닙니다.</p>
     {loading && <p role="status">전달 상태를 확인하는 중…</p>}
     {error && <p className="alert" role="alert">{error} 전달 상태 새로고침으로 다시 확인해 주세요.</p>}
@@ -95,7 +96,7 @@ export function JobEventsPanel({ jobId, jobState, environmentLabel, auto, paused
       </dl>
       {delivery.state === "PENDING" && <p className="small muted">전달 워커가 실행 중이면 자동으로 처리합니다. 대기가 계속되면 서버의 전달 설정과 연결 상태를 확인하세요.</p>}
       {delivery.state === "FAILED" && <button disabled={paused || busy || loading || !!error}
-        onClick={() => { setActionError(""); setConfirm(delivery); onDialogChange(true); }}>실패 이벤트 재전송</button>}
+        onClick={() => { setActionError(""); setConfirm(delivery); onDialogChange(true); }}><Icon name="send"/>실패 이벤트 재전송</button>}
       <details className="job-event-history"><summary>전달 시도 이력 · 최근 {attempts.length}건</summary>
         <p className="small muted">최신순으로 최대 100건을 표시합니다.</p>
         {attempts.length ? <ol className="job-attempts">{attempts.map(attempt => <li key={attempt.attempt}>
@@ -110,8 +111,8 @@ export function JobEventsPanel({ jobId, jobState, environmentLabel, auto, paused
       <p>이 작업의 결과 이벤트를 알림 서비스에 다시 전달합니다. 환경 설정 작업을 다시 실행하지 않습니다.</p>
       <p className="warning">원인을 해결한 뒤 진행하세요. 같은 이벤트 ID와 기존 이력을 유지하며 최대 5회 전달을 시도합니다. 이미 수신한 이벤트는 중복 처리하지 않습니다.</p>
       {actionError && <p className="alert" role="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}>돌아가기</button>
-        <button disabled={busy || !!actionError} onClick={() => void retry()}>{busy ? "접수 중…" : "재전송 접수"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}><Icon name="arrow-left"/>돌아가기</button>
+        <button disabled={busy || !!actionError} onClick={() => void retry()}><Icon name="send"/>{busy ? "접수 중…" : "재전송 접수"}</button></div>
     </Dialog>}
   </section>;
 }

@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import {useEffect,useRef,useState} from "react";
 import {fileApi,type FileInfo} from "./file-api";
 import {Dialog} from "../../shared/Dialog";
@@ -25,17 +26,17 @@ export function FileShares({file,environmentId,disabled,onBusyChange}:{file:File
   {file.visibility==='PUBLIC'?<p className="warning">공개 파일은 원본 URL로 누구나 볼 수 있습니다. 비밀번호로 보호하려면 목록에서 먼저 비공개로 변경해 주세요.</p>:<form className="file-share-form" onSubmit={e=>{e.preventDefault();void create();}}>
    <label>새 공유 비밀번호<input type="password" autoComplete="new-password" minLength={8} maxLength={64} required value={password} disabled={locked} aria-describedby="share-password-help" onChange={e=>setPassword(e.target.value)}/></label>
    <label>공유 기간<select value={days} disabled={locked} onChange={e=>setDays(e.target.value)}><option value="1">1일</option><option value="7">7일</option><option value="30">30일</option></select></label>
-   <button disabled={locked||loading||!data}>{busy?'처리 중…':'공유 링크 만들기'}</button>
+   <button disabled={locked||loading||!data}><Icon name="link"/>{busy?'처리 중…':'공유 링크 만들기'}</button>
    <p id="share-password-help" className="small muted">8~64자 · 비밀번호는 저장 후 다시 확인할 수 없습니다. 링크당 15분에 최대 10회 비밀번호를 확인할 수 있으며, 동시 사용 링크는 최대 10개입니다.</p>
   </form>}
   {!confirm&&error&&<p role="alert" className="alert">{error}</p>}{notice&&<p role="status" className="notice">{notice}</p>}
   <div ref={results} tabIndex={-1} role="group" aria-label="공유 링크 목록" aria-busy={loading}>
    {loading?<p role="status">공유 링크를 조회하는 중…</p>:data&&data.length===0?<p>아직 만든 공유 링크가 없습니다.</p>:data&&<><p className="small muted">사용 가능 링크 우선 · 최근 이력 포함 {data.length}개 · 최대 50개</p><ul className="file-url-list">{data.map(share=>{
     const state=share.state==='ACTIVE'&&Date.parse(share.expiresAt)<=Date.now()?'EXPIRED':share.state;
-    return <li key={share.shareId}><label><span>{states[state]}</span><span className="small muted">생성 {new Date(share.createdAt).toLocaleString('ko-KR')} · 만료 {new Date(share.expiresAt).toLocaleString('ko-KR')}</span><input aria-label="공유 URL" readOnly value={new URL(share.url,location.origin).href} onFocus={e=>e.target.select()}/></label>{state==='ACTIVE'&&<div className="actions"><button className="secondary" disabled={locked} onClick={()=>void copy(share.url)}>공유 링크 복사</button><a className="file-url-open" href={share.url} target="_blank" rel="noopener noreferrer">공유 화면 열기</a><button className="secondary danger" disabled={locked} onClick={()=>{setError('');setConfirm(share);}}>철회</button></div>}</li>;
+    return <li key={share.shareId}><label><span>{states[state]}</span><span className="small muted">생성 {new Date(share.createdAt).toLocaleString('ko-KR')} · 만료 {new Date(share.expiresAt).toLocaleString('ko-KR')}</span><input aria-label="공유 URL" readOnly value={new URL(share.url,location.origin).href} onFocus={e=>e.target.select()}/></label>{state==='ACTIVE'&&<div className="actions"><button className="secondary" disabled={locked} onClick={()=>void copy(share.url)} aria-label="공유 링크 복사" title="공유 링크 복사" data-tooltip="공유 링크 복사" data-icon-only="true"><Icon name="copy"/></button><a className="file-url-open" href={share.url} target="_blank" rel="noopener noreferrer"><Icon name="external-link"/>공유 화면 열기</a><button className="secondary danger" disabled={locked} onClick={()=>{setError('');setConfirm(share);}}><Icon name="ban"/>철회</button></div>}</li>;
    })}</ul></>}
   </div>
-  <button className="secondary" disabled={locked||loading} onClick={()=>void load()}>공유 목록 새로고침</button>
-  {confirm&&<Dialog title="공유 링크 철회" busy={busy} close={()=>setConfirm(null)}><p>이 링크와 비밀번호로 발급한 파일·영상 주소의 접근이 차단됩니다. 이미 내려받은 내용은 회수되지 않습니다.</p><p className="small">생성 {new Date(confirm.createdAt).toLocaleString('ko-KR')}</p>{error&&<p role="alert" className="alert">{error}</p>}<button className="secondary danger" disabled={busy} onClick={()=>void revoke()}>공유 링크 철회</button></Dialog>}
+  <button className="secondary" disabled={locked||loading} onClick={()=>void load()} aria-label="공유 목록 새로고침" title="공유 목록 새로고침" data-tooltip="공유 목록 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
+  {confirm&&<Dialog title="공유 링크 철회" busy={busy} close={()=>setConfirm(null)}><p>이 링크와 비밀번호로 발급한 파일·영상 주소의 접근이 차단됩니다. 이미 내려받은 내용은 회수되지 않습니다.</p><p className="small">생성 {new Date(confirm.createdAt).toLocaleString('ko-KR')}</p>{error&&<p role="alert" className="alert">{error}</p>}<button className="secondary danger" disabled={busy} onClick={()=>void revoke()}><Icon name="ban"/>공유 링크 철회</button></Dialog>}
  </details>;
 }

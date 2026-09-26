@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -37,7 +38,7 @@ export function JobBacklogSettings({ environmentId, environmentLabel, disabled, 
   }
   return <section className="job-panel" aria-labelledby="backlog-settings-title">
     <div className="section-line"><h3 id="backlog-settings-title">작업 대기 적체 경보</h3><button ref={refresh} className="secondary" disabled={disabled || loading || busy || confirm}
-      onClick={() => { setNotice(""); setReload(v => v + 1); }}>설정 새로고침</button></div>
+      onClick={() => { setNotice(""); setReload(v => v + 1); }} aria-label="설정 새로고침" title="설정 새로고침" data-tooltip="설정 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="small muted">{environmentLabel}의 환경 반영 작업을 감시합니다. 재시도 예약 시간이 남은 작업과 실행 중 작업은 제외합니다.</p>
     {loading && <p role="status">적체 경보 설정을 불러오는 중…</p>}{error && <p className="alert" role="alert">{error} 설정 새로고침으로 다시 확인해 주세요.</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
@@ -59,8 +60,8 @@ export function JobBacklogSettings({ environmentId, environmentLabel, disabled, 
         </fieldset>
         <p className="small muted">검사가 90초 넘게 끊기면 연속 횟수를 새로 셉니다. 해소는 대기 적체가 풀렸다는 뜻이며 작업 성공을 보장하지 않습니다.</p>
         <p className="small muted">이메일은 운영 알림의 수신 설정을 따릅니다. 감시만 켜면 알림 목록에 기록되며, 이메일 수신을 켠 경우에만 발송합니다. 개발 환경에서는 모의 발송합니다.</p>
-        <div className="form-actions"><button className="secondary" type="button" disabled={disabled || busy || confirm} onClick={openAlerts}>운영 알림 보기</button>
-          <button ref={submit} disabled={disabled || busy || !changed || !!actionError}>적체 경보 설정 저장</button></div>
+        <div className="form-actions"><button className="secondary" type="button" disabled={disabled || busy || confirm} onClick={openAlerts}><Icon name="bell"/>운영 알림 보기</button>
+          <button ref={submit} disabled={disabled || busy || !changed || !!actionError}><Icon name="save"/>적체 경보 설정 저장</button></div>
         {changed && <p className="small muted" role="status">저장하지 않은 변경이 있습니다. 이동하거나 새로고침하면 사라집니다.</p>}
       </form>
       {saved.updatedAt && <details className="job-event-history"><summary>최근 설정 변경 기록</summary><dl>
@@ -72,8 +73,8 @@ export function JobBacklogSettings({ environmentId, environmentLabel, disabled, 
       <p><strong>{environmentLabel}</strong></p><p>{draft.enabled ? `${draft.thresholdSeconds}초 이상 대기를 ${draft.consecutiveChecks}회 연속 확인하면 알립니다.` : "적체 감시를 끕니다."}</p>
       <p>현재 열린 적체는 ‘감시 종료’로 남기고 연속 횟수를 초기화합니다. 실제 복구로 표시하거나 복구 이메일을 보내지 않습니다. 이미 발송 중인 이메일은 회수할 수 없습니다.</p>
       {actionError && <p className="alert" role="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}>돌아가기</button>
-        <button disabled={busy || !!actionError} onClick={() => void save()}>{busy ? "저장 중…" : "설정 저장"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}><Icon name="arrow-left"/>돌아가기</button>
+        <button disabled={busy || !!actionError} onClick={() => void save()}><Icon name="save"/>{busy ? "저장 중…" : "설정 저장"}</button></div>
     </Dialog>}
   </section>;
 }

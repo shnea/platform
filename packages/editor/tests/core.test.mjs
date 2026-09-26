@@ -5,6 +5,9 @@ import {JSDOM} from 'jsdom';
 const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'https://editor.example',pretendToBeVisual:true});
 for(const key of ['window','document','navigator','Node','HTMLElement','HTMLSelectElement','Element','MutationObserver','DOMParser','getComputedStyle'])Object.defineProperty(globalThis,key,{configurable:true,value:typeof dom.window[key]==='function'&&key==='getComputedStyle'?dom.window[key].bind(dom.window):dom.window[key]});
 globalThis.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);globalThis.cancelAnimationFrame=dom.window.cancelAnimationFrame.bind(dom.window);
+// jsdom has no layout; real selection scrolling is covered by browser checks.
+dom.window.Range.prototype.getClientRects=()=>[];
+dom.window.Range.prototype.getBoundingClientRect=()=>({left:0,right:0,top:0,bottom:0,width:0,height:0});
 const {emptyDocument,parseDocument,fromMarkdown,createEditorCore,renderViewer,EditorError}=await import('@shnea/editor');
 const {mountEditor}=await import('@shnea/editor/ui');
 after(()=>dom.window.close());
@@ -165,6 +168,38 @@ test('공통 UI의 슬래시 삽입·닫기·문서 교체와 두 인스턴스�
  a.setValue(fromMarkdown('문서'));assert.equal(a.undo(),false);assert.deepEqual(b.getValue(),parseDocument(null));
  a.destroy();a.destroy();b.destroy();assert.equal(one.childElementCount,0);one.remove();two.remove();
 });
+test('삽입 메뉴 버튼은 선택 글자와 중간 커서를 유지하며 읽기 전용에는 숨긴다',()=>{
+ const node=target(),editor=mountEditor({element:node,value:fromMarkdown('앞 선택 뒤')}),body=node.querySelector('.tiptap'),button=node.querySelector('.se-mobile-actions button');
+ const select=(from,to=from)=>{body.focus();const range=document.createRange();range.setStart(body.querySelector('p').firstChild,from);range.setEnd(body.querySelector('p').firstChild,to);window.getSelection().removeAllRanges();window.getSelection().addRange(range);button.dispatchEvent(new window.Event('pointerdown',{bubbles:true,cancelable:true}));button.click();};
+ select(2,4);assert.equal(button.getAttribute('aria-expanded'),'true');assert.equal(document.activeElement,node.querySelector('.se-menu-header button'));
+ node.querySelector('[id$="-bold"]').click();assert.equal(body.querySelector('strong').textContent,'선택');assert.equal(body.textContent,'앞 선택 뒤');assert.equal(editor.undo(),true);
+ editor.setValue(fromMarkdown('앞뒤'));select(1);node.querySelector('[id$="-table"]').click();
+ assert.deepEqual(editor.getValue().content.content.map(item=>item.type),['paragraph','table','paragraph']);assert.equal(body.firstElementChild.textContent,'앞');assert.equal(body.lastElementChild.textContent,'뒤');
+ assert.equal(body.querySelectorAll('table').length,1);assert.equal(editor.undo(),true);assert.equal(body.textContent,'앞뒤');
+ button.click();node.querySelector('.se-menu-header button').click();assert.equal(document.activeElement,button);assert.equal(button.getAttribute('aria-expanded'),'false');editor.destroy();node.remove();
+ const read=target(),reader=mountEditor({element:read,editable:false});assert.equal(read.querySelector('.se-mobile-actions').hidden,true);read.querySelector('.se-mobile-actions button').click();assert.equal(read.querySelector('[role=dialog]').hidden,true);reader.destroy();read.remove();
+});
+
+test('모바일 삽입 메뉴는 첨부·표를 먼저 보여주고 검색·취소와 문서 교체를 유지한다',()=>{
+ const previous=window.innerWidth;Object.defineProperty(window,'innerWidth',{configurable:true,value:390});
+ const node=target(),editor=mountEditor({element:node}),button=node.querySelector('.se-mobile-actions button');
+ try{
+  button.click();assert.deepEqual([...node.querySelectorAll('[role=option]')].slice(0,5).map(el=>el.querySelector('span').textContent),['이미지 업로드','영상 업로드','파일 업로드','오디오 업로드','표 삽입']);
+  const search=node.querySelector('[role=combobox]');search.value='없는명령';search.dispatchEvent(new window.Event('input'));assert.equal(node.querySelectorAll('[role=option]').length,0);
+  search.value='table';search.dispatchEvent(new window.Event('input'));search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.equal(node.querySelectorAll('table').length,1);
+  button.click();editor.setValue(null);assert.equal(button.getAttribute('aria-expanded'),'false');assert.equal(node.querySelector('[role=dialog]').hidden,true);
+ }finally{editor.destroy();node.remove();Object.defineProperty(window,'innerWidth',{configurable:true,value:previous});}
+});
+
+test('모바일 키보드로 보이는 화면이 줄면 삽입 버튼을 위로 이동하고 해제한다',()=>{
+ const previous=window.innerWidth,viewport=Object.getOwnPropertyDescriptor(window,'visualViewport');
+ Object.defineProperty(window,'innerWidth',{configurable:true,value:390});
+ const visible=new window.EventTarget();Object.assign(visible,{width:390,height:400,offsetLeft:0,offsetTop:20});Object.defineProperty(window,'visualViewport',{configurable:true,value:visible});
+ const node=target(),editor=mountEditor({element:node});
+ try{assert.equal(node.querySelector('.se-mobile-actions').style.bottom,`${window.innerHeight-420}px`);visible.height=window.innerHeight;visible.offsetTop=0;visible.dispatchEvent(new window.Event('resize'));assert.equal(node.querySelector('.se-mobile-actions').style.bottom,'0px');}
+ finally{editor.destroy();node.remove();Object.defineProperty(window,'innerWidth',{configurable:true,value:previous});if(viewport)Object.defineProperty(window,'visualViewport',viewport);else delete window.visualViewport;}
+});
+
 test('원문 붙여넣기 선택은 변환을 끄고 읽기 문서는 편집 명령을 거부한다',()=>{
  const node=target(),editor=createEditorCore({element:node});editor.setPasteMode('text');
  const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{getData:type=>type==='text/plain'?'# 원문':'',files:[]}});node.querySelector('[contenteditable]').dispatchEvent(event);

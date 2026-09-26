@@ -63,7 +63,7 @@ class FileSharesController {
               <label for="password">공유 비밀번호</label>
               <input id="password" name="password" type="password" required minlength="8" maxlength="64" autocomplete="current-password" aria-describedby="password-help">
               <p id="password-help" class="hint">전달받은 비밀번호 8~64자를 입력해 주세요.</p>
-              <button type="submit">파일 열기</button>
+              <button type="submit"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>파일 열기</button>
             </form>
             <p class="hint foot">파일 보기와 다운로드가 허용됩니다. 인증은 최대 2시간 유지되며, 링크가 만료되거나 철회되면 다시 열 수 없습니다.</p>
             """.formatted(base);

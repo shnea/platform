@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import {useEffect,useState} from "react";
 import {fileApi,type FileInfo} from "./file-api";
 type Settings={title:string;description:string;showThumbnail:boolean;revision:number};
@@ -10,13 +11,13 @@ export function FilePublicShare({file,environmentId,disabled,onBusyChange}:{file
  if(file.visibility!=="PUBLIC")return null;
  return <details className="file-share-panel" onToggle={e=>setOpen(e.currentTarget.open)}><summary>공개 링크·공유 미리보기</summary>
  <p className="small muted">카카오톡 등에 보낼 링크입니다. 제목·설명과 대표 이미지가 공개되며, 비공개 전환·삭제·파일 서비스 사용 중지 시 접근을 차단합니다. 외부에 저장된 카드는 즉시 회수되지 않습니다.</p>
- <label>공개 공유 URL<input readOnly value={url} onFocus={e=>e.target.select()}/></label><div className="actions"><button className="secondary" onClick={()=>void navigator.clipboard.writeText(url).then(()=>setNotice("공개 공유 URL을 복사했습니다.")).catch(()=>setNotice("URL을 선택해 직접 복사해 주세요."))}>공유 URL 복사</button><a href={url} target="_blank" rel="noopener noreferrer">공유 페이지 열기</a></div>
+ <label>공개 공유 URL<input readOnly value={url} onFocus={e=>e.target.select()}/></label><div className="actions"><button className="secondary" onClick={()=>void navigator.clipboard.writeText(url).then(()=>setNotice("공개 공유 URL을 복사했습니다.")).catch(()=>setNotice("URL을 선택해 직접 복사해 주세요."))} aria-label="공유 URL 복사" title="공유 URL 복사" data-tooltip="공유 URL 복사" data-icon-only="true"><Icon name="copy"/></button><a href={url} target="_blank" rel="noopener noreferrer"><Icon name="external-link"/>공유 페이지 열기</a></div>
  {loading&&<p role="status">공유 설정을 불러오는 중…</p>}{error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
- {error&&<button className="secondary" disabled={busy||loading} onClick={()=>void load()}>설정 다시 조회</button>}
+ {error&&<button className="secondary" disabled={busy||loading} onClick={()=>void load()} aria-label="설정 다시 조회" title="설정 다시 조회" data-tooltip="설정 다시 조회" data-icon-only="true"><Icon name="refresh-cw"/></button>}
  {data&&<form onSubmit={e=>{e.preventDefault();void save();}}><fieldset disabled={busy||disabled||loading}><legend className="sr-only">공유 카드 내용</legend>
  <label>공유 제목<input maxLength={120} value={data.title} placeholder={file.originalName} onChange={e=>setData({...data,title:e.target.value})}/><span className="hint">비워 두면 파일 이름을 사용합니다. 최대 120자.</span></label>
  <label>공유 설명<input maxLength={300} value={data.description} onChange={e=>setData({...data,description:e.target.value})}/><span className="hint">최대 300자. 비워 두면 기본 안내를 표시합니다.</span></label>
  <label className="checkbox"><input type="checkbox" checked={data.showThumbnail} onChange={e=>setData({...data,showThumbnail:e.target.checked})}/>파일 썸네일을 대표 이미지로 사용</label><p className="small muted">썸네일이 없거나 선택을 끄면 공통 파일 이미지를 표시합니다.</p>
- <button type="submit">{busy?"저장 중…":"공유 미리보기 저장"}</button></fieldset></form>}
+ <button type="submit"><Icon name="save"/>{busy?"저장 중…":"공유 미리보기 저장"}</button></fieldset></form>}
  </details>;
 }

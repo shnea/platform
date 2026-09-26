@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/auth";
 import { MockResetPanel } from "./MockResetPanel";
@@ -132,7 +133,7 @@ export function MockLoginPanel({
               ))}
             </select>
           </label>
-          <button type="submit">{busy ? "실행 중…" : "테스트 실행"}</button>
+          <button type="submit"><Icon name="play"/>{busy ? "실행 중…" : "테스트 실행"}</button>
         </fieldset>
       </form>
       {error && (
@@ -178,7 +179,7 @@ export function MockLoginPanel({
             className="secondary"
             type="button"
             onClick={() => setReport(null)}
-          >
+          ><Icon name="trash-2"/>
             결과 지우기
           </button>
         </div>

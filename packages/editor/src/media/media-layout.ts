@@ -1,3 +1,4 @@
+import {createIcon,decorateAction} from '../icons/index.js';
 export type MediaLayout={widthPercent:number;align:'left'|'center'|'right'};
 export function mediaStyle(layout:MediaLayout){return `--se-media-width:${layout.widthPercent}%;margin-left:${layout.align==='left'?'0':'auto'};margin-right:${layout.align==='right'?'0':'auto'}`;}
 
@@ -6,10 +7,10 @@ export function mountMediaLayout(element:HTMLElement,read:()=>MediaLayout,enable
  const doc=element.ownerDocument,win=doc.defaultView!;
  const controls=doc.createElement('div');controls.className='se-media-layout-controls';controls.contentEditable='false';controls.setAttribute('aria-label','미디어 배치');
  const alignments=doc.createElement('div');alignments.className='se-media-align';
- for(const [align,label] of [['left','좌측'],['center','가운데'],['right','우측']] as const){const button=doc.createElement('button');button.type='button';button.textContent=label;button.dataset.align=align;button.setAttribute('aria-label',`미디어 ${label} 정렬`);button.addEventListener('click',()=>{if(enabled())commit({...read(),align});});alignments.append(button);}
- const reset=doc.createElement('button');reset.type='button';reset.textContent='전체 너비';reset.addEventListener('click',()=>{if(enabled())commit({...read(),widthPercent:100});});controls.append(alignments,reset);
+ for(const [align,label] of [['left','좌측'],['center','가운데'],['right','우측']] as const){const button=doc.createElement('button');button.type='button';decorateAction(button,align==='left'?'align-start-horizontal':align==='right'?'align-end-horizontal':'align-center-horizontal',`미디어 ${label} 정렬`,true);button.dataset.align=align;button.setAttribute('aria-label',`미디어 ${label} 정렬`);button.addEventListener('click',()=>{if(enabled())commit({...read(),align});});alignments.append(button);}
+ const reset=doc.createElement('button');reset.type='button';decorateAction(reset,'maximize','전체 너비',true);reset.addEventListener('click',()=>{if(enabled())commit({...read(),widthPercent:100});});controls.append(alignments,reset);
  const handle=doc.createElement('button');handle.type='button';handle.className='se-media-resize';handle.contentEditable='false';handle.setAttribute('role','slider');handle.setAttribute('aria-label','미디어 너비 조절');handle.setAttribute('aria-valuemin','25');handle.setAttribute('aria-valuemax','100');handle.setAttribute('aria-orientation','horizontal');handle.title='드래그하거나 방향키로 너비 조절';
- const icon=doc.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','20');icon.setAttribute('height','20');icon.setAttribute('aria-hidden','true');const path=doc.createElementNS(icon.namespaceURI,'path');path.setAttribute('d','M7 17L17 7M12 17h5v-5');icon.append(path);handle.append(icon);
+ handle.append(createIcon(doc,'move-diagonal-2'));
  element.append(controls,handle);
  let drag:{id:number;x:number;width:number;container:number;value:MediaLayout}|undefined;
  const clamp=(width:number)=>Math.max(25,Math.min(100,Math.round(width)));

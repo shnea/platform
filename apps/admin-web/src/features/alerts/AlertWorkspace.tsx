@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -54,7 +55,7 @@ function EmailSettings({ environmentId, environmentLabel, disabled, onBusyChange
     saved.suppressionMinutes !== draft.suppressionMinutes || saved.recoveryEnabled !== draft.recoveryEnabled);
   return <section className="job-panel" aria-labelledby="alert-settings-title">
     <div className="section-line"><h3 id="alert-settings-title">이메일 수신 설정</h3><button className="secondary" disabled={disabled || loading || busy}
-      onClick={() => { setNotice(""); setReload(v => v + 1); }}>설정 새로고침</button></div>
+      onClick={() => { setNotice(""); setReload(v => v + 1); }} aria-label="설정 새로고침" title="설정 새로고침" data-tooltip="설정 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="small muted">{environmentLabel}의 환경 반영 작업 실패·복구 알림을 받을 주소입니다. 알림 목록은 이메일 사용 여부와 관계없이 보관합니다.</p>
     {notice && <p className="notice" role="status">{notice}</p>}{error && <p className="alert" role="alert">{error} 설정 새로고침으로 다시 확인해 주세요.</p>}
     {loading && <p role="status">수신 설정을 불러오는 중…</p>}
@@ -78,7 +79,7 @@ function EmailSettings({ environmentId, environmentLabel, disabled, onBusyChange
         <div><dt>변경 시각</dt><dd>{date(saved.updatedAt)}</dd></div><div><dt>관리자 ID</dt><dd className="identifier">{saved.updatedBy}</dd></div>
         <div><dt>요청 ID</dt><dd className="identifier">{saved.requestId}</dd></div><div><dt>설정 버전</dt><dd>{saved.revision}</dd></div>
       </dl></details>}
-      <div className="form-actions"><button ref={submit} disabled={disabled || busy || !changed}>수신 설정 저장</button></div>
+      <div className="form-actions"><button ref={submit} disabled={disabled || busy || !changed}><Icon name="save"/>수신 설정 저장</button></div>
       {changed && <p className="small muted" role="status">저장하지 않은 변경이 있습니다. 다른 화면으로 이동하면 사라집니다.</p>}
     </form>}
     {confirm && draft && <Dialog title="이메일 수신 설정 저장" busy={busy} close={close}>
@@ -89,8 +90,8 @@ function EmailSettings({ environmentId, environmentLabel, disabled, onBusyChange
         : draft.deliveryMode === "MOCK" ? "개발 환경에서는 모의 발송만 기록합니다." : "운영 환경에서는 설정한 주소로 이메일이 발송됩니다."}</p>
       <p className="small muted">저장하면 기존 발송 대기는 취소합니다. 이미 발송 중인 이메일은 취소할 수 없으며, 과거 알림을 다시 보내지 않습니다.</p>
       {actionError && <p className="alert" role="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}>돌아가기</button>
-        <button disabled={busy || !!actionError} onClick={() => void save()}>{busy ? "저장 중…" : "설정 저장"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}><Icon name="arrow-left"/>돌아가기</button>
+        <button disabled={busy || !!actionError} onClick={() => void save()}><Icon name="save"/>{busy ? "저장 중…" : "설정 저장"}</button></div>
     </Dialog>}
   </section>;
 }
@@ -106,7 +107,7 @@ function EmailDeliveries({ environmentId, disabled }: Props) {
   }, [environmentId, query]);
   return <section className="job-panel" aria-labelledby="alert-deliveries-title">
     <div className="section-line"><h3 id="alert-deliveries-title">이메일 발송 이력</h3><button className="secondary" disabled={disabled || loading}
-      onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))}>발송 이력 새로고침</button></div>
+      onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))} aria-label="발송 이력 새로고침" title="발송 이력 새로고침" data-tooltip="발송 이력 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="small muted">발송사 접수는 수신함 도착을 보장하지 않습니다. 결과가 불확실한 이메일은 중복 발송을 막기 위해 자동 재전송하지 않습니다.</p>
     {loading && <p role="status">발송 이력을 불러오는 중…</p>}{error && <p className="alert" role="alert">{error} 새로고침으로 다시 확인해 주세요.</p>}
     {rows && (rows.length ? <ul className="job-attempts">{rows.slice(0, 20).map(row => <li key={row.eventId}>
@@ -120,8 +121,8 @@ function EmailDeliveries({ environmentId, disabled }: Props) {
       </dl></details>
     </li>)}</ul> : <p className="empty">발송 이력이 없습니다. 수신 설정을 켠 뒤 발생한 알림부터 기록합니다.</p>)}
     <div className="pagination" aria-label="발송 이력 페이지"><button className="secondary" disabled={disabled || loading || !query.offset}
-      onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}>이전 발송</button><span className="small">페이지 {query.offset / 20 + 1}</span>
+      onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}><Icon name="chevron-left"/>이전 발송</button><span className="small">페이지 {query.offset / 20 + 1}</span>
       <button className="secondary" disabled={disabled || loading || !rows || rows.length <= 20}
-        onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}>다음 발송</button></div>
+        onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}><Icon name="chevron-right"/>다음 발송</button></div>
   </section>;
 }

@@ -35,7 +35,11 @@
 .file-preview audio { width: min(100%,600px); }
 .file-video-player { width: 100%; min-width: 0; }
 .file-video-player video { display: block; width: 100%; max-height: 65vh; margin: 0 auto; background: var(--bg); }
-.file-video-frame { position: relative; background: #000; }
+.file-video-frame { position: relative; background: #000; container-type: inline-size; }
+/* Reserve the editor's remove corner; compact players keep quality available through its icon. */
+.se-media-frame .file-video-tools { right: 60px; }
+.file-video-frame:is(:fullscreen,.is-expanded) .file-video-tools { right: 8px; }
+@container (max-width:240px) { .file-video-settings > button > span { display: none; } }
 .file-video-frame video::-webkit-media-controls-fullscreen-button { display: none; }
 .file-video-tools { position: absolute; top: 8px; right: 8px; display: flex; align-items: start; gap: 8px; }
 .file-video-tools button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 8px; border: 1px solid #59645f; border-radius: 6px; background: #14201c; color: #f0f4ed; }

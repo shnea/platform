@@ -1,3 +1,4 @@
+import {decorateAction} from '../icons/index.js';
 import {mountImageViewer} from '../viewer/image-viewer.js';
 export type AttachmentKind='file'|'image'|'video'|'audio';
 export type AttachmentRef={fileId:string;scope:string;kind:AttachmentKind;name:string;size:number};
@@ -18,10 +19,10 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
  const status=doc.createElement('p');status.className='sa-status';status.setAttribute('role','status');status.textContent='파일 정보를 불러오는 중…';
  const content=doc.createElement('div');content.className='sa-content';
  const actions=doc.createElement('div');actions.className='sa-actions';
- const download=doc.createElement('a');download.textContent='다운로드';download.rel='noreferrer';download.hidden=true;
- const original=doc.createElement('a');original.textContent='원본 보기';original.target='_blank';original.rel='noopener noreferrer';original.hidden=true;
- const retry=doc.createElement('button');retry.type='button';retry.textContent='다시 조회';retry.hidden=true;retry.addEventListener('click',()=>void load());
- const open=doc.createElement('button');open.type='button';open.textContent=file.kind==='video'?'영상 재생':'미리보기';open.hidden=true;open.setAttribute('aria-expanded','false');
+ const download=doc.createElement('a');decorateAction(download,'download','다운로드');download.rel='noreferrer';download.hidden=true;
+ const original=doc.createElement('a');decorateAction(original,'external-link','원본 보기');original.target='_blank';original.rel='noopener noreferrer';original.hidden=true;
+ const retry=doc.createElement('button');retry.type='button';decorateAction(retry,'refresh-cw','다시 조회');retry.hidden=true;retry.addEventListener('click',()=>void load());
+ const open=doc.createElement('button');open.type='button';decorateAction(open,file.kind==='video'?'play':'eye',file.kind==='video'?'영상 재생':'미리보기');open.hidden=true;open.setAttribute('aria-expanded','false');
  const media=file.kind==='image'||file.kind==='video';heading.hidden=media;
  actions.append(open,original,download,retry);root.append(heading,status,content,actions);
  let disposed=false,timer:ReturnType<typeof setTimeout>|undefined,controller:AbortController|undefined,data:AttachmentViews|undefined,expanded=file.kind==='image'||file.kind==='audio',key='',cleanup:(()=>void)|undefined,video:ReturnType<NonNullable<AttachmentAdapter['video']>>|undefined;
@@ -46,14 +47,14 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
    if(expanded&&data.streamUrl){if(adapter?.video)video=adapter.video(content,data);else {const iframe=doc.createElement('iframe');iframe.src=safeURL(data.viewerUrl,doc);iframe.title=`${file.name} 영상 재생`;iframe.allowFullscreen=true;iframe.referrerPolicy='no-referrer';content.append(iframe);}}
    else {
     if(data.thumbnailUrl){const poster=doc.createElement('img');poster.src=safeURL(data.thumbnailUrl,doc);poster.alt=`${file.name} 영상 썸네일`;poster.loading='lazy';content.append(poster);}
-    if(data.streamUrl){const play=doc.createElement('button');play.type='button';play.className='sa-video-play';play.textContent='재생';play.setAttribute('aria-label',`${file.name} 영상 재생`);play.addEventListener('click',()=>{expanded=true;render();});content.append(play);}
+    if(data.streamUrl){const play=doc.createElement('button');play.type='button';play.className='sa-video-play';decorateAction(play,'play',`${file.name} 영상 재생`,true);play.setAttribute('aria-label',`${file.name} 영상 재생`);play.addEventListener('click',()=>{expanded=true;render();});content.append(play);}
    }
   }else if(file.kind==='audio'&&data.kind==='AUDIO'&&data.previewUrl){const audio=doc.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=safeURL(data.previewUrl,doc);audio.addEventListener('error',()=>{status.textContent='오디오를 재생하지 못했습니다. 다시 조회하거나 원본을 내려받아 주세요.';retry.hidden=false;});content.append(audio);}
   else if(expanded&&data.previewUrl&&data.state==='READY'){
    const iframe=doc.createElement('iframe');iframe.src=safeURL(data.viewerUrl,doc);iframe.title=`${file.name} 미리보기`;iframe.referrerPolicy='no-referrer';content.append(iframe);
   }
  }
- open.addEventListener('click',()=>{expanded=!expanded;open.textContent=expanded?'미리보기 닫기':file.kind==='video'?'영상 재생':'미리보기';open.setAttribute('aria-expanded',String(expanded));render();});
+ open.addEventListener('click',()=>{expanded=!expanded;decorateAction(open,expanded?'x':file.kind==='video'?'play':'eye',expanded?'미리보기 닫기':file.kind==='video'?'영상 재생':'미리보기');open.setAttribute('aria-expanded',String(expanded));render();});
  async function load(){
   if(disposed)return;clearTimeout(timer);controller?.abort();const request=controller=new AbortController();retry.disabled=true;
   if(!adapter){status.textContent='파일 조회 연결이 필요합니다.';return;}

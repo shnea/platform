@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../shared/api-error";
 import { Dialog } from "../../shared/Dialog";
@@ -201,13 +202,13 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
   return <section className="file-workspace" aria-label="파일 관리">
     <SectionTabs id="file-section" label="파일 작업" value={tab} onChange={value=>{setTab(value);setDetail(null);}} disabled={mutating||childBusy}
       items={[{ value: "list", label: "파일 목록" }, { value: "uploads", label: pending.length ? `업로드·재개 (${pending.length})` : "업로드·재개" },{value:"retention",label:"보존 정책"}]} />
-    {error && !confirm && <p className="alert" role="alert">{error} <button className="secondary" disabled={busy || loading} onClick={() => void load()}>다시 조회</button></p>}
+    {error && !confirm && <p className="alert" role="alert">{error} <button className="secondary" disabled={busy || loading} onClick={() => void load()} aria-label="다시 조회" title="다시 조회" data-tooltip="다시 조회" data-icon-only="true"><Icon name="refresh-cw"/></button></p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     <div id="file-section-panel" role="tabpanel" aria-labelledby={`file-section-${tab}`}>
       {tab === "retention" ? <RetentionPanel environmentId={environmentId} environmentLabel={environmentLabel} onBusyChange={setChildBusy} onChanged={()=>void load()} /> : tab === "list" && detail ? <FileDetails key={detail.fileId} file={detail} onOpen={setDetail} environmentId={environmentId} policies={policies} onBusyChange={setChildBusy} onChanged={()=>void load()} onClose={()=>{const id=detail.fileId;setDetail(null);void load().then(()=>requestAnimationFrame(()=>document.getElementById(`file-detail-${id}`)?.focus()));}} /> : tab === "list" ? <>
         <div className="section-line"><h3>저장된 파일</h3><div className="actions">
-          <button className="secondary" disabled={busy || loading} onClick={() => void load()}>목록 새로고침</button>
-          <button disabled={mutating} onClick={() => setTab("uploads")}>파일 올리기</button>
+          <button className="secondary" disabled={busy || loading} onClick={() => void load()} aria-label="목록 새로고침" title="목록 새로고침" data-tooltip="목록 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
+          <button disabled={mutating} onClick={() => setTab("uploads")}><Icon name="upload"/>파일 올리기</button>
         </div></div>
         <p className="small muted">상세·보기에서 썸네일·문서·영상과 원본, 용도별 URL을 확인하세요. 비공개 파일은 권한을 확인한 뒤 임시 URL을 발급합니다.</p>
         {loading && <p role="status">파일 목록을 불러오는 중…</p>}
@@ -217,35 +218,35 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
             <div className="file-description"><strong>{file.originalName}</strong><span className="small muted">{fileSize(file.size)} · {date(file.createdAt)} 업로드</span>
               <span className="small">{file.visibility === "PUBLIC" ? "공개 · 링크로 접근" : "비공개 · 인증 필요"} · 보존 {file.retentionCode}</span></div>
             <div className="actions file-actions">
-              <button id={`file-detail-${file.fileId}`} className="secondary" disabled={busy || loading || !!error} onClick={()=>{setDetail(file);setNotice("");}} aria-label={`${file.originalName} 상세·보기`}>상세·보기</button>
-              <button className="secondary" disabled={busy || loading || !!error} onClick={() => void download(file)} aria-label={`${file.originalName} 다운로드`}>다운로드</button>
-              <button className="quiet" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "visibility", file }); }} aria-label={`${file.originalName} 공개 범위 변경`}>공개 범위</button>
-              <button className="quiet danger" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "delete", file }); }} aria-label={`${file.originalName} 삭제`}>삭제</button>
+              <button id={`file-detail-${file.fileId}`} className="secondary" disabled={busy || loading || !!error} onClick={()=>{setDetail(file);setNotice("");}} aria-label={`${file.originalName} 상세·보기`} title="상세·보기" data-tooltip="상세·보기" data-icon-only="true"><Icon name="eye"/></button>
+              <button className="secondary" disabled={busy || loading || !!error} onClick={() => void download(file)} aria-label={`${file.originalName} 다운로드`} title="다운로드" data-tooltip="다운로드" data-icon-only="true"><Icon name="download"/></button>
+              <button className="quiet" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "visibility", file }); }} aria-label={`${file.originalName} 공개 범위 변경`}><Icon name="globe"/>공개 범위</button>
+              <button className="quiet danger" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "delete", file }); }} aria-label={`${file.originalName} 삭제`}><Icon name="trash-2"/>삭제</button>
             </div>
           </li>)}
         </ul>
-        <div className="pagination"><button className="secondary" disabled={busy || loading || offset === 0} onClick={() => void load(offset - 20)}>이전 파일</button>
-          <span className="small muted">{Math.floor(offset / 20) + 1}페이지</span><button className="secondary" disabled={busy || loading || files.length < 20} onClick={() => void load(offset + 20)}>다음 파일</button></div>
+        <div className="pagination"><button className="secondary" disabled={busy || loading || offset === 0} onClick={() => void load(offset - 20)}><Icon name="chevron-left"/>이전 파일</button>
+          <span className="small muted">{Math.floor(offset / 20) + 1}페이지</span><button className="secondary" disabled={busy || loading || files.length < 20} onClick={() => void load(offset + 20)}><Icon name="chevron-right"/>다음 파일</button></div>
       </> : <>
-        <div className="section-line"><h3>파일 업로드</h3><button className="secondary" disabled={busy || loading} onClick={() => void load()}>재개 목록 조회</button></div>
+        <div className="section-line"><h3>파일 업로드</h3><button className="secondary" disabled={busy || loading} onClick={() => void load()} aria-label="재개 목록 조회" title="재개 목록 조회" data-tooltip="재개 목록 조회" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
         <div className={`file-drop${dragging ? " is-dragging" : ""}`} onDragOver={event => { event.preventDefault(); if (!busy) setDragging(true); }}
           onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
           onDrop={event => { event.preventDefault(); setDragging(false); if (!busy) addFiles(event.dataTransfer.files); }}>
           <strong>여러 파일을 끌어 놓거나 선택하세요</strong>
           <p className="small muted">파일당 최대 5GB · 한 번에 최대 20개 · 원본 확인 후 순서대로 전송</p>
           <input ref={input} type="file" multiple className="sr-only" tabIndex={-1} aria-label="업로드할 파일 선택" onChange={event => { if (event.target.files) addFiles(event.target.files); }} />
-          <button disabled={busy} onClick={() => input.current?.click()}>파일 선택</button>
+          <button disabled={busy} onClick={() => input.current?.click()}><Icon name="folder-open"/>파일 선택</button>
         </div>
         <label className="file-visibility">추가할 파일의 공개 범위<select value={visibility} disabled={busy} onChange={event => setVisibility(event.target.value as "PUBLIC" | "PRIVATE")}>
           <option value="PUBLIC">공개 — 링크를 알면 다운로드 가능</option><option value="PRIVATE">비공개 — 인증된 접근만 허용</option></select></label>
         <label className="file-visibility">추가할 파일의 보존 코드<select value={retention} disabled={busy||loading} onChange={e=>setRetention(e.target.value)}>{policies.filter(p=>p.enabled).map(p=><option value={p.code} key={p.code}>{p.displayName} ({p.code})</option>)}</select></label>
         <p className="small muted file-guidance">일시정지 후 다른 화면으로 이동할 수 있습니다. 돌아오면 같은 원본 파일을 다시 선택해 이어 올리세요. 원본 확인 중인 파일은 새로 추가해야 합니다.</p>
         <div className="section-line"><h3>업로드 현황 <span className="muted">{items.length}개</span></h3><div className="actions">
-          {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}>일시정지</button>
+          {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}><Icon name="pause"/>일시정지</button>
             : <button disabled={mutating || !items.some(item => item.file && ["queued", "paused", "error"].includes(item.stage))}
-                onClick={() => void start(items.filter(item => item.file && ["queued", "paused", "error"].includes(item.stage)).map(item => item.id))}>업로드 시작</button>}
+                onClick={() => void start(items.filter(item => item.file && ["queued", "paused", "error"].includes(item.stage)).map(item => item.id))}><Icon name="upload"/>업로드 시작</button>}
           <button className="quiet" disabled={busy || !items.some(item => ["done", "cancelled"].includes(item.stage))}
-            onClick={() => updateItems(old => old.filter(item => !["done", "cancelled"].includes(item.stage)))}>완료·취소 항목 정리</button>
+            onClick={() => updateItems(old => old.filter(item => !["done", "cancelled"].includes(item.stage)))}><Icon name="trash-2"/>완료·취소 항목 정리</button>
         </div></div>
         {!items.length && <p className="muted">추가한 파일과 이어 올릴 파일이 여기에 표시됩니다.</p>}
         <ul className="file-upload-list" aria-label="업로드 현황">
@@ -261,8 +262,8 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
                 onChange={event => { const file = event.target.files?.[0]; if (!file) return;
                   if (file.size !== item.size) patch(item.id, { error: "파일 크기가 다릅니다. 같은 원본을 선택해 주세요." });
                   else patch(item.id, { file, stage: "paused", error: undefined }); event.target.value = ""; }} /></label>}
-              {item.file && <button className="secondary" disabled={busy} onClick={() => void start([item.id])}>{item.stage === "error" ? "다시 시도" : "이어서 올리기"}</button>}
-              <button className="quiet danger" disabled={busy} onClick={() => void cancel(item)}>업로드 취소</button>
+              {item.file && <button className="secondary" disabled={busy} onClick={() => void start([item.id])}><Icon name="upload"/>{item.stage === "error" ? "다시 시도" : "이어서 올리기"}</button>}
+              <button className="quiet danger" disabled={busy} onClick={() => void cancel(item)}><Icon name="x"/>업로드 취소</button>
             </div>}
           </li>)}
         </ul>
@@ -274,8 +275,8 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         : confirm.file.visibility === "PUBLIC" ? "비공개로 변경하면 인증된 접근만 허용합니다. 이미 내려받은 파일은 회수할 수 없습니다."
         : "공개로 변경하면 링크를 아는 사람이 로그인 없이 다운로드할 수 있습니다."}</p>
       {error && <p className="alert" role="alert">{error}</p>}
-      <div className="actions"><button className="secondary" disabled={mutating} onClick={() => setConfirm(null)}>취소</button>
-        <button className={confirm.type === "delete" ? "destructive" : ""} disabled={mutating} onClick={() => void mutate()}>
+      <div className="actions"><button className="secondary" disabled={mutating} onClick={() => setConfirm(null)}><Icon name="x"/>취소</button>
+        <button className={confirm.type === "delete" ? "destructive" : ""} disabled={mutating} onClick={() => void mutate()}><Icon name={confirm.type === 'delete' ? 'trash-2' : confirm.file.visibility === 'PUBLIC' ? 'lock' : 'globe'}/>
           {mutating ? "처리 중…" : confirm.type === "delete" ? "파일 삭제" : confirm.file.visibility === "PUBLIC" ? "비공개로 변경" : "공개로 변경"}</button></div>
     </Dialog>}
   </section>;

@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useState } from "react";
 import { api } from "../../shared/auth";
 
@@ -20,7 +21,7 @@ export function EmailInbox({ environmentId }: { environmentId: string }) {
   return <div className="email-inbox" aria-labelledby="email-inbox-title">
     <div className="section-line">
       <h4 id="email-inbox-title">개발용 이메일 수신함</h4>
-      <button type="button" className="secondary" disabled={loading} onClick={() => setReload(value => value + 1)}>메일 새로고침</button>
+      <button type="button" className="secondary" disabled={loading} onClick={() => setReload(value => value + 1)} aria-label="메일 새로고침" title="메일 새로고침" data-tooltip="메일 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
     </div>
     <p className="small muted">외부로 발송하지 않은 인증·복구 메일입니다. 최근 1시간의 메일을 최대 100건 표시합니다. 인증 링크는 테스트 계정에 접근할 수 있으므로 공유하지 마세요.</p>
     {loading && <p role="status">메일을 불러오는 중…</p>}

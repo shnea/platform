@@ -1,3 +1,4 @@
+@import "@shnea/editor/icons.css";
 .job-panel { margin-top: 32px; padding-top: 8px; border-top: 1px solid var(--line); }
 .job-panel button { min-height: 44px; }
 .job-auto { display: inline-flex; flex-direction: row; align-items: center; gap: 10px; min-height: 44px; margin: 0; font-size: 14px; }
@@ -949,7 +950,7 @@ textarea::placeholder {
 .overview-link:hover:not(:disabled) { background: var(--surface); filter: none; }
 @media (max-width: 600px) {
   aside { flex-wrap: wrap; justify-content: space-between; }
-  .mobile-menu { display: block; }
+  .mobile-menu { display: inline-flex; }
   .workspace-menu { display: none; order: 3; width: 100%; }
   .menu-open .workspace-menu { display: block; }
   aside nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -959,3 +960,7 @@ textarea::placeholder {
   .scope-caption { justify-content: flex-start; }
   .overview-link { align-items: flex-start; gap: 12px; }
 }
+
+/* Navigation retains names; routine action buttons share the same Lucide strokes. */
+.nav:has(>.shnea-icon){display:flex;justify-content:flex-start}
+.header-actions [data-tooltip]::after{inset-block-start:calc(100% + 7px);inset-block-end:auto}

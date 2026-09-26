@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -101,7 +102,7 @@ export function JobPanel({ environmentId, environmentLabel, ready, disabled, onB
     <div className="section-line">
       <h3 id="jobs-title" ref={heading} tabIndex={-1}>비동기 작업</h3>
       {!selected && <button className="secondary" disabled={disabled || busy || ready}
-        onClick={() => { setActionError(""); setConfirm(true); }}>환경 반영 접수</button>}
+        onClick={() => { setActionError(""); setConfirm(true); }}><Icon name="send"/>환경 반영 접수</button>}
     </div>
     <p className="small muted">{environmentLabel}의 환경 반영 상태와 시도 이력입니다.
       {ready ? " 현재 로그인 설정은 반영된 상태입니다." : " 대기·실패한 환경 설정을 백그라운드에서 반영할 수 있습니다."}</p>
@@ -116,10 +117,10 @@ export function JobPanel({ environmentId, environmentLabel, ready, disabled, onB
         </select></label>
         <label>접수 시작일<input name="from" type="date" defaultValue={query.from} /></label>
         <label>접수 종료일<input name="to" type="date" defaultValue={query.to} /></label>
-        <button type="submit" disabled={loading || disabled}>조회</button>
+        <button type="submit" disabled={loading || disabled}><Icon name="search"/>조회</button>
       </form>
       <div className="job-tools"><span className="small muted">{checked ? `마지막 확인 ${date(checked)}` : "접수일은 현재 기기의 시간대를 기준으로 조회합니다."}</span>
-        <button className="quiet" disabled={loading || disabled} onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))}>작업 새로고침</button></div>
+        <button className="quiet" disabled={loading || disabled} onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))} aria-label="작업 새로고침" title="작업 새로고침" data-tooltip="작업 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
       {loading && <p role="status">작업을 불러오는 중…</p>}
       {error && <p role="alert" className="alert">{error}</p>}
       {rows && (rows.length ? <ul className="job-list">{rows.slice(0, 20).map(job => <li key={job.id}>
@@ -129,17 +130,17 @@ export function JobPanel({ environmentId, environmentLabel, ready, disabled, onB
         </button>
       </li>)}</ul> : <p className="empty">{query.state || query.from || query.to ? "조회 조건에 맞는 작업이 없습니다. 상태나 기간을 바꿔 보세요." : "아직 접수된 작업이 없습니다. 반영이 필요한 환경에서 작업을 접수할 수 있습니다."}</p>)}
       <div className="pagination" aria-label="작업 목록 페이지">
-        <button className="secondary" disabled={loading || disabled || !query.offset} onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}>이전 작업</button>
+        <button className="secondary" disabled={loading || disabled || !query.offset} onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}><Icon name="chevron-left"/>이전 작업</button>
         <span className="small">페이지 {query.offset / 20 + 1}</span>
-        <button className="secondary" disabled={loading || disabled || !rows || rows.length <= 20} onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}>다음 작업</button>
+        <button className="secondary" disabled={loading || disabled || !rows || rows.length <= 20} onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}><Icon name="chevron-right"/>다음 작업</button>
       </div>
     </>}
     {confirm && <Dialog title="환경 반영 작업 접수" busy={busy} close={() => setConfirm(false)}>
       <p><strong>{environmentLabel}</strong></p><p>현재 설정을 인증 서버에 반영합니다. 같은 환경에 진행 중인 작업이 있으면 그 작업을 확인합니다.</p>
       <p className="warning">접수는 완료와 다릅니다. 실패하면 최대 3회 시도하며, 실행 중인 작업은 취소할 수 없습니다.</p>
       {actionError && <p role="alert" className="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={() => setConfirm(false)}>돌아가기</button>
-        <button disabled={busy || !!actionError} onClick={() => void enqueue()}>{busy ? "접수 중…" : "작업 접수"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={() => setConfirm(false)}><Icon name="arrow-left"/>돌아가기</button>
+        <button disabled={busy || !!actionError} onClick={() => void enqueue()}><Icon name="send"/>{busy ? "접수 중…" : "작업 접수"}</button></div>
     </Dialog>}
   </section>;
 }
@@ -198,8 +199,8 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
   }
   return <div className="job-detail">
     <div className="section-line"><h4 ref={heading} tabIndex={-1}>작업 상세</h4><div className="actions">
-      <button className="quiet" disabled={busy || eventDialog} onClick={back}>작업 목록으로</button>
-      <button className="secondary" disabled={busy || eventDialog || loading} onClick={() => setReload(n => n + 1)}>상태 새로고침</button>
+      <button className="quiet" disabled={busy || eventDialog} onClick={back}><Icon name="arrow-left"/>작업 목록으로</button>
+      <button className="secondary" disabled={busy || eventDialog || loading} onClick={() => setReload(n => n + 1)} aria-label="상태 새로고침" title="상태 새로고침" data-tooltip="상태 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
     </div></div>
     {loading && <p role="status">상태를 확인하는 중…</p>}
     {error && <p className="alert" role="alert">{error} 표시된 정보는 마지막 조회 결과입니다.</p>}
@@ -217,8 +218,8 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
       </dl>
       <div className="actions">
         {["QUEUED", "RETRY_WAIT"].includes(job.state) && <button className="secondary danger" disabled={busy || loading || !!error}
-          onClick={() => { setActionError(""); setAction("cancel"); }}>작업 취소</button>}
-        {job.state === "FAILED" && <button disabled={busy || loading || !!error} onClick={() => { setActionError(""); setAction("retry"); }}>실패 작업 재시도</button>}
+          onClick={() => { setActionError(""); setAction("cancel"); }}><Icon name="x"/>작업 취소</button>}
+        {job.state === "FAILED" && <button disabled={busy || loading || !!error} onClick={() => { setActionError(""); setAction("retry"); }}><Icon name="refresh-cw"/>실패 작업 재시도</button>}
       </div>
       {job.state === "RUNNING" && <p className="small muted">실행 중에는 취소할 수 없습니다. 완료 상태를 확인해 주세요.</p>}
       <h4>시도 이력</h4>
@@ -234,8 +235,8 @@ function JobDetail({ id, environmentLabel, auto, back, select, onBusyChange, onS
       <p><strong>{environmentLabel}</strong></p><p className="identifier">{job.id}</p>
       <p>{action === "cancel" ? "대기 중인 작업을 취소합니다. 이미 시작됐다면 취소하지 않고 최신 상태를 안내합니다." : "원본 이력은 보존하고 현재 환경 설정으로 다시 접수합니다. 기존 후속 작업이나 진행 중인 작업이 있으면 그 작업으로 이동합니다."}</p>
       {actionError && <p className="alert" role="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={closeAction}>돌아가기</button>
-        <button className={action === "cancel" ? "destructive" : ""} disabled={busy || !!actionError} onClick={() => void execute()}>{busy ? "처리 중…" : action === "cancel" ? "작업 취소" : "다시 접수"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={closeAction}><Icon name="arrow-left"/>돌아가기</button>
+        <button className={action === "cancel" ? "destructive" : ""} disabled={busy || !!actionError} onClick={() => void execute()}><Icon name={action === 'cancel' ? 'x' : 'refresh-cw'}/>{busy ? "처리 중…" : action === "cancel" ? "작업 취소" : "다시 접수"}</button></div>
     </Dialog>}
   </div>;
 }

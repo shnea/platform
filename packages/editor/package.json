@@ -7,7 +7,9 @@
   "files": [
     "dist",
     "README.md",
-    "src/styles/editor.css"
+    "src/styles/editor.css",
+    "LICENSE-LUCIDE",
+    "src/icons/icons.css"
   ],
   "exports": {
     ".": {
@@ -22,7 +24,12 @@
     "./image-viewer": {
       "types": "./dist/viewer/image-viewer.d.ts",
       "import": "./dist/viewer/image-viewer.js"
-    }
+    },
+    "./icons": {
+      "types": "./dist/icons/index.d.ts",
+      "import": "./dist/icons/index.js"
+    },
+    "./icons.css": "./src/icons/icons.css"
   },
   "scripts": {
     "build": "tsc",

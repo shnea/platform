@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -57,7 +58,7 @@ export function OperationalAlertsPanel({ environmentId, environmentLabel, disabl
   }
   return <section className="job-panel operational-alerts" aria-labelledby="operational-alerts-title">
     <div className="section-line"><h3 id="operational-alerts-title" ref={heading} tabIndex={-1}>운영 알림</h3>
-      <button className="secondary" disabled={loading || disabled || busy} onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))}>알림 새로고침</button></div>
+      <button className="secondary" disabled={loading || disabled || busy} onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))} aria-label="알림 새로고침" title="알림 새로고침" data-tooltip="알림 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="small muted">{environmentLabel}의 작업 실패·복구와 대기 적체 알림입니다. 확인은 읽었다는 기록입니다. 적체 해소·감시 종료·환경 반영 성공은 각각 구분합니다.</p>
     <label className="alert-filter">확인 상태<select value={query.acknowledged} disabled={loading || disabled || busy}
       onChange={e => { setNotice(""); setQuery({ acknowledged: e.target.value, offset: 0, reload: query.reload + 1 }); }}>
@@ -85,20 +86,20 @@ export function OperationalAlertsPanel({ environmentId, environmentLabel, disabl
         </dl>
       </details>
       {!alert.acknowledgedAt && <button className="secondary" disabled={disabled || busy || loading}
-        onClick={() => { setActionError(""); setSelected(alert); }}>알림 확인 처리</button>}
+        onClick={() => { setActionError(""); setSelected(alert); }}><Icon name="check"/>알림 확인 처리</button>}
     </li>)}</ul> : <p className="empty">{query.acknowledged === "false" ? "미확인 운영 알림이 없습니다." : "조회 조건에 맞는 운영 알림이 없습니다."}</p>)}
     <div className="pagination" aria-label="운영 알림 페이지">
-      <button className="secondary" disabled={loading || disabled || busy || !query.offset} onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}>이전 알림</button>
+      <button className="secondary" disabled={loading || disabled || busy || !query.offset} onClick={() => setQuery(q => ({ ...q, offset: q.offset - 20 }))}><Icon name="chevron-left"/>이전 알림</button>
       <span className="small">페이지 {query.offset / 20 + 1}</span>
-      <button className="secondary" disabled={loading || disabled || busy || !rows || rows.length <= 20} onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}>다음 알림</button>
+      <button className="secondary" disabled={loading || disabled || busy || !rows || rows.length <= 20} onClick={() => setQuery(q => ({ ...q, offset: q.offset + 20 }))}><Icon name="chevron-right"/>다음 알림</button>
     </div>
     {selected && <Dialog title="운영 알림 확인" busy={busy} close={close}>
       <p><strong>{environmentLabel}</strong></p><p>발생 {date(selected.occurredAt)}</p><p className="identifier">알림 {selected.id}</p>
       <p>이 알림을 확인됨으로 표시합니다. 최초 확인 관리자와 시각을 보관하며 이미 확인된 알림은 기존 기록을 유지합니다.</p>
       <p className="warning">확인해도 실패한 작업은 다시 실행되지 않습니다. 원인 확인과 작업 재시도는 별도로 진행하세요.</p>
       {actionError && <p className="alert" role="alert">{actionError}</p>}
-      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}>돌아가기</button>
-        <button disabled={busy || !!actionError} onClick={() => void acknowledge()}>{busy ? "처리 중…" : "확인 처리"}</button></div>
+      <div className="form-actions"><button className="secondary" disabled={busy} onClick={close}><Icon name="arrow-left"/>돌아가기</button>
+        <button disabled={busy || !!actionError} onClick={() => void acknowledge()}><Icon name="check"/>{busy ? "처리 중…" : "확인 처리"}</button></div>
     </Dialog>}
   </section>;
 }

@@ -7,6 +7,7 @@
 | `apps/admin-web/src/main.tsx`, `app/main.tsx` | 관리자 시작점과 메뉴·페이지 연결 |
 | `apps/admin-web/src/features/` | projects, accounts, testing, jobs, monitoring, alerts, files, editor, developer, guest 화면 |
 | `apps/admin-web/src/shared/` | 인증, 오류, 공통 대화상자·탭 |
+| `apps/admin-web/src/shared/Icon.tsx` | 공통 Lucide 노드의 React 표시 |
 | `apps/admin-web/src/shared/media/` | 이미지·영상과 에디터의 공통 재생 연결 |
 | `apps/admin-web/src/styles/` | 관리자 기본 테마·레이아웃 |
 | `apps/admin-web/demo.html` | 인증 모듈과 분리된 공개 체험 시작점 |
@@ -16,6 +17,7 @@
 | `packages/editor/src/editing/` | 슬래시·붙여넣기 UI와 표 조작 |
 | `packages/editor/src/media/` | 첨부 업로드·조회·미디어 줄·크기 조절 |
 | `packages/editor/src/viewer/` | 공통 이미지 확대 뷰어 |
+| `packages/editor/src/icons/` | 선택한 Lucide SVG 노드·DOM 생성·조작 버튼 스타일 |
 | `packages/editor/src/styles/` | 에디터·읽기 공통 CSS |
 
 호스트는 내부 폴더를 직접 import하지 않고 `@shnea/editor`, `@shnea/editor/ui`, `@shnea/editor/style.css`, `@shnea/editor/image-viewer`를 사용한다. 내부 이동 후에도 이 진입점 이름은 유지한다.

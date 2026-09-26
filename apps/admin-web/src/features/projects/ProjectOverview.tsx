@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useState } from "react";
 import { api } from "../../shared/auth";
 
@@ -27,7 +28,7 @@ export function ProjectOverview({ environmentId, ready, disabled, open }: {
     <p className={ready ? "muted" : "warning"}>{ready
       ? "환경 설정이 반영되었습니다. 위 탭에서 인증 설정, 회원, API 키를 관리하세요."
       : "환경 설정을 반영해야 합니다. 인증 설정을 확인하거나 비동기 작업에서 진행 상태를 확인하세요."}</p>
-    {error ? <div className="alert" role="alert">{error} <button className="secondary" disabled={disabled} onClick={() => setReload(n => n + 1)}>현황 다시 조회</button></div>
+    {error ? <div className="alert" role="alert">{error} <button className="secondary" disabled={disabled} onClick={() => setReload(n => n + 1)} aria-label="현황 다시 조회" title="현황 다시 조회" data-tooltip="현황 다시 조회" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
       : !summary ? <p role="status">운영 현황을 불러오는 중…</p> : null}
     <div className="overview-links">
       <button className="overview-link" disabled={disabled} onClick={() => open("files")}>

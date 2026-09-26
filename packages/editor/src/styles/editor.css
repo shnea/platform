@@ -1,3 +1,4 @@
+@import "../icons/icons.css";
 .shnea-editor,.shnea-viewer{--se-bg:var(--surface,#fff);--se-text:var(--text,#183126);--se-muted:var(--muted,#52695c);--se-line:var(--line,#cdd7ce);--se-accent:var(--accent,#245c43);--se-raised:var(--raised,#edf2ed);color:var(--se-text);font-family:inherit;font-size:16px;line-height:1.7;min-width:0;text-align:left}
 .shnea-editor *,.shnea-viewer *{box-sizing:border-box}.shnea-editor [hidden]{display:none!important}
 .shnea-editor{border:1px solid var(--se-line);border-radius:8px;background:var(--se-bg)}
@@ -112,3 +113,26 @@
 @media(max-width:600px){.se-media-frame{width:100%!important;margin-left:0!important;margin-right:0!important}.se-media-resize,.se-media-layout-controls{display:none!important}}
 
 @media(max-width:600px){.se-image-row-tools{left:8px}}
+
+/* Compact media tools remain usable with touch and retain native disabled states. */
+.shnea-image-viewer .siv-tools .shnea-icon-only{padding:9px;min-width:44px;min-height:44px}
+.shnea-image-viewer .siv-tools svg{stroke-width:2}
+.shnea-image-viewer .siv-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.shnea-image-viewer .siv-heading button{border:1px solid var(--line,#cdd7ce);border-radius:6px;background:var(--surface,#fff);color:inherit;cursor:pointer}
+.shnea-image-viewer .siv-heading [data-tooltip]::after{inset-block-start:calc(100% + 7px);inset-block-end:auto}
+.shnea-image-viewer .siv-scale{min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.shnea-attachment .sa-video-play{width:56px;height:56px;padding:14px;border-radius:50%}
+.shnea-attachment .sa-video-play .shnea-icon{width:26px;height:26px}
+
+.se-command-list button>span{display:inline-flex;align-items:center;gap:10px}
+.shnea-editor .se-mobile-actions{display:none}
+@media(max-width:600px){
+ .shnea-editor .se-mobile-actions{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;padding-bottom:max(8px,env(safe-area-inset-bottom));border-top:1px solid var(--se-line);background:var(--se-bg)}
+ .shnea-editor .se-mobile-actions span{font-size:12px;color:var(--se-muted)}
+ .shnea-editor .se-hint{display:none}
+ .shnea-editor .se-insert-menu{border-radius:12px;padding:12px;overscroll-behavior:contain}
+ .shnea-editor .se-menu-tabs{flex-wrap:nowrap;overflow-x:auto;flex-shrink:0;padding:3px;margin:-3px}
+ .shnea-editor .se-menu-tabs button{flex-shrink:0}
+ .shnea-editor .se-menu-header,.shnea-editor .se-menu-help{flex-shrink:0}
+ .shnea-editor .se-insert-menu [role=tabpanel]{overscroll-behavior:contain}
+}

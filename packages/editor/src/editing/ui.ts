@@ -1,3 +1,4 @@
+import {createIcon,decorateAction,type IconName} from '../icons/index.js';
 import {createEditorCore,type CoreOptions,type EditorCommand,type AttachmentKind} from '../index.js';
 
 type Category='전체'|'본문'|'목록'|'글자 서식'|'표'|'첨부'|'편집';
@@ -39,19 +40,20 @@ export const editorCommands:Item[]=[
  {id:'undo',label:'실행 취소',keyword:'undo',category:'편집'},
  {id:'redo',label:'다시 실행',keyword:'redo',category:'편집'}
 ];
+const commandIcons:Record<Action,IconName>={"file": "file", "image": "image", "video": "video", "audio": "music", "paragraph": "file-text", "h1": "heading", "h2": "heading", "h3": "heading", "blockquote": "quote", "codeBlock": "code-xml", "horizontalRule": "minus", "bulletList": "list", "orderedList": "list-ordered", "taskList": "list-checks", "indent": "indent-increase", "outdent": "indent-decrease", "bold": "bold", "italic": "italic", "underline": "underline", "strike": "strikethrough", "code": "code-xml", "link": "link", "unlink": "unlink", "clear": "remove-formatting", "table": "table", "addRow": "rows-3", "deleteRow": "rows-3", "addColumn": "columns-3", "deleteColumn": "columns-3", "deleteTable": "trash-2", "undo": "undo-2", "redo": "redo-2"};
 type UIOptions=Omit<CoreOptions,'onKeyDown'|'onStateChange'|'onBeforeInput'|'onMarkdownPaste'>;
 let instance=0;
 
-/** One selection-preserving slash palette; no permanent formatting toolbar. */
+/** One selection-preserving palette, opened by slash or the mobile insertion menu. */
 export function mountEditor(options:UIOptions){
  const doc=options.element.ownerDocument,win=doc.defaultView!,prefix=`shnea-menu-${++instance}`;
  const root=doc.createElement('section');root.className='shnea-editor';root.setAttribute('aria-label','문서 편집기');
  if(options.element.querySelector('.shnea-editor'))throw new Error('이 영역에는 이미 에디터가 있습니다.');
  const body=doc.createElement('div');body.className='se-body';
- const menu=doc.createElement('div');menu.className='se-insert-menu';menu.hidden=true;menu.setAttribute('role','dialog');menu.setAttribute('aria-label','편집 기능');
+ const menu=doc.createElement('div');menu.id=prefix;menu.className='se-insert-menu';menu.hidden=true;menu.setAttribute('role','dialog');menu.setAttribute('aria-label','편집 기능');
  const header=doc.createElement('div');header.className='se-menu-header';
  const search=doc.createElement('input');search.type='text';search.placeholder='명령 검색 · /table, /굵게';search.setAttribute('aria-label','편집 기능 검색');search.setAttribute('role','combobox');search.setAttribute('aria-autocomplete','list');search.setAttribute('aria-controls',`${prefix}-list`);search.setAttribute('aria-expanded','false');search.autocomplete='off';
- const closeButton=doc.createElement('button');closeButton.type='button';closeButton.textContent='닫기';closeButton.addEventListener('click',()=>close(true));header.append(search,closeButton);
+ const closeButton=doc.createElement('button');closeButton.type='button';decorateAction(closeButton,'x','닫기',true);closeButton.addEventListener('click',()=>close(true));header.append(search,closeButton);
  const tabs=doc.createElement('div');tabs.className='se-menu-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','기능 종류');
  const panel=doc.createElement('div');panel.id=`${prefix}-panel`;panel.setAttribute('role','tabpanel');
  const list=doc.createElement('div');list.id=`${prefix}-list`;list.className='se-command-list';list.setAttribute('role','listbox');list.setAttribute('aria-label','편집 명령');
@@ -59,34 +61,47 @@ export function mountEditor(options:UIOptions){
  const help=doc.createElement('p');help.className='se-menu-help';help.textContent='↑↓ 이동 · Enter 선택 · Esc 닫기 · // 문자 입력';
  const form=doc.createElement('form');form.className='se-link-form';form.hidden=true;
  const linkLabel=doc.createElement('label');linkLabel.textContent='연결할 주소';const linkInput=doc.createElement('input');linkInput.type='text';linkInput.inputMode='url';linkInput.placeholder='https://';linkInput.required=true;linkLabel.append(linkInput);
- const apply=doc.createElement('button');apply.type='submit';apply.textContent='링크 적용';form.append(linkLabel,apply);
+ const apply=doc.createElement('button');apply.type='submit';decorateAction(apply,'link','링크 적용');form.append(linkLabel,apply);
  const paste=doc.createElement('div');paste.className='se-paste-choice';paste.hidden=true;
  const pasteTitle=doc.createElement('p');pasteTitle.textContent='Markdown 서식이 포함되어 있습니다. 어떻게 붙여넣을까요?';
- const plain=doc.createElement('button'),formatted=doc.createElement('button');plain.type=formatted.type='button';plain.textContent='원문 그대로';formatted.textContent='Markdown 서식 적용';paste.append(pasteTitle,plain,formatted);
+ const plain=doc.createElement('button'),formatted=doc.createElement('button');plain.type=formatted.type='button';decorateAction(plain,'file-text','원문 그대로');decorateAction(formatted,'code-xml','Markdown 서식 적용');paste.append(pasteTitle,plain,formatted);
  panel.append(list,count);menu.append(header,tabs,panel,form,paste,help);
  const message=doc.createElement('p');message.className='se-message';message.setAttribute('role','status');message.hidden=true;
  const hint=doc.createElement('p');hint.className='se-hint';hint.textContent='/ 모든 편집 기능 · /table 표 · 글자 선택 후 / 서식 · Ctrl/Cmd+Z 실행 취소';
- root.append(body,menu,hint,message);options.element.append(root);
- let core:ReturnType<typeof createEditorCore>|undefined,disposed=false,category:Category='전체',selected=0,items:Item[]=[],removeSlash=false,dismissed='',pasteSource='';
+ const mobileActions=doc.createElement('div');mobileActions.className='se-mobile-actions';mobileActions.hidden=options.editable===false;
+ const insertButton=doc.createElement('button');insertButton.type='button';decorateAction(insertButton,'layout-grid','삽입 메뉴');insertButton.setAttribute('aria-haspopup','dialog');insertButton.setAttribute('aria-controls',prefix);insertButton.setAttribute('aria-expanded','false');
+ const mobileHint=doc.createElement('span');mobileHint.textContent='/ 로도 열 수 있어요';mobileActions.append(mobileHint,insertButton);
+ root.append(body,menu,hint,message,mobileActions);options.element.append(root);
+ let core:ReturnType<typeof createEditorCore>|undefined,disposed=false,category:Category='전체',selected=0,items:Item[]=[],removeSlash=false,dismissed='',pasteSource='',openedByButton=false;
+ const mobile=()=>win.innerWidth<=600;
  const status=(text:string)=>{message.textContent=text;message.hidden=!text;};
  const allowed=(item:Item)=>isAttachment(item.id)||item.id==='link'||!!core?.can(item.id);
  function position(){
+  const viewport=win.visualViewport;
+  mobileActions.style.bottom=mobile()?`${Math.max(0,win.innerHeight-(viewport?.offsetTop??0)-(viewport?.height??win.innerHeight))}px`:'';
   if(menu.hidden||!core)return;
   let rect:{left:number;bottom:number;top:number};try{rect=core.getMenuAnchor();}catch{rect=body.getBoundingClientRect();}
-  const viewport=win.visualViewport,left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0,width=viewport?.width??win.innerWidth,height=viewport?.height??win.innerHeight;
+  const left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0,width=viewport?.width??win.innerWidth,height=viewport?.height??win.innerHeight;
+  if(mobile()){
+   menu.style.width=`${Math.max(0,width-16)}px`;menu.style.maxHeight=`${Math.max(0,Math.min(560,height-16))}px`;menu.style.left=`${left+8}px`;
+   menu.style.top=`${Math.max(top+8,top+height-menu.getBoundingClientRect().height-8)}px`;return;
+  }
   const menuWidth=Math.min(460,width-24),menuHeight=Math.min(440,height-24);
   menu.style.width=`${menuWidth}px`;menu.style.maxHeight=`${menuHeight}px`;
   menu.style.left=`${Math.max(left+12,Math.min(rect.left,left+width-menuWidth-12))}px`;
   menu.style.top=`${Math.max(top+12,Math.min(rect.bottom+8,top+height-menuHeight-12))}px`;
  }
- function close(focus=false){menu.hidden=true;pasteSource='';search.setAttribute('aria-expanded','false');search.removeAttribute('aria-activedescendant');dismissed=`/${core?.getSlash()?.query??''}`;if(focus)core?.focus();}
- function open(query='',fromDocument=false){
+ function close(focus=false){menu.hidden=true;pasteSource='';insertButton.setAttribute('aria-expanded','false');search.setAttribute('aria-expanded','false');search.removeAttribute('aria-activedescendant');dismissed=`/${core?.getSlash()?.query??''}`;if(focus){if(openedByButton)insertButton.focus({preventScroll:true});else core?.focus();}}
+ function open(query='',fromDocument=false,fromButton=false){
   if(!core||options.editable===false)return;
-  removeSlash=fromDocument;category='전체';selected=0;search.value=query;form.hidden=true;paste.hidden=true;header.hidden=false;help.hidden=false;panel.hidden=false;tabs.hidden=false;menu.hidden=false;menu.setAttribute('aria-label','편집 기능');search.setAttribute('aria-expanded','true');status('');render();position();search.focus();
+  openedByButton=fromButton;removeSlash=fromDocument;category='전체';selected=0;search.value=query;form.hidden=true;paste.hidden=true;header.hidden=false;help.hidden=false;panel.hidden=false;tabs.hidden=false;menu.hidden=false;menu.setAttribute('aria-label','편집 기능');search.setAttribute('aria-expanded','true');insertButton.setAttribute('aria-expanded','true');help.textContent=mobile()?'원하는 기능을 선택하면 작성하던 위치에 적용됩니다.':'↑↓ 이동 · Enter 선택 · Esc 닫기 · // 문자 입력';status('');render();position();
+  if(fromButton)closeButton.focus({preventScroll:true});else search.focus({preventScroll:true});
  }
+ insertButton.addEventListener('pointerdown',event=>{core?.captureSelection();event.preventDefault();});
+ insertButton.addEventListener('click',()=>{if(!menu.hidden){close(true);return;}core?.captureSelection();open('',false,true);});
  function run(item:Item){
   if(!core||!allowed(item))return;
-  if(item.id==='link'){panel.hidden=true;tabs.hidden=true;form.hidden=false;search.removeAttribute('aria-activedescendant');linkInput.value='';linkInput.setCustomValidity('');linkInput.focus();return;}
+  if(item.id==='link'){panel.hidden=true;tabs.hidden=true;form.hidden=false;search.removeAttribute('aria-activedescendant');linkInput.value='';linkInput.setCustomValidity('');position();linkInput.focus();return;}
   try{
    if(isAttachment(item.id)){core.pickAttachment(item.id,{removeSlash,onClose:()=>close(true)});return;}
    close();
@@ -97,27 +112,33 @@ export function mountEditor(options:UIOptions){
   if(!core||disposed||menu.hidden)return;
   const query=search.value.replace(/^\//,'').trim().toLowerCase();
   items=editorCommands.filter(item=>(query||category==='전체'||item.category===category)&&(!query||`${item.label} ${item.keyword} ${item.aliases??''}`.toLowerCase().includes(query)));
+  if(mobile()&&!query&&category==='전체'){const first:Action[]=['image','video','file','audio','table'];items.sort((a,b)=>(first.includes(a.id)?first.indexOf(a.id):first.length)-(first.includes(b.id)?first.indexOf(b.id):first.length));}
   if(query)items.sort((a,b)=>Number(b.keyword===query)-Number(a.keyword===query));
   if(!items[selected]||!allowed(items[selected]))selected=items.findIndex(allowed);
   for(const tab of tabs.querySelectorAll<HTMLButtonElement>('button')){const active=tab.textContent===category;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
   panel.setAttribute('aria-labelledby',`${prefix}-tab-${categories.indexOf(category)}`);
   list.replaceChildren();
   items.forEach((item,index)=>{
-   const el=doc.createElement('button');el.type='button';el.tabIndex=-1;el.id=`${prefix}-${item.id}`;el.setAttribute('role','option');el.setAttribute('aria-selected',String(index===selected));el.setAttribute('aria-disabled',String(!allowed(item)));el.className=index===selected?'se-chosen':'';
+   const el=doc.createElement('button');el.type='button';el.tabIndex=index===selected?0:-1;el.id=`${prefix}-${item.id}`;el.setAttribute('role','option');el.setAttribute('aria-selected',String(index===selected));el.setAttribute('aria-disabled',String(!allowed(item)));el.className=index===selected?'se-chosen':'';
    const name=doc.createElement('span');name.textContent=item.label;const key=doc.createElement('small');key.textContent=`/${item.keyword}`;
    if(!allowed(item))key.textContent+=' · 현재 위치 사용 불가';
    else if(core!.isActive(item.id))key.textContent+=' · 적용 중';
-   el.append(name,key);el.addEventListener('mousedown',event=>event.preventDefault());el.addEventListener('click',()=>run(item));list.append(el);
+   name.prepend(createIcon(doc,commandIcons[item.id]));el.append(name,key);el.addEventListener('mousedown',event=>event.preventDefault());el.addEventListener('click',()=>run(item));list.append(el);
   });
   count.textContent=items.length?`${items.length}개 기능${query?' · 전체 종류 검색':''}`:'일치하는 기능이 없습니다. 다른 이름으로 검색해 보세요.';
   if(selected>=0)search.setAttribute('aria-activedescendant',`${prefix}-${items[selected].id}`);else search.removeAttribute('aria-activedescendant');
  }
  for(const [index,name]of categories.entries()){
   const tab=doc.createElement('button');tab.type='button';tab.id=`${prefix}-tab-${index}`;tab.textContent=name;tab.setAttribute('role','tab');tab.setAttribute('aria-controls',panel.id);
-  tab.addEventListener('click',()=>{category=name;search.value='';selected=0;render();});
+  tab.addEventListener('click',()=>{category=name;search.value='';selected=0;render();position();});
   tab.addEventListener('keydown',event=>{if(!['ArrowRight','ArrowLeft','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?categories.length-1:(index+(event.key==='ArrowRight'?1:-1)+categories.length)%categories.length;const target=tabs.children[next] as HTMLButtonElement;target.click();target.focus();});tabs.append(tab);
  }
- search.addEventListener('input',()=>{selected=0;category='전체';panel.hidden=false;tabs.hidden=false;form.hidden=true;render();});
+ search.addEventListener('input',()=>{selected=0;category='전체';panel.hidden=false;tabs.hidden=false;form.hidden=true;render();position();});
+ list.addEventListener('keydown',event=>{
+  if(event.isComposing||!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
+  event.preventDefault();const enabled=items.map((item,index)=>allowed(item)?index:-1).filter(index=>index>=0);if(!enabled.length)return;
+  selected=event.key==='Home'?enabled[0]:event.key==='End'?enabled[enabled.length-1]:enabled[(enabled.indexOf(selected)+(event.key==='ArrowDown'?1:-1)+enabled.length)%enabled.length];render();(list.children[selected] as HTMLElement)?.focus({preventScroll:true});list.children[selected]?.scrollIntoView?.({block:'nearest'});
+ });
  search.addEventListener('keydown',event=>{
   if(event.isComposing)return;
   if(event.key==='/'&&!search.value){event.preventDefault();close();dismissed='/';core?.insertText('/');core?.focus();return;}
@@ -130,14 +151,15 @@ export function mountEditor(options:UIOptions){
  form.addEventListener('submit',event=>{event.preventDefault();try{if(core?.run('link',linkInput.value,{removeSlash})){close(true);status('링크를 적용했습니다.');}}catch(e){status(e instanceof Error?e.message:'주소를 확인해 주세요.');linkInput.setCustomValidity(message.textContent??'');linkInput.reportValidity();}});
  linkInput.addEventListener('input',()=>linkInput.setCustomValidity(''));
  for(const [button,markdown]of [[plain,false],[formatted,true]] as const)button.addEventListener('click',()=>{const source=pasteSource;close();try{if(markdown)core?.insertMarkdown(source);else core?.insertText(source);core?.focus();status(markdown?'Markdown 서식을 적용했습니다.':'원문 그대로 붙여넣었습니다.');}catch(e){status(e instanceof Error?e.message:'붙여넣지 못했습니다.');}});
- const pasteCancel=doc.createElement('button');pasteCancel.type='button';pasteCancel.textContent='취소';pasteCancel.addEventListener('click',()=>close(true));paste.append(pasteCancel);
+ const pasteCancel=doc.createElement('button');pasteCancel.type='button';decorateAction(pasteCancel,'x','취소');pasteCancel.addEventListener('click',()=>close(true));paste.append(pasteCancel);
  function choosePaste(source:string){close();pasteSource=source;menu.hidden=false;menu.setAttribute('aria-label','붙여넣기 방식');header.hidden=true;tabs.hidden=true;panel.hidden=true;form.hidden=true;help.hidden=true;paste.hidden=false;position();formatted.focus();}
- const outside=(event:Event)=>{if(!menu.hidden&&!menu.contains(event.target as Node))close();};doc.addEventListener('pointerdown',outside);
+ const outside=(event:Event)=>{if(!menu.hidden&&!menu.contains(event.target as Node)&&!insertButton.contains(event.target as Node))close();};doc.addEventListener('pointerdown',outside);
  const refresh=()=>{if(!core||disposed)return;const slash=core.getSlash();if(menu.hidden&&slash&&dismissed!==`/${slash.query}`)open(slash.query,true);if(!slash)dismissed='';};
  const trigger=()=>{if(!core?.canOpenSlash())return false;open();return true;};
- const reposition=()=>position();win.addEventListener('resize',reposition);win.addEventListener('scroll',reposition,true);win.visualViewport?.addEventListener('resize',reposition);
- function cleanup(){doc.removeEventListener('pointerdown',outside);win.removeEventListener('resize',reposition);win.removeEventListener('scroll',reposition,true);win.visualViewport?.removeEventListener('resize',reposition);}
+ const reposition=()=>position();win.addEventListener('resize',reposition);win.addEventListener('scroll',reposition,true);win.visualViewport?.addEventListener('resize',reposition);win.visualViewport?.addEventListener('scroll',reposition);
+ function cleanup(){doc.removeEventListener('pointerdown',outside);win.removeEventListener('resize',reposition);win.removeEventListener('scroll',reposition,true);win.visualViewport?.removeEventListener('resize',reposition);win.visualViewport?.removeEventListener('scroll',reposition);}
  try{core=createEditorCore({...options,element:body,onStateChange:refresh,onMarkdownPaste:choosePaste,onError:error=>{status(error.message);options.onError?.(error);},onKeyDown:event=>event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&trigger(),onBeforeInput:event=>event.inputType==='insertText'&&event.data==='/'&&trigger()});}
  catch(error){cleanup();root.remove();throw error;}
+ position();
  return {...core,setValue:(...args:Parameters<typeof core.setValue>)=>{close();core!.setValue(...args);status('');},destroy:()=>{if(disposed)return;disposed=true;cleanup();core!.destroy();root.remove();}};
 }

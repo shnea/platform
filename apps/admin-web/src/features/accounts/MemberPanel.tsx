@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -46,7 +47,7 @@ export function MemberPanel({ environmentId, ready, suspended }: {
     <div className="section-line">
       <h3 id="member-title" ref={listHeading} tabIndex={-1}>회원·세션 관리</h3>
       {!selected && <button className="secondary" disabled={!ready || loading}
-        onClick={() => setQuery({ ...query, reload: query.reload + 1 })}>회원 새로고침</button>}
+        onClick={() => setQuery({ ...query, reload: query.reload + 1 })} aria-label="회원 새로고침" title="회원 새로고침" data-tooltip="회원 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>}
     </div>
     <p className="small muted">현재 환경의 회원을 조회하고 로그인 허용 상태와 세션을 관리합니다.</p>
     {!ready ? <p className="warning">로그인 설정을 먼저 반영한 뒤 회원을 관리할 수 있습니다.</p> : selected ?
@@ -57,7 +58,7 @@ export function MemberPanel({ environmentId, ready, suspended }: {
         <form className="member-search" onSubmit={find}>
           <label>회원 검색<input type="search" value={search} maxLength={200}
             placeholder="아이디, 이메일 또는 이름" onChange={e => setSearch(e.target.value)} /></label>
-          <button type="submit" disabled={loading}>검색</button>
+          <button type="submit" disabled={loading}><Icon name="search"/>검색</button>
         </form>
         {loading && <p role="status">회원을 불러오는 중…</p>}
         {error && <p className="alert" role="alert">{error}</p>}
@@ -70,10 +71,10 @@ export function MemberPanel({ environmentId, ready, suspended }: {
         </div> : <p className="empty">{query.search ? "검색 결과가 없습니다. 검색어를 바꿔 보세요." : "이 환경에 등록된 회원이 없습니다."}</p>)}
         <div className="pagination" aria-label="회원 목록 페이지">
           <button className="secondary" disabled={loading || query.offset === 0}
-            onClick={() => setQuery({ ...query, offset: Math.max(0, query.offset - 20) })}>이전</button>
+            onClick={() => setQuery({ ...query, offset: Math.max(0, query.offset - 20) })}><Icon name="chevron-left"/>이전</button>
           <span className="small">페이지 {query.offset / 20 + 1}</span>
           <button className="secondary" disabled={loading || !page?.hasMore}
-            onClick={() => setQuery({ ...query, offset: query.offset + 20 })}>다음</button>
+            onClick={() => setQuery({ ...query, offset: query.offset + 20 })}><Icon name="chevron-right"/>다음</button>
         </div>
       </>}
   </section>;
@@ -131,10 +132,10 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
     <div className="section-line">
       <h4 ref={heading} tabIndex={-1}>회원 상세</h4>
       <div className="actions">
-        <button className="quiet" disabled={busy} onClick={back}>목록으로</button>
+        <button className="quiet" disabled={busy} onClick={back}><Icon name="arrow-left"/>목록으로</button>
         <button className="secondary" disabled={busy || loading} onClick={() => {
           setMessage(""); setReload(value => value + 1);
-        }}>회원·세션 새로고침</button>
+        }} aria-label="회원·세션 새로고침" title="회원·세션 새로고침" data-tooltip="회원·세션 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
       </div>
     </div>
     {loading && <p role="status">회원 정보와 세션을 불러오는 중…</p>}
@@ -151,10 +152,10 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
         <div><dt>로그인 허용 상태</dt><dd className={`state ${user.enabled ? "active" : "suspended"}`}>{user.enabled ? "활성" : "비활성"}</dd></div>
       </dl>
       <button className={user.enabled ? "secondary danger" : "secondary"} disabled={busy || (!user.enabled && suspended)}
-        onClick={() => confirm({ type: "state" })}>{user.enabled ? "회원 비활성화" : "회원 활성화"}</button>
+        onClick={() => confirm({ type: "state" })}><Icon name={user.enabled ? 'ban' : 'check'}/>{user.enabled ? "회원 비활성화" : "회원 활성화"}</button>
       {suspended && <p className="small muted">프로젝트가 중지되어 회원 재활성화는 제한됩니다. 조회·비활성화·세션 종료는 가능합니다.</p>}
       <div className="section-line"><h4>로그인 세션 {sessions.length}개</h4>
-        <button className="secondary danger" disabled={busy} onClick={() => confirm({ type: "sessions" })}>전체 세션 종료</button>
+        <button className="secondary danger" disabled={busy} onClick={() => confirm({ type: "sessions" })}><Icon name="log-out"/>전체 세션 종료</button>
       </div>
       <p className="small muted">목록에는 온라인 세션만 표시합니다. 전체 종료는 오프라인 세션도 포함합니다. 연동 서비스가 자체 검증하는 기존 접근 토큰은 만료 전까지 유효할 수 있습니다.</p>
       {sessions.length ? <ul className="key-list member-sessions">{sessions.map(session => <li key={session.id}>
@@ -162,7 +163,7 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
           <p className="identifier">{session.id}</p><p className="small muted">IP {session.ipAddress || "정보 없음"}</p>
           <p className="small">로그인 {date(session.start)}<br />마지막 접근 {date(session.lastAccess)}</p></div>
         <button className="secondary danger" disabled={busy} aria-label={`세션 종료 ${session.id}`}
-          onClick={() => confirm({ type: "sessions", sessionId: session.id })}>종료</button>
+          onClick={() => confirm({ type: "sessions", sessionId: session.id })}><Icon name="log-out"/>종료</button>
       </li>)}</ul> : <p className="empty">현재 온라인 로그인 세션이 없습니다.</p>}
     </>}
     {action && user && <Dialog title={title} busy={busy} close={() => {
@@ -177,9 +178,9 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
       {actionError && <p className="alert" role="alert">{actionError}</p>}
       <div className="form-actions"><button className="secondary" disabled={busy} onClick={() => {
         setAction(null); if (actionError) setReload(value => value + 1);
-      }}>{actionError ? "닫고 새로고침" : "취소"}</button>
+      }}><Icon name="x"/>{actionError ? "닫고 새로고침" : "취소"}</button>
         <button className={action.type === "state" && !user.enabled ? "" : "destructive"}
-          disabled={busy || !!actionError} onClick={() => void execute()}>{busy ? "처리 중…" : title}</button></div>
+          disabled={busy || !!actionError} onClick={() => void execute()}><Icon name="check"/>{busy ? "처리 중…" : title}</button></div>
     </Dialog>}
   </div>;
 }

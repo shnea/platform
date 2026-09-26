@@ -1,0 +1,8 @@
+.shnea-icon{display:inline-block;flex:none;width:20px;height:20px;vertical-align:middle;pointer-events:none}
+:where(button:not([hidden]):has(>.shnea-icon),a:not([hidden]):has(>.shnea-icon)),.shnea-action:not([hidden]){display:inline-flex;align-items:center;justify-content:center;gap:8px}
+:where(button,a)[data-icon-only="true"],.shnea-icon-only{position:relative;min-width:44px;min-height:44px;padding:9px;flex-shrink:0}
+:where(button,a)[data-tooltip]{position:relative}
+:where(button,a)[data-tooltip]::after{content:attr(data-tooltip);position:absolute;z-index:20;inset-block-end:calc(100% + 7px);inset-inline-end:0;width:max-content;max-width:min(240px,80vw);padding:6px 9px;border:1px solid var(--line,#52695c);border-radius:5px;background:var(--surface,#fff);color:var(--text,#183126);font-size:12px;font-weight:500;line-height:1.5;white-space:normal;pointer-events:none;opacity:0;visibility:hidden}
+:where(button,a)[data-tooltip]:is(:hover,:focus-visible)::after{opacity:1;visibility:visible}
+:where(button,a)[data-tooltip]:disabled::after{display:none}
+@media(hover:none){:where(button,a)[data-tooltip]:not(:focus-visible)::after{display:none}}

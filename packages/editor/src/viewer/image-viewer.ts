@@ -1,3 +1,4 @@
+import {createIcon,decorateAction,type IconName} from '../icons/index.js';
 export type ImageViewOptions={src:string;originalUrl?:string;downloadUrl?:string;name:string;onError?:()=>void};
 
 /** Shared, framework-neutral image viewer. Zoom state never enters the document. */
@@ -8,7 +9,7 @@ export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
  const root=doc.createElement('div');root.className='shnea-image-viewer';
  const trigger=doc.createElement('button');trigger.type='button';trigger.className='siv-thumbnail';trigger.setAttribute('aria-label',`${options.name} 확대 보기`);
  const thumbnail=doc.createElement('img');thumbnail.src=source;thumbnail.alt=options.name;thumbnail.loading='lazy';thumbnail.referrerPolicy='no-referrer';trigger.append(thumbnail);
- const hint=doc.createElement('span');hint.textContent='확대 보기';hint.className='siv-open';trigger.append(hint);root.append(trigger);element.append(root);
+ const hint=doc.createElement('span');hint.append(createIcon(doc,'zoom-in'));hint.setAttribute('aria-hidden','true');hint.className='siv-open';trigger.append(hint);root.append(trigger);element.append(root);
  const dialog=doc.createElement('dialog');dialog.className='shnea-image-viewer siv-dialog';dialog.setAttribute('aria-label',`${options.name} 이미지 확대 보기`);
  const tools=doc.createElement('div');tools.className='siv-tools';
  const name=doc.createElement('strong');name.textContent=options.name;name.className='siv-name';
@@ -18,17 +19,12 @@ export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
  const error=doc.createElement('p');error.className='siv-error';error.setAttribute('role','alert');error.hidden=true;
  let loaded=false,disposed=false,scale=1,fitScale=1,x=0,y=0,fitted=true;
  const points=new Map<number,{x:number;y:number}>();
- const button=(label:string,action:()=>void)=>{const el=doc.createElement('button');el.type='button';el.textContent=label;el.addEventListener('click',action);tools.append(el);return el;};
- const minus=button('축소',()=>zoom(scale/1.25)),plus=button('확대',()=>zoom(scale*1.25));
- function magnifier(button:HTMLButtonElement,positive:boolean){
-  const svg=doc.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.setAttribute('width','20');svg.setAttribute('height','20');
-  for(const data of ['M21 21l-5-5','M6 10h8',...(positive?['M10 6v8']:[])]){const path=doc.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',data);svg.append(path);}const circle=doc.createElementNS(svg.namespaceURI,'circle');circle.setAttribute('cx','10');circle.setAttribute('cy','10');circle.setAttribute('r','7');svg.append(circle);button.prepend(svg);
- }
- magnifier(minus,false);magnifier(plus,true);tools.append(state);
- const fit=button('화면 맞춤',()=>{fitted=true;layout();}),actual=button('100%',()=>{fitted=false;scale=1;x=y=0;paint();});
- if(original){const anchor=doc.createElement('a');anchor.href=original;anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.textContent='원본 보기';tools.append(anchor);}
- if(download){const anchor=doc.createElement('a');anchor.href=download;anchor.textContent='다운로드';anchor.rel='noreferrer';tools.append(anchor);}
- const close=button('닫기',()=>dialog.close());dialog.append(name,tools,stage,error);root.append(dialog);
+ const button=(label:string,action:()=>void,icon?:IconName)=>{const el=doc.createElement('button');el.type='button';if(icon)decorateAction(el,icon,label,true);else {el.textContent=label;el.title='실제 크기(100%)';}el.addEventListener('click',action);tools.append(el);return el;};
+ const minus=button('축소',()=>zoom(scale/1.25),'zoom-out'),plus=button('확대',()=>zoom(scale*1.25),'zoom-in');tools.append(state);
+ const fit=button('화면 맞춤',()=>{fitted=true;layout();},'scan'),actual=button('100%',()=>{fitted=false;scale=1;x=y=0;paint();});
+ if(original){const anchor=doc.createElement('a');anchor.href=original;anchor.target='_blank';anchor.rel='noopener noreferrer';decorateAction(anchor,'external-link','원본 보기',true);tools.append(anchor);}
+ if(download){const anchor=doc.createElement('a');anchor.href=download;anchor.rel='noreferrer';decorateAction(anchor,'download','다운로드',true);tools.append(anchor);}
+ const close=button('닫기',()=>dialog.close(),'x');const heading=doc.createElement('div');heading.className='siv-heading';heading.append(name,close);dialog.append(heading,tools,stage,error);root.append(dialog);
  function paint(){
   if(!loaded)return;
   const maxX=Math.max(0,(full.naturalWidth*scale-stage.clientWidth)/2),maxY=Math.max(0,(full.naturalHeight*scale-stage.clientHeight)/2);

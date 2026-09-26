@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/auth";
 
@@ -101,9 +102,7 @@ export function SocialProviderPanel({
             setMessage("");
             setReload((value) => value + 1);
           }}
-        >
-          설정 새로고침
-        </button>
+         aria-label="설정 새로고침" title="설정 새로고침" data-tooltip="설정 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button>
       </div>
       <p className="small muted">
         제공자별 공통 콜백 하나로 모든 프로젝트를 연결합니다. 같은 소셜 앱에
@@ -264,7 +263,7 @@ function ProviderForm({
           aria-describedby="social-callback-hint"
         />
       </label>
-      <button type="button" className="secondary" onClick={() => void copyCallback()}>콜백 URL 복사</button>
+      <button type="button" className="secondary" onClick={() => void copyCallback()}><Icon name="copy"/>콜백 URL 복사</button>
       <p role="status" className="small">{copyMessage}</p>
       <p id="social-callback-hint" className="hint">
         모든 프로젝트가 함께 사용하는 제공자별 주소입니다. 외부 콘솔에 자동 등록되지는 않습니다.
@@ -304,7 +303,7 @@ function ProviderForm({
             />
             실제 로그인에서 사용
           </label>
-          <button type="submit">{busy ? "저장 중…" : "소셜 설정 저장"}</button>
+          <button type="submit"><Icon name="save"/>{busy ? "저장 중…" : "소셜 설정 저장"}</button>
         </fieldset>
       </form>
       {error && (

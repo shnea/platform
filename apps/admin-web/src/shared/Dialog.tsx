@@ -1,3 +1,4 @@
+import {Icon} from './Icon';
 import { useEffect, useRef, type ReactNode } from "react";
 
 export function Dialog({
@@ -60,9 +61,7 @@ export function Dialog({
           aria-label="닫기"
           disabled={busy}
           onClick={close}
-        >
-          닫기
-        </button>
+         title="닫기" data-tooltip="닫기" data-icon-only="true"><Icon name="x"/></button>
       </div>
       {children}
     </dialog>

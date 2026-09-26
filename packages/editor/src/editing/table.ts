@@ -1,3 +1,4 @@
+import {decorateAction} from '../icons/index.js';
 import {Table,TableView} from '@tiptap/extension-table';
 import {CellSelection,TableMap} from '@tiptap/pm/tables';
 import {TextSelection} from '@tiptap/pm/state';
@@ -13,9 +14,9 @@ export const EditorTable=Table.extend({
    const info=doc.createElement('span');info.textContent='셀을 선택하면 행·열을 삭제할 수 있습니다.';tools.append(info);
    const row=doc.createElement('button'),col=doc.createElement('button');
    for(const button of [row,col,right,bottom]){button.type='button';button.contentEditable='false';button.addEventListener('mousedown',event=>event.preventDefault());}
-   row.textContent='선택 행 삭제';col.textContent='선택 열 삭제';row.disabled=col.disabled=true;tools.append(row,col);
-   right.className='se-table-add-column';right.textContent='+';right.setAttribute('aria-label','표 오른쪽에 열 추가');right.title='오른쪽에 열 추가';
-   bottom.className='se-table-add-row';bottom.textContent='+ 아래 행 추가';bottom.setAttribute('aria-label','표 아래에 행 추가');
+   decorateAction(row,'rows-3','선택 행 삭제');decorateAction(col,'columns-3','선택 열 삭제');row.disabled=col.disabled=true;tools.append(row,col);
+   right.className='se-table-add-column';decorateAction(right,'plus','표 오른쪽에 열 추가',true);right.setAttribute('aria-label','표 오른쪽에 열 추가');right.title='오른쪽에 열 추가';
+   bottom.className='se-table-add-row';decorateAction(bottom,'plus','아래 행 추가');bottom.setAttribute('aria-label','표 아래에 행 추가');
    const scroll=doc.createElement('div');scroll.className='se-table-scroll';base.dom.replaceChildren(tools,scroll,right,bottom);scroll.append(base.table);
    let selectedCell:number|undefined;
    const refresh=()=>{

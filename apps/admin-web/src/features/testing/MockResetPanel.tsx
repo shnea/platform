@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
@@ -56,7 +57,7 @@ export function MockResetPanel({ environmentId, environmentLabel, disabled, onBu
   return <div className="mock-reset">
     <h4>DEV 테스트 계정 초기화</h4>
     <p className="small muted">개발 로그인으로 만든 테스트 계정과 세션을 삭제합니다. 일반 회원·운영 계정·관리 권한이 있는 계정은 제외합니다.</p>
-    <button ref={trigger} type="button" className="secondary danger" disabled={busy || disabled} onClick={inspect}>
+    <button ref={trigger} type="button" className="secondary danger" disabled={busy || disabled} onClick={inspect}><Icon name="search"/>
       {busy ? "처리 중…" : "초기화 대상 확인"}
     </button>
     {!preview && error && <p className="alert" role="alert">{error}</p>}
@@ -88,9 +89,9 @@ export function MockResetPanel({ environmentId, environmentLabel, disabled, onBu
       </> : <p className="empty">초기화할 테스트 계정이 없습니다. 일반 회원이나 보호 대상 계정은 삭제하지 않습니다.</p>}
       {error && <p className="alert" role="alert">{error}</p>}
       <div className="form-actions">
-        <button type="button" className="secondary" disabled={busy} onClick={() => { setPreview(null); setError(""); }}>닫기</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => { setPreview(null); setError(""); }} aria-label="닫기" title="닫기" data-tooltip="닫기" data-icon-only="true"><Icon name="x"/></button>
         {preview.items.length > 0 && <button type="button" className="destructive" disabled={busy || !confirmed || !!error || disabled}
-          onClick={reset}>{busy ? "삭제 중…" : `${preview.items.length}명 삭제`}</button>}
+          onClick={reset}><Icon name="trash-2"/>{busy ? "삭제 중…" : `${preview.items.length}명 삭제`}</button>}
       </div>
     </Dialog>}
   </div>;

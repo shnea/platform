@@ -117,6 +117,7 @@ export function createEditorCore(options:CoreOptions){
     can(name:EditorCommand){ensure();return command(name,true);},
     isActive(name:string){ensure();return /^h[1-3]$/.test(name)?engine.isActive('heading',{level:Number(name[1])}):engine.isActive(name);},
     getSlash(){ensure();return slash();},
+    captureSelection(){ensure();syncSelection();},
     canOpenSlash(){ensure();syncSelection();const {empty,$from}=engine.state.selection;return engine.isEditable&&!engine.view.composing&&!engine.isActive('codeBlock')&&(!empty||$from.parentOffset===0||/\s$/u.test($from.parent.textBetween(0,$from.parentOffset)));},
     getMenuAnchor(){ensure();return engine.view.coordsAtPos(engine.state.selection.from);},
     insertAttachment(file:AttachmentRef){editable();const attrs={...file,id:crypto.randomUUID()};parseDocument({format:'shnea-editor',version:3,content:{type:'doc',content:[{type:'attachment',attrs}]}});if(!file.fileId)throw new EditorError('ATTACHMENT_ERROR','저장된 파일 식별자가 필요합니다.');attachments.insert(engine,[{type:'attachment',attrs}]);},

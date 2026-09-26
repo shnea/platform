@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import { useEffect, useState } from "react";
 import { api, mode } from "../../shared/auth";
 
@@ -29,7 +30,7 @@ export function ServiceMonitoring() {
   },[reload,auto]);
   const stale=data!==null&&now-Date.parse(data.measuredAt)>=60000;
   return <section className="job-panel service-monitoring" aria-labelledby="service-monitoring-title">
-    <div className="section-line"><h2 id="service-monitoring-title">플랫폼 서비스 상태</h2><button className="secondary" disabled={loading} onClick={()=>setReload(v=>v+1)}>서비스 새로고침</button></div>
+    <div className="section-line"><h2 id="service-monitoring-title">플랫폼 서비스 상태</h2><button className="secondary" disabled={loading} onClick={()=>setReload(v=>v+1)} aria-label="서비스 새로고침" title="서비스 새로고침" data-tooltip="서비스 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div>
     <p className="muted">{mode==="dev"?"개발":"운영"} 플랫폼 전체의 프로젝트·파일·알림 서비스를 확인합니다. 프로젝트 선택과 관계없는 공통 지표입니다.</p>
     <label className="job-auto"><input type="checkbox" checked={auto} disabled={loading} onChange={e=>setAuto(e.target.checked)} />30초마다 갱신</label>
     <p className="small muted">각 서비스 재시작 이후의 누적값입니다. 상태 검사·이 화면의 조회 요청은 제외하며, 내부 API와 거절된 요청은 포함합니다. 화면을 숨기면 자동 갱신을 쉽니다.</p>

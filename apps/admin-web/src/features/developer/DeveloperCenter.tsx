@@ -1,3 +1,4 @@
+import {Icon} from '../../shared/Icon';
 import {useEffect,useState} from "react";
 import {auth} from "../../shared/auth";
 import {readApiError} from "../../shared/api-error";
@@ -27,21 +28,21 @@ export function DeveloperCenter(){
    {tab==='start'&&<><h2>프로젝트 서버에서 파일 서비스 연결하기</h2><p className="muted">브라우저 → 프로젝트 서버 → 플랫폼 파일 서비스 순서로 연결합니다. 사용자별 업로드 허용 여부는 프로젝트 서버가 판단합니다.</p>
     <ol className="developer-steps"><li><h3>파일 서비스 사용 켜기</h3><p>프로젝트 생성 시 선택하거나 프로젝트 → 프로젝트 설정에서 켜세요. 모든 환경에 적용됩니다.</p></li><li><h3>환경별 서버 키 발급</h3><p>프로젝트 → API 키에서 파일 조회·업로드 권한을 선택하세요. 삭제·공유 관리 권한은 필요한 서버에만 추가하세요. 기존 키에 새 권한이 자동으로 붙지 않습니다.</p></li><li><h3>서버에서 호출하기</h3><p><code>X-Platform-Key</code> 헤더로 키를 전달합니다. 서버의 비밀값 저장소에 보관하고 프런트 코드·본문·URL에는 넣지 마세요.</p></li></ol>
     <h3>업로드부터 파일 사용까지</h3><ol className="developer-workflow">{workflow.map(([title,path,description])=><li key={title}><strong>{title}</strong><code>{path}</code><p>{description}</p></li>)}</ol>
-    <button onClick={()=>setTab('example')}>실행 예제로 확인</button>
+    <button onClick={()=>setTab('example')}><Icon name="code-xml"/>실행 예제로 확인</button>
    </>}
    {tab==='example'&&<><h2>실행 가능한 서버 연동 예제</h2><p>Python 3.11 이상과 표준 라이브러리만 사용합니다. 프로젝트 서버나 개발 PC에서 실행하고, 실제 서비스에서는 사용자 권한 확인 후 <code>Client.upload()</code>를 호출하세요.</p>
-    <a className="developer-download" href="/examples/file-client.py" download>file-client.py 다운로드</a>
+    <a className="developer-download" href="/examples/file-client.py" download><Icon name="download"/>file-client.py 다운로드</a>
     <h3>1. 서버 환경변수 설정</h3><dl><dt><code>PLATFORM_URL</code></dt><dd>{location.origin}</dd><dt><code>PLATFORM_API_KEY</code></dt><dd>해당 프로젝트·환경에서 발급한 파일 권한 서버 키</dd></dl><p className="small muted">키를 입력하거나 저장하는 브라우저 폼은 제공하지 않습니다. 실행 서버의 환경변수로 지정하세요.</p>
-    <h3>2. 업로드·변환 상태 확인</h3><pre tabIndex={0}><code>{command}</code></pre><button className="secondary" onClick={()=>void copy(command)}>업로드 명령 복사</button>
+    <h3>2. 업로드·변환 상태 확인</h3><pre tabIndex={0}><code>{command}</code></pre><button className="secondary" onClick={()=>void copy(command)}><Icon name="copy"/>업로드 명령 복사</button>
     <p>최대 8MiB 조각으로 전송하고 최대 120초 동안 변환 상태를 확인합니다. 실패·중단 후 같은 명령을 실행하면 기록과 서버 수신 위치로 재개합니다. 업로드 기록에는 키를 저장하지 않습니다.</p>
     <h3>3. 호스트 서비스에 연결</h3><pre tabIndex={0}><code>{'from file_client import Client\n\n# 프로젝트 서버에서 요청자의 업로드 권한을 먼저 확인합니다.\nfile = Client().upload("/server/upload/sample.mp4", "/server/state/upload.json")\nfile_id = file["fileId"]  # 호스트 DB·에디터 본문에는 ID 저장\nviews = Client().views(file_id)  # 임시 URL은 필요할 때 재조회'}</code></pre><p className="small muted">모듈로 가져올 때는 파일명을 <code>file_client.py</code>로 바꾸세요. 서버의 임시 원본과 재개 기록은 호스트가 관리합니다. 브라우저 업로드 엔드포인트에는 호스트의 인증·용량 제한을 적용하세요.</p>
     <h3>4. 다시 보기·삭제</h3><pre tabIndex={0}><code>{'python file-client.py views FILE_ID\npython file-client.py delete FILE_ID'}</code></pre><p>삭제는 원본과 파생 콘텐츠를 정리합니다. 테스트용 파일 ID로 확인하세요.</p>
     <details><summary>오류와 운영 시 확인할 점</summary><ul><li>401: 키 만료·폐기·프로젝트 상태를 확인하세요.</li><li>403: 프로젝트 파일 사용 설정과 키의 기능 권한을 확인하세요.</li><li>409: 수신 위치·변경된 설정을 재조회하고 용량 부족 여부를 확인하세요.</li><li>429·503: 반복 요청을 멈추고 응답의 재시도 안내를 확인하세요.</li><li>오류 응답의 code·detail·requestId로 원인을 찾으세요. 키·임시 URL은 로그에서 가리세요.</li><li>파일 서비스를 꺼도 보존·자동 정리는 계속 적용됩니다. 이미 받은 파일과 외부 공유 카드 캐시는 회수할 수 없습니다.</li></ul></details>
    </>}
-   {tab==='api'&&<><div className="section-line"><h2>파일 API 명세</h2><button className="secondary" disabled={loading} onClick={()=>void load()}>명세 새로고침</button></div><p className="muted">실행 중인 파일 서비스의 OpenAPI 명세입니다. 서버 키 API와 관리자 전용 API를 구분해 확인하세요.</p>
+   {tab==='api'&&<><div className="section-line"><h2>파일 API 명세</h2><button className="secondary" disabled={loading} onClick={()=>void load()} aria-label="명세 새로고침" title="명세 새로고침" data-tooltip="명세 새로고침" data-icon-only="true"><Icon name="refresh-cw"/></button></div><p className="muted">실행 중인 파일 서비스의 OpenAPI 명세입니다. 서버 키 API와 관리자 전용 API를 구분해 확인하세요.</p>
     {loading&&<p role="status">명세를 불러오는 중…</p>}{error&&<p className="alert" role="alert">{error}</p>}
     {spec&&<><label>API 검색<input type="search" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="예: uploads, 공유, DELETE"/></label><p className="small muted" role="status">{operations.length}개 작업{error?' · 이전 조회 결과':''}</p>
-    <button className="secondary" onClick={()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(spec,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='platform-files.openapi.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}>OpenAPI JSON 다운로드</button>
+    <button className="secondary" onClick={()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(spec,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='platform-files.openapi.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}}><Icon name="download"/>OpenAPI JSON 다운로드</button>
     <div className="developer-operations">{operations.map(({path,method,op})=><details key={method+path}><summary><span className="identifier">{method.toUpperCase()}</span><span>{op.summary??path}</span><code>{path}</code></summary><p>{op.description}</p><p className="small muted">{path.includes('/admin/')?'관리자 Bearer JWT':op.security?.length?'서버 API 키 또는 명세에 지정한 인증':'공개 접근 · 파일 공개 범위/공유 상태 확인'}</p><pre tabIndex={0}><code>{JSON.stringify(op,null,2)}</code></pre></details>)}</div>
     <details><summary>공통 데이터 형식·인증 정의</summary><pre tabIndex={0}><code>{JSON.stringify(spec.components,null,2)}</code></pre></details></>}
    </>}
