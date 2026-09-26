@@ -1,12 +1,12 @@
 import type {JSONContent} from '@tiptap/core';
 import {schema,emptyContent,safeLink} from './schema.js';
 
-export type EditorDocument={format:'shnea-editor';version:1;content:JSONContent};
-export type EditorErrorCode='DOCUMENT_INVALID'|'DOCUMENT_VERSION_UNSUPPORTED'|'DOCUMENT_LIMIT_EXCEEDED'|'EDITOR_DESTROYED'|'EDITOR_READ_ONLY'|'EDITOR_MOUNTED';
+export type EditorDocument={format:'shnea-editor';version:2;content:JSONContent};
+export type EditorErrorCode='DOCUMENT_INVALID'|'DOCUMENT_VERSION_UNSUPPORTED'|'DOCUMENT_LIMIT_EXCEEDED'|'EDITOR_DESTROYED'|'EDITOR_READ_ONLY'|'EDITOR_MOUNTED'|'ATTACHMENT_ERROR';
 export class EditorError extends Error {
   constructor(public readonly code:EditorErrorCode,message:string){super(message);this.name='EditorError';}
 }
-export const emptyDocument=():EditorDocument=>({format:'shnea-editor',version:1,content:emptyContent()});
+export const emptyDocument=():EditorDocument=>({format:'shnea-editor',version:2,content:emptyContent()});
 const fail=():never=>{throw new EditorError('DOCUMENT_INVALID','문서 구조나 속성이 올바르지 않습니다. 원본을 확인해 주세요.');};
 function record(value:unknown):Record<string,unknown>{
   if(!value||typeof value!=='object'||Array.isArray(value))return fail();
@@ -20,11 +20,12 @@ export function parseDocument(input:unknown):EditorDocument{
   if(input===null||input===undefined)return emptyDocument();
   const root=record(input);keys(root,['format','version','content']);
   if(root.format!=='shnea-editor')fail();
-  if(root.version!==1)throw new EditorError('DOCUMENT_VERSION_UNSUPPORTED','지원하지 않는 문서 버전입니다. 호환되는 에디터를 사용해 주세요.');
+  if(root.version!==1&&root.version!==2)throw new EditorError('DOCUMENT_VERSION_UNSUPPORTED','지원하지 않는 문서 버전입니다. 호환되는 에디터를 사용해 주세요.');
   let nodes=0,characters=0;
   const seen=new Set<object>();
+  const attachmentIds=new Set<string>();
   function attributes(value:unknown,allowed:string[],type:string):void{
-    if(value===undefined)return;
+    if(value===undefined){if(type==='attachment'||type==='imageRow')fail();return;}
     const attrs=record(value);keys(attrs,allowed);
     for(const [key,item] of Object.entries(attrs)){
       if(item===null)continue;
@@ -50,6 +51,12 @@ export function parseDocument(input:unknown):EditorDocument{
       for(const key of ['source','alt','title'])if(attrs[key]!==undefined&&typeof attrs[key]!=='string')fail();
       if(typeof attrs.source==='string'&&/^\s*(data|blob|javascript):/i.test(attrs.source))fail();
     }
+    if(type==='attachment'){
+      if(root.version!==2||typeof attrs.id!=='string'||!/^[a-f0-9-]{36}$/i.test(attrs.id)||attachmentIds.has(attrs.id))fail();attachmentIds.add(attrs.id as string);
+      for(const key of ['fileId','scope','name'])if(typeof attrs[key]!=='string'||(attrs[key] as string).length>1000)fail();
+      if(!attrs.scope||!attrs.name||!['file','image','video','audio'].includes(attrs.kind as string)||!Number.isSafeInteger(attrs.size)||Number(attrs.size)<0||Number(attrs.size)>5_000_000_000)fail();
+    }
+    if(type==='imageRow'){if(root.version!==2||typeof attrs.id!=='string'||!/^[a-f0-9-]{36}$/i.test(attrs.id)||attachmentIds.has(attrs.id))fail();attachmentIds.add(attrs.id as string);}
   }
   function visit(value:unknown,depth:number):void{
     if(depth>64||++nodes>20000||characters>2_000_000)throw new EditorError('DOCUMENT_LIMIT_EXCEEDED','문서 크기 또는 중첩 깊이 제한을 초과했습니다.');
@@ -57,6 +64,7 @@ export function parseDocument(input:unknown):EditorDocument{
     keys(node,['type','attrs','content','marks','text']);
     if(typeof node.type!=='string'||!Object.hasOwn(schema.nodes,node.type))fail();
     const type=node.type as string;
+    if(type==='imageRow'&&(!Array.isArray(node.content)||node.content.length<1||node.content.length>3||node.content.some(child=>record(child).type!=='attachment'||record(record(child).attrs).kind!=='image')))fail();
     attributes(node.attrs,Object.keys(schema.nodes[type].spec.attrs??{}),type);
     if(node.text!==undefined){if(node.type!=='text'||typeof node.text!=='string'||!node.text.length)fail();characters+=(node.text as string).length;}
     if(node.marks!==undefined){
@@ -69,6 +77,6 @@ export function parseDocument(input:unknown):EditorDocument{
   visit(root.content,0);
   if(characters>2_000_000)throw new EditorError('DOCUMENT_LIMIT_EXCEEDED','문서 크기 제한을 초과했습니다.');
   if(record(root.content).type!=='doc')fail();
-  try{const node=schema.nodeFromJSON(root.content);node.check();return {format:'shnea-editor',version:1,content:node.toJSON()};}
+  try{const node=schema.nodeFromJSON(root.content);node.check();return {format:'shnea-editor',version:2,content:node.toJSON()};}
   catch{return fail();}
 }

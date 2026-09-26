@@ -1,10 +1,15 @@
-import {createEditorCore,type CoreOptions,type EditorCommand} from './index.js';
+import {createEditorCore,type CoreOptions,type EditorCommand,type AttachmentKind} from './index.js';
 
-type Category='전체'|'본문'|'목록'|'글자 서식'|'표'|'편집';
-type Action=EditorCommand;
+type Category='전체'|'본문'|'목록'|'글자 서식'|'표'|'첨부'|'편집';
+type Action=EditorCommand|AttachmentKind;
 type Item={id:Action;label:string;keyword:string;category:Category;aliases?:string};
-const categories:Category[]=['전체','본문','목록','글자 서식','표','편집'];
+const categories:Category[]=['전체','본문','목록','글자 서식','표','첨부','편집'];
+const isAttachment=(id:Action):id is AttachmentKind=>['file','image','video','audio'].includes(id);
 export const editorCommands:Item[]=[
+ {id:'file',label:'파일 업로드',keyword:'file',category:'첨부'},
+ {id:'image',label:'이미지 업로드',keyword:'image',category:'첨부',aliases:'사진 picture'},
+ {id:'video',label:'영상 업로드',keyword:'video',category:'첨부'},
+ {id:'audio',label:'오디오 업로드',keyword:'audio',category:'첨부',aliases:'음악 소리'},
  {id:'paragraph',label:'본문',keyword:'text',category:'본문',aliases:'paragraph 문단'},
  {id:'h1',label:'제목 1',keyword:'h1',category:'본문',aliases:'heading title'},
  {id:'h2',label:'제목 2',keyword:'h2',category:'본문',aliases:'heading title'},
@@ -64,7 +69,7 @@ export function mountEditor(options:UIOptions){
  root.append(body,menu,hint,message);options.element.append(root);
  let core:ReturnType<typeof createEditorCore>|undefined,disposed=false,category:Category='전체',selected=0,items:Item[]=[],removeSlash=false,dismissed='',pasteSource='';
  const status=(text:string)=>{message.textContent=text;message.hidden=!text;};
- const allowed=(item:Item)=>item.id==='link'||!!core?.can(item.id);
+ const allowed=(item:Item)=>isAttachment(item.id)||item.id==='link'||!!core?.can(item.id);
  function position(){
   if(menu.hidden||!core)return;
   let rect:{left:number;bottom:number;top:number};try{rect=core.getMenuAnchor();}catch{rect=body.getBoundingClientRect();}
@@ -83,6 +88,7 @@ export function mountEditor(options:UIOptions){
   if(!core||!allowed(item))return;
   if(item.id==='link'){panel.hidden=true;tabs.hidden=true;form.hidden=false;search.removeAttribute('aria-activedescendant');linkInput.value='';linkInput.setCustomValidity('');linkInput.focus();return;}
   try{
+   if(isAttachment(item.id)){core.pickAttachment(item.id,{removeSlash,onClose:()=>close(true)});return;}
    close();
    if(!core.run(item.id,undefined,{removeSlash}))status('현재 위치에서는 사용할 수 없는 동작입니다.');else status('');
   }catch(e){status(e instanceof Error?e.message:'동작을 실행하지 못했습니다.');}

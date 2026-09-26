@@ -4,6 +4,7 @@ import { SectionTabs } from "./SectionTabs";
 import { Dialog } from "./Dialog";
 import type { RetentionPolicy } from "./RetentionPanel";
 import {VideoPlayer,videoState,videoReason,type FileViewsData} from "./VideoPlayer";
+import {ImageViewer} from './ImageViewer';
 import {FileDuplicates} from "./FileDuplicates";
 import {FilePublicShare} from "./FilePublicShare";
 import {FileShares} from "./FileShares";
@@ -43,7 +44,7 @@ export function FileDetails({file,environmentId,policies,onClose,onOpen,onBusyCh
    <SectionTabs id="file-view" label="파일 보기 방식" value={tab} disabled={busy} onChange={value=>{setTab(value);setMediaError(false);}} items={[{value:'preview',label:data.kind==='VIDEO'?'영상 보기':data.kind==='AUDIO'?'오디오 듣기':'미리보기'},{value:'thumbnail',label:'썸네일 보기'},{value:'original',label:'원본 보기'}]}/>
    <div id="file-view-panel" role="tabpanel" aria-labelledby={`file-view-${tab}`} className="file-preview">
     {!error&&data.kind==='VIDEO'&&tab==='preview'?<VideoPlayer data={data}/>:expired||error?<p className="muted">보기 정보를 새로 조회해 주세요.</p>:!source||data.state!=='READY'&&tab!=='thumbnail'?<p className="muted">{data.state==='QUEUED'||data.state==='PROCESSING'?'원본은 저장되었습니다. 미리보기가 준비되면 여기에 표시됩니다.':data.state==='FAILED'?'미리보기를 만들지 못했습니다. 다시 시도하거나 원본을 다운로드해 확인해 주세요.':tab==='thumbnail'?'이 파일에는 썸네일이 없습니다.':'이 형식은 화면 미리보기를 지원하지 않습니다. 원본을 다운로드해 확인해 주세요.'}</p>:
-     tab==='thumbnail'||data.kind==='IMAGE'?<img key={source} src={source} alt={`${file.originalName} ${tab==='thumbnail'?'썸네일':'이미지'}`} onError={()=>setMediaError(true)}/>:
+     tab==='thumbnail'||data.kind==='IMAGE'?<ImageViewer src={source} originalUrl={data.kind==='IMAGE'?data.originalUrl:source} downloadUrl={data.kind==='IMAGE'?data.downloadUrl:undefined} name={`${file.originalName} ${tab==='thumbnail'?'썸네일':'이미지'}`} onError={()=>setMediaError(true)}/>:
      data.kind==='VIDEO'?<video key={source} controls playsInline preload="metadata" poster={data.thumbnailUrl??undefined} src={source} onError={()=>setMediaError(true)}/>:
      data.kind==='AUDIO'?<audio key={source} controls preload="metadata" src={source} onError={()=>setMediaError(true)}/>:
      <iframe key={source} src={source} title={`${file.originalName} ${tab==='original'?'원본':'미리보기'}`} referrerPolicy="no-referrer"/>}

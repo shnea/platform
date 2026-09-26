@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T17:22:31.648Z",
+  "generatedAt": "2026-09-26T18:26:10.036Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -40,15 +40,22 @@
       {
         "name": "mobile",
         "value": "600px",
-        "purpose": "파일 URL 행과 파일 보존 변경 폼을 세로로 배치한다. 미리보기 안쪽 여백은 8px, 문서 프레임 높이는 440px로 줄이며 동작은 줄바꿈한다."
+        "purpose": "파일 URL 행과 파일 보존 변경 폼을 세로로 배치한다. 미리보기 안쪽 여백은 8px, 문서 프레임 높이는 440px로 줄이며 동작은 줄바꿈한다. 에디터 이미지 행은 저장된 구성을 유지하며 세로로 쌓고 공통 이미지 확대 대화상자는 화면을 채우며 안쪽 여백 12px와 모서리 반경 0을 사용한다."
       }
     ]
   },
   "components": [
     {
+      "name": "공통 이미지 확대 도구",
+      "kind": "custom",
+      "description": "에디터 편집·읽기와 파일 기본 이미지 뷰어에서 같은 이미지 확대 dialog를 사용한다. 본문 썸네일을 누르면 파일명·도구 모음·확대 영역 순서로 열리고 닫으면 썸네일로 포커스를 돌린다. SVG 돋보기와 축소·확대, 배율, 화면 맞춤·100%·원본 보기·다운로드·닫기를 제공하며 도구 최소 높이는 44px다. 휠·드래그·두 손가락 터치와 확대 영역의 키보드 조작을 지원하고 확대 상태는 문서에 저장하지 않는다. 로딩 실패 시 오류를 표시하고 확대 조작을 잠근다. 데스크톱 dialog는 최대 1200px와 화면 너비에서 32px를 뺀 값 중 작은 너비, 화면 높이에서 32px를 뺀 높이, 16px 안쪽 여백과 8px 모서리를 사용한다. 아래는 확대 동작을 연결하지 않은 도구 모음의 정적 예시다.",
+      "html": "<div class=\"ds-image-tools\" aria-label=\"이미지 확대 도구 예시\"><button type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M21 21l-5-5M6 10h8\"/><circle cx=\"10\" cy=\"10\" r=\"7\"/></svg>축소</button><button type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M21 21l-5-5M6 10h8M10 6v8\"/><circle cx=\"10\" cy=\"10\" r=\"7\"/></svg>확대</button><span class=\"ds-image-scale\">100%</span><button type=\"button\">화면 맞춤</button><button type=\"button\">100%</button><button type=\"button\">닫기</button></div>",
+      "css": ".ds-image-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text,#183126);font:16px/1.5 system-ui,sans-serif}.ds-image-tools button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;margin:0;padding:8px 12px;font:inherit;font-size:14px;font-weight:600;border:1px solid var(--line,#cdd7ce);border-radius:6px;background:var(--surface,#fff);color:inherit;cursor:pointer}.ds-image-tools svg{stroke:currentColor;stroke-width:1.8;fill:none}.ds-image-scale{min-width:5ch;text-align:center;font-variant-numeric:tabular-nums}.ds-image-tools button:hover{background:var(--raised,#edf2ed)}.ds-image-tools button:focus-visible{outline:3px solid var(--accent,#245c43);outline-offset:2px}.ds-image-tools button:disabled{opacity:.5;cursor:not-allowed}@media(max-width:600px){.ds-image-tools{gap:4px}.ds-image-tools button{padding:8px}}"
+    },
+    {
       "name": "에디터 슬래시 메뉴",
       "kind": "custom",
-      "description": "독립 에디터 메뉴는 메모리 문서의 편집·읽기와 접힌 JSON 입출력을 제공한다. 상단 서식 도구막대 없이 /로 전체·본문·목록·글자 서식·표·편집 종류와 검색 목록을 연다. 검색은 전체 종류에서 찾으며 선택 글자를 보존한다. 화면 경계 안의 팝업에서 방향키·Enter·Esc를 지원하고 현재 위치 사용 불가를 문구로 표시한다. Markdown 붙여넣기는 원문·서식·취소를 고른다. 표 가장자리 추가·선택 행/열 삭제는 편집에만 표시하고 읽기와 본문·표 너비를 공유한다. 파일 업로드·드롭·HLS·이미지 나란히 배치는 후속 범위다. 아래는 메뉴 일부의 정적 시각 예시다.",
+      "description": "독립 에디터 메뉴는 메모리 문서의 편집·읽기와 접힌 JSON 입출력을 제공한다. 상단 서식 도구막대 없이 /로 전체·본문·목록·글자 서식·표·편집 종류와 검색 목록을 연다. 검색은 전체 종류에서 찾으며 선택 글자를 보존한다. 화면 경계 안의 팝업에서 방향키·Enter·Esc를 지원하고 현재 위치 사용 불가를 문구로 표시한다. Markdown 붙여넣기는 원문·서식·취소를 고른다. 표 가장자리 추가·선택 행/열 삭제는 편집에만 표시하고 읽기와 본문·표 너비를 공유하며 긴 셀 내용은 줄바꿈한다. /file·/image·/video·/audio와 이미지 붙여넣기·본문 드롭으로 첨부한다. 접힌 저장 위치의 도움말은 본문 메모리 유지와 첨부의 실제 공개 파일 저장·기본 보존 정책, 본문 제거 후 파일이 남음을 구분한다. 일반 파일·오디오는 파일명·용량과 동작을 담은 간결한 영역이고 준비된 이미지·영상은 카드·파일명·용량 없이 표시한다. 영상은 썸네일 재생 버튼으로 본문 HLS를 열며 자동 재생하지 않는다. 이미지 행은 최대 3개를 균등 분배하고 간격 12px를 둔다. 편집 시 행 오른쪽 아래 추가·미디어 오른쪽 위 제거 버튼은 hover/focus에서, 호버가 없는 기기에서는 항상 보인다. 3개면 추가를 숨기고 제거 후 균등 분배하며 읽기에서는 조작부를 숨긴다. 아래는 메뉴 일부의 정적 시각 예시다.",
       "html": "<section class=\"ds-editor-menu\" aria-label=\"편집 기능 메뉴 예시\"><label>편집 기능 검색<input placeholder=\"명령 검색 · /table, /굵게\" /></label><div class=\"ds-editor-categories\"><button type=\"button\" aria-pressed=\"true\">전체</button><button type=\"button\">본문</button><button type=\"button\">목록</button><button type=\"button\">글자 서식</button><button type=\"button\">표</button><button type=\"button\">편집</button></div><div class=\"ds-editor-commands\"><button type=\"button\">제목 1<small>/h1</small></button><button type=\"button\">표 삽입<small>/table</small></button></div><p>↑↓ 이동 · Enter 선택 · Esc 닫기 · // 문자 입력</p></section>",
       "css": ".ds-editor-menu{max-width:460px;display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--accent,#b0e1c7);border-radius:8px;background:var(--surface,#182220);color:var(--text,#e8eee8);box-shadow:0 8px 32px #0003;font:16px/1.7 \"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif}.ds-editor-menu label{display:grid;gap:6px;font-size:14px}.ds-editor-menu input,.ds-editor-menu button{font:inherit;color:inherit;background:var(--surface,#182220);border:1px solid var(--line,#34443e);border-radius:6px;min-height:44px;padding:8px 12px;min-width:0}.ds-editor-menu button{font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}.ds-editor-categories{display:flex;flex-wrap:wrap;gap:4px}.ds-editor-categories button{padding:6px 10px;font-size:13px}.ds-editor-menu [aria-pressed=true]{background:var(--raised,#202d29);border-color:var(--accent,#b0e1c7);color:var(--accent,#b0e1c7)}.ds-editor-commands{display:flex;flex-direction:column;gap:4px}.ds-editor-commands button{display:flex;justify-content:space-between;gap:12px;text-align:left}.ds-editor-menu small,.ds-editor-menu p{font-size:12px;font-weight:400;color:var(--muted,#a5b7ae)}.ds-editor-menu p{margin:0}.ds-editor-menu button:hover{background:var(--raised,#202d29)}.ds-editor-menu :is(input,button):focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-editor-menu button{transition:none}}"
     },

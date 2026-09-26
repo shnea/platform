@@ -9,6 +9,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class FileSharesWebTest {
+    @Test void imageViewerRedirectChecksAccessAndKeepsProtectedToken() throws Exception {
+        var views=mock(FileViews.class);UUID id=UUID.randomUUID();String token="b".repeat(43);
+        when(views.authorize(id,token,null)).thenReturn(mock(FilesService.Row.class));
+        var links=mock(FileViews.Links.class);when(links.kind()).thenReturn("IMAGE");when(views.links(id,token,null)).thenReturn(links);
+        var mvc=MockMvcBuilders.standaloneSetup(new FileViewsController(views,mock(FilesService.class),mock(FileStore.class),mock(FileAccess.class))).setControllerAdvice(new FileErrors()).build();
+        mvc.perform(get("/api/v1/files/"+id+"/view").param("token",token)).andExpect(status().isFound()).andExpect(header().string("Location","/file-viewer.html?id="+id+"&token="+token));
+        verify(views).authorize(id,token,null);
+        when(views.authorize(id,null,null)).thenThrow(FileFailure.missing());
+        mvc.perform(get("/api/v1/files/"+id+"/view")).andExpect(status().isNotFound());
+    }
     @Test void videoRedirectStaysRelativeBehindTheHttpsGateway() throws Exception {
         var views=mock(FileViews.class);UUID id=UUID.randomUUID();String token="a".repeat(43);
         when(views.authorize(id,token,null)).thenReturn(mock(FilesService.Row.class));

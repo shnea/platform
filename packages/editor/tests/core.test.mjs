@@ -11,12 +11,91 @@ after(()=>dom.window.close());
 const target=()=>{const node=document.createElement('div');document.body.append(node);return node;};
 const rejects=(fn,code='DOCUMENT_INVALID')=>assert.throws(fn,error=>error instanceof EditorError&&error.code===code);
 const docOf=content=>({format:'shnea-editor',version:1,content:{type:'doc',content}});
+const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+const pasteFiles=(node,files)=>{const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files,getData:()=>''}});node.querySelector('.tiptap').dispatchEvent(event);};
+const attached=(attrs={})=>({type:'attachment',attrs:{id:'10000000-0000-4000-8000-000000000001',fileId:'saved-file',scope:'environment',kind:'file',name:'test.txt',size:12,...attrs}});
+const document2=content=>({...docOf(content),version:2});
+const views=file=>({fileId:file.fileId,kind:'TEXT',state:'READY',originalUrl:'/original',downloadUrl:'/download',viewerUrl:'/view',previewUrl:'/preview',thumbnailUrl:null,expiresAt:null});
+
+test('version 1은 2로 이전하며 첨부 식별자·범위·크기를 검사하고 임시 URL을 거부한다',()=>{
+ assert.equal(parseDocument(docOf([{type:'paragraph'}])).version,2);
+ assert.deepEqual({...parseDocument(document2([attached()])).content.content[0].attrs},attached().attrs);
+ for(const value of [document2([{type:'attachment'}]),docOf([attached()]),document2([attached(),attached()]),document2([attached({scope:''})]),document2([attached({size:-1})]),document2([attached({downloadUrl:'/temporary-secret'})])])rejects(()=>parseDocument(value));
+});
+
+test('이미지 붙여넣기는 업로드 중 위치·환경을 보존하고 파일 ID만 문서에 저장한다',async()=>{
+ const node=target();let complete,context;let scope='first';
+ const attachments={scope:()=>scope,upload:(file,ctx)=>{context=ctx;return new Promise(resolve=>{complete=()=>resolve({fileId:'saved-file',scope:ctx.scope,kind:ctx.kind,name:file.name,size:file.size});});},resolve:async file=>views(file)};
+ const editor=createEditorCore({element:node,attachments});pasteFiles(node,[new File(['image'],'photo.png',{type:'image/png'})]);
+ assert.equal(node.querySelectorAll('.sa-pending').length,1);assert.equal(context.kind,'image');scope='second';editor.insertText('나중 입력');complete();await tick();
+ const saved=editor.getValue();assert.match(JSON.stringify(saved),/나중 입력/);const ref=saved.content.content.find(n=>n.type==='imageRow').content[0].attrs;assert.equal(ref.scope,'first');assert.equal(ref.fileId,'saved-file');assert.ok(!JSON.stringify(saved).includes('/download'));assert.equal(node.querySelectorAll('.sa-pending').length,0);
+ editor.destroy();node.remove();
+});
+
+test('여러 파일은 순서대로 전송되고 실패한 파일만 같은 요청 ID로 재시도한다',async()=>{
+ const node=target(),calls=[];let fail=true;
+ const attachments={scope:()=> 'env',upload:async(file,ctx)=>{calls.push([file.name,ctx.requestId]);if(file.name==='one.txt'&&fail){fail=false;throw Error('연결 끊김');}return {fileId:file.name,scope:ctx.scope,kind:ctx.kind,name:file.name,size:file.size};},resolve:async file=>views(file)};
+ const editor=createEditorCore({element:node,attachments});pasteFiles(node,[new File(['1'],'one.txt'),new File(['2'],'two.txt')]);await tick();
+ assert.deepEqual(calls.map(x=>x[0]),['one.txt','two.txt']);assert.match(node.textContent,/연결 끊김/);[...node.querySelectorAll('button')].find(b=>b.textContent==='다시 시도').click();await tick();
+ assert.equal(calls[0][1],calls[2][1]);assert.deepEqual(editor.getValue().content.content.filter(n=>n.type==='attachment').map(n=>n.attrs.fileId),['one.txt','two.txt']);editor.destroy();node.remove();
+});
+
+test('첨부 취소·문서 교체는 전송을 중단하며 늦은 완료가 새 문서를 바꾸지 않는다',async()=>{
+ const node=target();let context,complete;
+ const attachments={scope:()=> 'env',upload:(file,ctx)=>{context=ctx;return new Promise(resolve=>complete=()=>resolve({fileId:'late',scope:ctx.scope,kind:ctx.kind,name:file.name,size:file.size}));},resolve:async file=>views(file)};
+ const editor=createEditorCore({element:node,attachments});pasteFiles(node,[new File(['1'],'one.txt')]);editor.setValue(fromMarkdown('새 문서'));assert.equal(context.signal.aborted,true);complete();await tick();assert.equal(node.textContent,'새 문서');
+ pasteFiles(node,[new File(['2'],'two.txt')]);[...node.querySelectorAll('button')].find(b=>b.textContent==='첨부 취소').click();assert.equal(context.signal.aborted,true);complete();await tick();assert.equal(editor.getValue().content.content.some(n=>n.type==='attachment'),false);editor.destroy();node.remove();
+});
+
+test('첨부 없는 호스트·저장 위치 미선택은 업로드하지 않고 한국어로 안내한다',()=>{
+ const node=target(),errors=[];const editor=createEditorCore({element:node,onError:e=>errors.push(e)});pasteFiles(node,[new File(['1'],'one.txt')]);assert.equal(errors[0].code,'ATTACHMENT_ERROR');assert.equal(editor.getValue().content.content.some(n=>n.type==='attachment'),false);editor.destroy();node.remove();
+});
+
+test('이미지 줄은 1~3개 이미지만 허용하며 개별 삭제·마지막 삭제와 읽기 배치를 보존한다',async()=>{
+ const row=images=>({type:'imageRow',attrs:{id:'20000000-0000-4000-8000-000000000001'},content:images});
+ const images=[1,2,3].map(n=>attached({id:`10000000-0000-4000-8000-00000000000${n}`,kind:'image'}));
+ for(const contents of [[],[attached()],images.concat(attached({id:'10000000-0000-4000-8000-000000000004',kind:'image'}))])rejects(()=>parseDocument(document2([row(contents)])));
+ const node=target(),editor=createEditorCore({element:node,value:document2([row(images)])});await tick();assert.equal(node.querySelector('.se-image-row').dataset.count,'3');assert.equal(node.querySelector('.se-image-row-tools button').hidden,true);
+ node.querySelectorAll('.se-media-remove')[1].click();assert.equal(node.querySelector('.se-image-row').dataset.count,'2');assert.equal(node.querySelector('.se-image-row-tools button').hidden,false);
+ const read=target(),dispose=renderViewer(read,editor.getValue());assert.equal(read.querySelector('.se-image-row').dataset.count,'2');assert.equal(read.querySelector('.se-media-remove'),null);dispose();read.remove();
+ node.querySelector('.se-media-remove').click();node.querySelector('.se-media-remove').click();assert.equal(node.querySelector('.se-image-row'),null);assert.doesNotThrow(()=>parseDocument(editor.getValue()));editor.destroy();node.remove();
+});
+
+test('옆에 추가한 이미지는 같은 줄에 저장되고 네 번째 추가는 거부한다',async()=>{
+ const node=target(),errors=[];const adapter={scope:()=> 'env',upload:async(file,ctx)=>({fileId:file.name,scope:ctx.scope,kind:ctx.kind,name:file.name,size:file.size}),resolve:async file=>views(file)};
+ const editor=createEditorCore({element:node,attachments:adapter,onError:e=>errors.push(e)});pasteFiles(node,[new File(['1'],'one.png',{type:'image/png'})]);await tick();
+ const original=window.HTMLInputElement.prototype.click;
+ let count=3;
+ window.HTMLInputElement.prototype.click=function(){Object.defineProperty(this,'files',{value:Array.from({length:count},(_,i)=>new File(['2'],`next-${i}.png`,{type:'image/png'}))});this.dispatchEvent(new window.Event('change'));};
+ try{node.querySelector('.se-image-row-tools button').click();assert.equal(errors.length,1);assert.match(errors[0].message,/최대 3개/);count=2;node.querySelector('.se-image-row-tools button').click();await tick();assert.equal(node.querySelector('.se-image-row').dataset.count,'3');const saved=parseDocument(editor.getValue());assert.equal(saved.content.content.filter(n=>n.type==='imageRow').length,1);assert.equal(saved.content.content.find(n=>n.type==='imageRow').content.length,3);}finally{window.HTMLInputElement.prototype.click=original;editor.destroy();node.remove();}
+});
+
+test('파일 선택 입력은 DOM에 연결되고 취소·문서 교체 후 제거하며 늦은 선택은 무시한다',()=>{
+ const node=target(),editor=createEditorCore({element:node,attachments:{scope:()=> 'env',upload:async()=>{throw Error('선택 취소 뒤 업로드 금지');},resolve:async file=>views(file)}});
+ const original=window.HTMLInputElement.prototype.click;let input;
+ window.HTMLInputElement.prototype.click=function(){input=this;assert.equal(this.isConnected,true);};
+ try{editor.focus();editor.pickAttachment('image');assert.equal(input.accept,'image/*');input.dispatchEvent(new window.Event('cancel'));assert.equal(input.isConnected,false);assert.equal(document.activeElement,node.querySelector('.tiptap'));
+ editor.pickAttachment('file');editor.setValue(fromMarkdown('교체 문서'));assert.equal(input.isConnected,false);Object.defineProperty(input,'files',{value:[new File(['1'],'late.txt')]});input.dispatchEvent(new window.Event('change'));assert.equal(node.textContent,'교체 문서');assert.equal(document.querySelector('.se-file-picker'),null);
+ }finally{window.HTMLInputElement.prototype.click=original;editor.destroy();node.remove();}
+});
+
+test('읽기 첨부는 동일 조회를 사용하며 실행 가능한 URL·다른 파일 응답을 차단한다',async()=>{
+ for(const invalid of [{downloadUrl:'javascript:alert(1)'},{fileId:'another-file'}]){
+  const node=target(),dispose=renderViewer(node,document2([attached()]),{attachments:{scope:()=>undefined,upload:async()=>{throw Error('unused');},resolve:async file=>({...views(file),...invalid})}});await tick();assert.equal(node.querySelector('[contenteditable]'),null);assert.equal(node.querySelector('.sa-content').childElementCount,0);assert.ok(node.querySelector('.sa-status').textContent);assert.ok([...node.querySelectorAll('a')].every(a=>a.hidden));dispose();node.remove();
+ }
+});
+
+test('첨부 조회 실패 후 다시 조회하면 뷰어를 복원하며 제거 뒤 응답은 무시한다',async()=>{
+ const node=target();let fail=true,resolve;
+ const adapter={scope:()=>undefined,upload:async()=>{throw Error('unused');},resolve:async file=>{if(fail)throw Error('삭제·권한 확인');return new Promise(done=>resolve=()=>done(views(file)));}};
+ const dispose=renderViewer(node,document2([attached()]),{attachments:adapter});await tick();assert.match(node.textContent,/삭제·권한/);fail=false;node.querySelector('button:last-child').click();resolve();await tick();assert.equal(node.querySelector('a').hidden,false);node.querySelector('button:last-child').click();dispose();resolve();await tick();assert.equal(node.childElementCount,0);node.remove();
+});
 
 test('문서 입출력은 독립 복사이며 빈 값만 명시적으로 초기화한다',()=>{
   assert.deepEqual(parseDocument(null),emptyDocument());
   const source=fromMarkdown('# 한글 제목\n\n본문 **굵게**'),copy=parseDocument(source);copy.content.content[0].content[0].text='수정';
   assert.equal(source.content.content[0].content[0].text,'한글 제목');
-  rejects(()=>parseDocument({...source,version:2}),'DOCUMENT_VERSION_UNSUPPORTED');
+  rejects(()=>parseDocument({...source,version:99}),'DOCUMENT_VERSION_UNSUPPORTED');
   rejects(()=>parseDocument(''));rejects(()=>parseDocument({}));
 });
 test('알 수 없는 노드·속성·부적절한 구조와 과도한 깊이는 거부한다',()=>{
@@ -97,7 +176,7 @@ test('슬래시 검색은 모든 종류를 찾고 beforeinput·조합 중 입력
  const node=target(),editor=mountEditor({element:node}),body=node.querySelector('.tiptap'),search=node.querySelector('[role=combobox]');
  body.dispatchEvent(new window.InputEvent('beforeinput',{inputType:'insertText',data:'/',bubbles:true,cancelable:true,isComposing:true}));assert.equal(node.querySelector('[role=dialog]').hidden,true);
  body.dispatchEvent(new window.InputEvent('beforeinput',{inputType:'insertText',data:'/',bubbles:true,cancelable:true}));assert.equal(node.querySelector('[role=dialog]').hidden,false);
- assert.equal(node.querySelectorAll('[role=tab]').length,6);assert.equal(node.querySelector('[role=toolbar]'),null);
+ assert.equal(node.querySelectorAll('[role=tab]').length,7);assert.equal(node.querySelector('[role=toolbar]'),null);
  search.value='table';search.dispatchEvent(new window.Event('input'));assert.match(node.querySelector('[aria-selected=true][role=option]').textContent,/표 삽입/);
  search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));assert.equal(node.querySelectorAll('tr').length,3);assert.doesNotMatch(JSON.stringify(editor.getValue()),/\/table/);
  editor.setValue(null);body.dispatchEvent(new window.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true}));search.dispatchEvent(new window.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true}));assert.equal(body.textContent,'/');assert.equal(node.querySelector('[role=dialog]').hidden,true);
