@@ -30,6 +30,22 @@
 .file-preview { background: var(--surface); min-height: 200px; padding: 16px; display: grid; place-items: center; }
 .file-preview img, .file-preview video { max-width: 100%; max-height: 560px; object-fit: contain; }
 .file-preview audio { width: min(100%,600px); }
+.file-video-player { width: 100%; min-width: 0; }
+.file-video-player video { display: block; width: 100%; max-height: 65vh; margin: 0 auto; background: var(--bg); }
+.file-video-frame { position: relative; background: #000; }
+.file-video-frame video::-webkit-media-controls-fullscreen-button { display: none; }
+.file-video-tools { position: absolute; top: 8px; right: 8px; display: flex; align-items: start; gap: 8px; }
+.file-video-tools button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 8px; border: 1px solid #59645f; border-radius: 6px; background: #14201c; color: #f0f4ed; }
+.file-video-tools button:hover { background: #263930; }
+.file-video-tools button:focus-visible, .file-video-settings-panel select:focus-visible { outline: 2px solid #8ce5b5; outline-offset: 2px; }
+.file-video-settings { position: relative; }
+.file-video-settings-panel { position: absolute; top: 52px; right: 0; width: 184px; padding: 12px; border: 1px solid #59645f; border-radius: 6px; background: #14201c; color: #f0f4ed; }
+.file-video-settings-panel label { display: grid; gap: 8px; margin: 0 0 8px; color: inherit; }
+.file-video-settings-panel select { width: 100%; min-height: 44px; color-scheme: dark; color: #f0f4ed; background: #14201c; border-color: #59645f; }
+.file-video-frame:fullscreen, .file-video-frame.is-expanded { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #000; }
+.file-video-frame.is-expanded { position: fixed; inset: 0; z-index: 1000; height: 100dvh; }
+.file-video-frame:fullscreen video, .file-video-frame.is-expanded video { width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
+.file-public-viewer { width: min(1100px,100%); margin: 0 auto; padding: 24px; overflow-wrap: anywhere; }
 .file-preview iframe { width: 100%; height: 560px; border: 0; background: var(--surface); }
 .file-url-list { padding: 0; list-style: none; }
 .file-url-list li { display: flex; align-items: end; gap: 16px; padding-block: 12px; border-bottom: 1px solid var(--line); }

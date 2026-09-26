@@ -39,7 +39,62 @@ class FilesDatabaseTest {
     }
     @AfterEach void cleanup() { if (admin != null) admin.execute("DROP SCHEMA " + schema + " CASCADE"); }
     RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
-    FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store);}
+    FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000);}
+    FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos());}
+    @Test void videoQualityPreservesPortraitAndNeverUpscales() {
+        var landscape=FileVideos.variants(new FileVideos.Source(1920,1080,12,true));
+        assertThat(landscape).extracting(FileVideos.Variant::quality).containsExactly(360,720,1080);
+        var portrait=FileVideos.variants(new FileVideos.Source(720,1280,12,false));
+        assertThat(portrait).extracting(FileVideos.Variant::quality).containsExactly(360,720);
+        assertThat(portrait.getFirst().width()).isEqualTo(360);assertThat(portrait.getFirst().height()).isEqualTo(640);
+        var small=FileVideos.variants(new FileVideos.Source(321,241,12,false)).getFirst();
+        assertThat(small.quality()).isEqualTo(240);assertThat(small.width()).isLessThanOrEqualTo(321);assertThat(small.height()).isLessThanOrEqualTo(241);
+    }
+    UUID videoFile() {
+        UUID id=create().uploadId();append(id,0,bytes);service.complete(id,owner);
+        db.update("UPDATE files SET original_name='video.mp4' WHERE id=?",id);return id;
+    }
+    @Test void playbackCapabilityOutlivesViewTokenButCannotReadOriginalAndIsRevoked() {
+        UUID id=videoFile();service.visibility(id,owner,"PRIVATE");var v=views();var links=v.manage(id,owner,java.time.Instant.now().plusSeconds(60));
+        String token=links.viewerUrl().split("token=")[1];assertThat(links.streamExpiresAt()).isAfter(links.expiresAt().plusSeconds(7000));
+        db.update("UPDATE file_view_tokens SET expires_at=now()-interval '1 second' WHERE file_id=?",id);
+        code("FILE_NOT_FOUND",()->v.authorize(id,token,null));assertThat(v.authorize(id,token,null,true).id()).isEqualTo(id);
+        db.update("UPDATE file_view_tokens SET playback_expires_at=now()-interval '1 second' WHERE file_id=?",id);
+        code("FILE_NOT_FOUND",()->v.authorize(id,token,null,true));
+        String next=v.manage(id,owner,null).viewerUrl().split("token=")[1];service.visibility(id,owner,"PUBLIC");service.visibility(id,owner,"PRIVATE");
+        code("FILE_NOT_FOUND",()->v.authorize(id,next,null,true));
+    }
+    @Test void playlistRewritesEveryChildWithCapabilityAndRejectsForeignPaths() throws Exception {
+        UUID id=videoFile(),generation=UUID.randomUUID();Path directory=store.video(id).resolve(generation.toString());Files.createDirectories(directory);
+        db.update("INSERT INTO file_videos(file_id,state,generation) VALUES (?,'READY',?)",id,generation);
+        Files.writeString(directory.resolve("master.m3u8"),"#EXTM3U\nq360.m3u8\n");
+        Files.writeString(directory.resolve("q360.m3u8"),"#EXTM3U\n#EXTINF:6,\nq360-00000.ts\n#EXT-X-ENDLIST\n");
+        assertThat(videos().playlist(id,"master.m3u8","capability")).contains("/hls/q360.m3u8?token=capability");
+        assertThat(videos().playlist(id,"q360.m3u8","capability")).contains("/hls/q360-00000.ts?token=capability");
+        code("FILE_NOT_FOUND",()->videos().asset(id,"../secret"));code("FILE_NOT_FOUND",()->videos().asset(id,"q720.m3u8"));
+        Files.writeString(directory.resolve("q360.m3u8"),"#EXTM3U\nhttps://evil.invalid/segment.ts\n");
+        assertThatThrownBy(()->videos().playlist(id,"q360.m3u8",null)).isInstanceOf(FileFailure.class);
+    }
+    @Test void derivativeReservationsCountAgainstUploadsAndSurviveUntilRecoveryCleanup() throws Exception {
+        UUID id=videoFile();videos().reserve(service.downloadable(id),9_999_900);
+        code("FILE_QUOTA_EXCEEDED",()->service.create(owner,new FilesService.Create(UUID.randomUUID(),"more.bin",1000L,hash(bytes),null,null)));
+        code("FILE_QUOTA_EXCEEDED",()->videos().reserve(service.downloadable(id),1000));
+        Path directory=store.video(id).resolve(UUID.randomUUID().toString());Files.createDirectories(directory);Files.writeString(directory.resolve("partial.ts"),"partial");
+        db.update("INSERT INTO file_videos(file_id,state,attempts,heartbeat_at) VALUES (?,'PROCESSING',2,now()-interval '3 minutes')",id);
+        videos().recover();assertThat(Files.exists(store.video(id))).isFalse();assertThat(videos().status(id).state()).isEqualTo("QUEUED");
+        assertThat(db.queryForObject("SELECT video_reserved_bytes FROM files WHERE id=?",Long.class,id)).isZero();
+        db.update("UPDATE file_videos SET state='PROCESSING',attempts=3,heartbeat_at=now()-interval '3 minutes' WHERE file_id=?",id);
+        videos().recover();assertThat(videos().status(id).state()).isEqualTo("FAILED");
+        var foreign=new FileAccess.Context(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID());code("FILE_NOT_FOUND",()->videos().retry(id,foreign));
+        assertThat(videos().retry(id,owner).state()).isEqualTo("QUEUED");
+    }
+    @Test void activeConversionDelaysPhysicalDeletionThenPurgesAllDerivatives() throws Exception {
+        UUID id=videoFile();Path directory=store.video(id).resolve(UUID.randomUUID().toString());Files.createDirectories(directory);Files.writeString(directory.resolve("q360-00000.ts"),"segment");
+        db.update("INSERT INTO file_videos(file_id,state,heartbeat_at) VALUES (?,'PROCESSING',now())",id);
+        service.delete(id,owner);service.cleanup();assertThat(Files.exists(store.video(id))).isTrue();
+        db.update("UPDATE file_videos SET state='FAILED' WHERE file_id=?",id);service.cleanup();assertThat(Files.exists(store.video(id))).isFalse();
+        assertThat(Files.exists(store.path(id))).isFalse();
+    }
     @Test void privateViewLinksExpireAndAllVariantsFollowVisibilityAndDeletion() {
         UUID id=readyOld();var views=views();service.visibility(id,owner,"PRIVATE");
         var links=views.manage(id,owner,java.time.Instant.now().plusSeconds(45));

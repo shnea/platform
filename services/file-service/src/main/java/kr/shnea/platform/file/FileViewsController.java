@@ -55,6 +55,7 @@ class FileViewsController {
     @GetMapping("/api/v1/files/{id}/view")
     void viewer(@PathVariable UUID id,@RequestParam(required=false) String token,HttpServletRequest request,HttpServletResponse response) throws IOException {
         var row=views.authorize(id,token,null);var links=views.links(id,token,null);
+        if(links.video()!=null){response.sendRedirect("/file-viewer.html?id="+id+(token==null?"":"&token="+token));return;}
         String source=escape(links.previewUrl()==null?"":links.previewUrl());String content;
         if(links.previewUrl()==null)content="<p>미리보기가 준비되지 않았거나 지원하지 않는 형식입니다. 원본을 다운로드해 확인해 주세요.</p>";
         else content=switch(links.kind()) {

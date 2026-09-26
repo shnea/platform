@@ -14,12 +14,23 @@ class FileStore {
     static final long MAX_CHUNK = 8 * 1024 * 1024;
     static final long DISK_RESERVE = 256 * 1024 * 1024;
     private final Path root;
+    final Object mediaMonitor = new Object();
     FileStore(@Value("${platform.files.directory:/app/storage}") String directory) throws IOException {
         root = Path.of(directory).toAbsolutePath().normalize();
         Files.createDirectories(root);
     }
     Path path(UUID id) { return root.resolve(id + ".bin"); }
     Path thumbnail(UUID id) { return root.resolve(id + ".jpg"); }
+    Path video(UUID id) { return root.resolve(id + ".hls"); }
+    void deleteVideo(UUID id) {
+        Path target=video(id);
+        if(!target.getParent().equals(root))throw new IllegalArgumentException("Invalid video directory");
+        try {
+            if(Files.exists(target))try(var paths=Files.walk(target)) {
+                for(Path path:paths.sorted(java.util.Comparator.reverseOrder()).toList())Files.deleteIfExists(path);
+            }
+        }catch(IOException e){throw FileFailure.unavailable();}
+    }
     long usableSpace() {
         try { return Math.max(0, Files.getFileStore(root).getUsableSpace() - DISK_RESERVE); }
         catch (IOException e) { throw FileFailure.unavailable(); }
@@ -76,7 +87,7 @@ class FileStore {
         catch (IOException e) { throw FileFailure.unavailable(); }
     }
     void delete(UUID id) {
-        try { Files.deleteIfExists(path(id)); Files.deleteIfExists(thumbnail(id)); }
+        try { Files.deleteIfExists(path(id)); Files.deleteIfExists(thumbnail(id)); deleteVideo(id); }
         catch (IOException e) { throw FileFailure.unavailable(); }
     }
     private static MessageDigest digest() {

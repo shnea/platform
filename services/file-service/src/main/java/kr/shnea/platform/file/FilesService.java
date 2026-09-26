@@ -55,11 +55,11 @@ class FilesService {
                     throw new FileFailure("FILE_REQUEST_CONFLICT", 409, "같은 요청 ID에 다른 파일 정보가 지정되었습니다.");
                 return upload(old);
             }
-            long reserved = db.queryForObject("SELECT coalesce(sum(size_bytes),0) FROM files WHERE environment_id=? AND purged_at IS NULL", Long.class, context.environmentId());
+            long reserved = db.queryForObject("SELECT coalesce(sum(size_bytes+video_bytes+video_reserved_bytes),0) FROM files WHERE environment_id=? AND purged_at IS NULL", Long.class, context.environmentId());
             long pending = db.queryForObject("SELECT count(*) FROM files WHERE environment_id=? AND state='UPLOADING'", Long.class, context.environmentId());
             if (input.size() > quota - reserved || pending >= pendingLimit)
                 throw new FileFailure("FILE_QUOTA_EXCEEDED", 409, "환경의 파일 용량 또는 진행 중 업로드 수 제한을 초과했습니다.");
-            long remaining = db.queryForObject("SELECT coalesce(sum(size_bytes-received_bytes),0) FROM files WHERE state='UPLOADING'", Long.class);
+            long remaining = db.queryForObject("SELECT coalesce(sum(CASE WHEN state='UPLOADING' THEN size_bytes-received_bytes ELSE 0 END+video_reserved_bytes),0) FROM files WHERE purged_at IS NULL", Long.class);
             if (input.size() > store.usableSpace() - remaining)
                 throw new FileFailure("FILE_STORAGE_FULL", 507, "예약 가능한 파일 저장 공간이 부족합니다.");
             RetentionService.lock(db,context.environmentId());
@@ -212,6 +212,7 @@ class FilesService {
                         db.update("UPDATE files SET state='EXPIRED' WHERE id=?", id);
                         audit(id, new FileAccess.Context(row.project(), row.environment(), row.owner(), row.ownerKind()), "upload.expired");
                     } else if (!Set.of("CANCELLED", "EXPIRED", "DELETED").contains(row.state())) return;
+                    if(db.queryForObject("SELECT count(*) FROM file_videos WHERE file_id=? AND state='PROCESSING' AND heartbeat_at>now()-interval '2 minutes'",Long.class,id)>0)return;
                     store.delete(id);
                     db.update("UPDATE files SET purged_at=coalesce(purged_at,now()) WHERE id=?", id);
                 });

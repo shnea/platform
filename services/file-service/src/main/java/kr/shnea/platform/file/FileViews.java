@@ -18,11 +18,12 @@ import tools.jackson.databind.json.JsonMapper;
 class FileViews {
     record View(String state,String kind,String mediaType,boolean thumbnail,String errorCode) {}
     record Links(UUID fileId,String state,String kind,String mediaType,String errorCode,String originalUrl,String previewUrl,
-                 String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt) {}
+                 String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt,
+                 FileVideos.Status video,String streamUrl,Instant streamExpiresAt) {}
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FilesService files;
-    private final FileAccess access; private final FileStore store;
-    FileViews(JdbcTemplate db,TransactionTemplate tx,FilesService files,FileAccess access,FileStore store) {
-        this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;
+    private final FileAccess access; private final FileStore store; private final FileVideos videos;
+    FileViews(JdbcTemplate db,TransactionTemplate tx,FilesService files,FileAccess access,FileStore store,FileVideos videos) {
+        this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;this.videos=videos;
     }
     View view(UUID id) {
         db.update("INSERT INTO file_views(file_id) VALUES (?) ON CONFLICT DO NOTHING",id);
@@ -36,29 +37,36 @@ class FileViews {
                 end=Instant.now().plusSeconds(300);if(expiry!=null&&expiry.isBefore(end))end=expiry;
                 if(!end.isAfter(Instant.now()))throw FileFailure.missing();
                 byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);token=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-                db.update("DELETE FROM file_view_tokens WHERE file_id=? AND expires_at<=now()",id);
+                db.update("DELETE FROM file_view_tokens WHERE file_id=? AND greatest(expires_at,playback_expires_at)<=now()",id);
                 // Keep at most 20 short-lived viewer sessions per file; do not invalidate an active video on refresh.
                 db.update("DELETE FROM file_view_tokens WHERE token_hash IN (SELECT token_hash FROM file_view_tokens WHERE file_id=? ORDER BY expires_at DESC OFFSET 19)",id);
-                db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at) SELECT ?,id,access_revision,? FROM files WHERE id=?",hash(token),java.sql.Timestamp.from(end),id);
+                db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at,playback_expires_at) SELECT ?,id,access_revision,?,? FROM files WHERE id=?",hash(token),java.sql.Timestamp.from(end),
+                    FileVideos.candidate(info.originalName())?java.sql.Timestamp.from(Instant.now().plusSeconds(7200)):null,id);
             }
             return links(id,token,end);
         });
     }
     FilesService.Row authorize(UUID id,String token,String key) {
+        return authorize(id,token,key,false);
+    }
+    FilesService.Row authorize(UUID id,String token,String key,boolean playback) {
+        if(token!=null&&!token.matches("[A-Za-z0-9_-]{43}"))throw FileFailure.missing();
         var row=files.downloadable(id);
         if(key!=null) {files.sameEnvironment(row,access.require(key,"files:read"));return files.downloadable(id);}
         access.requireActive(row.environment());row=files.downloadable(id);
         if(row.visibility().equals("PRIVATE")) {
-            if(token==null||!token.matches("[A-Za-z0-9_-]{43}")||db.queryForObject("SELECT count(*) FROM file_view_tokens t JOIN files f ON f.id=t.file_id WHERE t.file_id=? AND t.token_hash=? AND t.expires_at>now() AND t.access_revision=f.access_revision",Long.class,id,hash(token))!=1)throw FileFailure.missing();
+            if(token==null||db.queryForObject("SELECT count(*) FROM file_view_tokens t JOIN files f ON f.id=t.file_id WHERE t.file_id=? AND t.token_hash=? AND t."+(playback?"playback_expires_at":"expires_at")+">now() AND t.access_revision=f.access_revision",Long.class,id,hash(token))!=1)throw FileFailure.missing();
         }
         return row;
     }
     Links links(UUID id,String token,Instant expiry) {
         if(token!=null&&expiry==null)expiry=db.query("SELECT expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=?",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
         View v=view(id);String base="/api/v1/files/"+id;String query=token==null?"":"?token="+token;
-        return new Links(id,v.state(),v.kind(),v.mediaType(),v.errorCode(),base+"/content/original"+query,
+        var video=FileVideos.candidate(files.downloadable(id).name())?videos.status(id):null;
+        Instant streamEnd=token==null?null:db.query("SELECT playback_expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=? AND playback_expires_at IS NOT NULL",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
+        return new Links(id,v.state(),video==null?v.kind():"VIDEO",v.mediaType(),v.errorCode(),base+"/content/original"+query,
             v.state().equals("READY")?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
-            base+"/view"+query,base+"/content/download"+query,expiry);
+            base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd);
     }
     Object retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
@@ -69,7 +77,7 @@ class FileViews {
     }
     @Scheduled(fixedDelay=3000,initialDelay=15000)
     void work() {
-        db.update("DELETE FROM file_view_tokens WHERE expires_at<=now()");
+        db.update("DELETE FROM file_view_tokens WHERE greatest(expires_at,playback_expires_at)<=now()");
         // Discover completed files, including files uploaded before this feature was installed.
         db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
         db.update("UPDATE file_views SET state=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,error_code='FILE_PREVIEW_INTERRUPTED' WHERE state='PROCESSING' AND started_at<now()-interval '2 minutes'");
@@ -77,7 +85,7 @@ class FileViews {
             var ids=db.queryForList("SELECT v.file_id FROM file_views v JOIN files f ON f.id=v.file_id WHERE v.state='QUEUED' AND f.state='READY' ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF v SKIP LOCKED",UUID.class);
             if(ids.isEmpty())return null;UUID next=ids.getFirst();db.update("UPDATE file_views SET state='PROCESSING',attempts=attempts+1,started_at=now(),error_code=NULL WHERE file_id=?",next);return next;
         });
-        if(id!=null)process(id);
+        if(id!=null)synchronized(store.mediaMonitor){process(id);}
     }
     void process(UUID id) {
         Path temporary=null;
@@ -150,7 +158,7 @@ class FileViews {
         }
     }
     private static View unsupported(String reason){return new View("UNSUPPORTED","OTHER","application/octet-stream",false,reason);}
-    private static byte[] run(List<String> command,int seconds) throws Exception {
+    static byte[] run(List<String> command,int seconds) throws Exception {
         Path output=Files.createTempFile("platform-probe-",".out");Process process=null;
         try {
             // Fixed shell program, positional arguments only: filenames never become shell source.

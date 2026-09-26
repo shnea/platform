@@ -3,7 +3,7 @@
   "info": {
     "title": "SHNEA 파일 서비스 API",
     "version": "0.1.0",
-    "description": "서버 키와 관리자 JWT 경로를 분리한다. 업로드·원본·보존 관리와 이미지/영상 썸네일, 지원 영상/오디오/PDF/TXT/MD 뷰어 제공. 비공개 콘텐츠는 파일별 최대 5분 임시 링크 또는 서버 키로 보호한다. 이용자 JWT·비밀번호 공유는 후속 단계다."
+    "description": "서버 키와 관리자 JWT 경로를 분리한다. 업로드·원본·보존 관리와 이미지/영상 썸네일, 지원 영상/오디오/PDF/TXT/MD 뷰어 제공. 비공개 콘텐츠는 파일별 최대 5분 임시 링크 또는 서버 키로 보호한다. 이용자 JWT·비밀번호 공유는 후속 단계다. HLS VOD 자동 변환과 자동/360p/720p/1080p 선택을 제공한다. 원본보다 확대하지 않으며 지원 입력과 처리 한도는 FILES 지침을 따른다."
   },
   "servers": [
     {
@@ -2047,6 +2047,9 @@
                 }
               }
             }
+          },
+          "302": {
+            "description": "영상은 동일 출처 file-viewer.html 전용 뷰어로 이동. 관리자 로그인 불필요, 파일 접근 권한 필요."
           }
         },
         "parameters": [
@@ -2067,6 +2070,148 @@
               "type": "string"
             },
             "description": "비공개 보기용 임시 토큰. 서버 키를 URL에 넣지 않는다."
+          }
+        ]
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/{id}/video/retry": {
+      "post": {
+        "operationId": "retryVideoConversion",
+        "summary": "실패한 HLS 영상 변환 재시도",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. 충돌 시 다시 조회한 뒤 적용.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files/{id}/hls/{asset}": {
+      "get": {
+        "operationId": "getVideoHlsAsset",
+        "summary": "HLS 재생 목록 또는 영상 조각 — 매 요청 접근 검사",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {},
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "매니페스트의 모든 자식 URL에도 토큰 포함. 재생 목록/HEAD는 최근 이용을 갱신하지 않고 영상 조각 GET/206은 갱신. no-store.",
+            "content": {
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "video/mp2t": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. 충돌 시 다시 조회한 뒤 적용.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "부분 콘텐츠; Content-Range/Accept-Ranges 헤더 제공"
+          },
+          "416": {
+            "description": "범위가 잘못되었거나 다중 범위; Content-Range: bytes */크기"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "master\\.m3u8|q[0-9]{1,4}\\.m3u8|q[0-9]{1,4}-[0-9]{5}\\.ts"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "streamUrl의 재생 전용 토큰. 최대 2시간, 원본 접근에는 사용할 수 없다."
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "단일 bytes 범위. HEAD는 본문과 이용 갱신 없이 전체 길이만 제공한다."
           }
         ]
       }
@@ -2750,6 +2895,29 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "streamUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "streamExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
@@ -2763,10 +2931,88 @@
           "thumbnailUrl",
           "viewerUrl",
           "downloadUrl",
-          "expiresAt"
+          "expiresAt",
+          "video",
+          "streamUrl",
+          "streamExpiresAt"
         ],
         "additionalProperties": false,
-        "description": "공개 URL은 고정. 비공개 URL은 권한을 포함하는 최대 5분 임시 링크(관리자는 JWT 만료 이내). 보기 발급/조회 자체는 최근 이용을 갱신하지 않는다. 원본·썸네일·미리보기의 성공한 GET/206만 갱신. 미지원 원본은 attachment로 제공."
+        "description": "일반 비공개 보기/원본 URL은 최대 5분. streamUrl은 HLS 전용 최대 2시간이며 원본 접근 연장 권한이 아니다. 모든 조각에서 현재 공개 범위/접근 버전/프로젝트 상태를 검사한다. 영상은 화질별 완료 비율을 표시하며 전체 완료 후 제공한다."
+      },
+      "VideoVariant": {
+        "type": "object",
+        "properties": {
+          "quality": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "bandwidth": {
+            "type": "integer"
+          },
+          "playlist": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quality",
+          "width",
+          "height",
+          "bandwidth",
+          "playlist"
+        ],
+        "additionalProperties": false
+      },
+      "VideoStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "PROCESSING",
+              "READY",
+              "UNSUPPORTED",
+              "FAILED"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "durationSeconds": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoVariant"
+            }
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "progress",
+          "durationSeconds",
+          "variants",
+          "errorCode"
+        ],
+        "additionalProperties": false
       }
     }
   }

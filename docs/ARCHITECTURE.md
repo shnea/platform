@@ -1,6 +1,6 @@
 # MSA 실행 기반
 
-파일 관리자는 별도 파일 메뉴와 파일 서비스의 관리자 JWT API를 사용한다. 서버 키와 관리자 업로드 소유권은 종류·식별자로 분리하며 프로젝트·환경의 현재 상태는 프로젝트 서비스 내부 API에서 확인한다. 다운로드는 짧은 일회용 링크, 비공개 미리보기/부분 전송은 최대 5분의 파일별 보기 링크로 구분한다. file-service 내부의 영속 썸네일 큐와 보존 정리기가 같은 파일 DB·볼륨을 사용하며 FFmpeg는 제한된 작업 프로세스로만 실행한다. 구체적인 경계와 제약은 [파일 서비스](FILES.md)를 따른다.
+파일 관리자는 별도 파일 메뉴와 파일 서비스의 관리자 JWT API를 사용한다. 서버 키와 관리자 업로드 소유권은 종류·식별자로 분리하며 프로젝트·환경의 현재 상태는 프로젝트 서비스 내부 API에서 확인한다. 다운로드는 짧은 일회용 링크, 비공개 미리보기/부분 전송은 최대 5분의 파일별 보기 링크, HLS 조각은 최대 2시간의 재생 전용 권한으로 구분한다. file-service 내부의 영속 썸네일/HLS 변환 큐와 보존 정리기가 같은 파일 DB·볼륨을 사용하며 FFmpeg는 제한된 작업 프로세스로만 실행한다. 구체적인 경계와 제약은 [파일 서비스](FILES.md)를 따른다.
 
 이 문서는 첫 구현 단위의 실제 구성을 설명한다. 전체 기능 범위는 [요구사항](REQUIREMENTS.md)에 있다.
 
@@ -11,7 +11,7 @@
 | Nginx | nginx | 없음 | 30140 진입·상태 라우팅·Keycloak 프록시 |
 | 관리자 웹 | admin-web | 없음 | React·TypeScript UI, Keycloak 브라우저 로그인, 테마·프로젝트·키·감사 관리 |
 | 프로젝트 | project-service | platform_project | 프로젝트·환경·중지·재개·설정 동기화·API 키·감사·개발 Mock 로그인 |
-| 파일 | file-service | platform_file | 업로드·재개, 원본/미리보기/썸네일·부분 전송, 보기 권한, 보존 정책·자동 정리·감사와 영속 볼륨 |
+| 파일 | file-service | platform_file | 업로드·재개, 원본/미리보기/썸네일·부분 전송·HLS 변환/재생, 보기 권한, 보존 정책·자동 정리·감사와 영속 볼륨 |
 | 알림 | notification-service | platform_notification | 인증 메일 모의 수신함·NCP 전달·상태/보존 관리, 내부 오류/요청 추적 |
 | Keycloak | keycloak | platform_identity | PostgreSQL 기반 인증 엔진·프로젝트 realm·소셜 브로커 |
 | PostgreSQL | postgres | platform_admin(초기화·운영 전용) | 네 DB와 개별 소유자 생성 |
