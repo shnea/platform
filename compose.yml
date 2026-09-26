@@ -133,7 +133,7 @@ services:
   file-service:
     <<: *api
     image: register.shnea.kr/platform-file-service:${IMAGE_TAG:?Set IMAGE_TAG}
-    mem_limit: ${FILE_MEMORY:-512m}
+    mem_limit: ${FILE_MEMORY:-1g}
     cpus: ${FILE_CPUS:-1.0}
     volumes:
       - file-data:/app/storage
@@ -147,7 +147,7 @@ services:
       PLATFORM_MONITORING_SECRET: ${PLATFORM_MONITORING_SECRET:-}
       DB_USERNAME: platform_file
       DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
-      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError}
+      JAVA_TOOL_OPTIONS: ${FILE_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=35 -XX:+ExitOnOutOfMemoryError}
 
   notification-service:
     <<: *api

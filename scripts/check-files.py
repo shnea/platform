@@ -98,7 +98,7 @@ def start():
     old = key(environments[0], ['integration:read'])
     state.update(full=full, foreign=foreign, prod_key=prod_key, read=read, old=old)
     spec, _ = call('GET', '/api/v1/files/openapi', key=full['apiKey']); validate(spec)
-    assert sum(len(v) for v in spec['paths'].values()) == 22
+    assert sum(len(v) for v in spec['paths'].values()) == 37
     state['environments'] = environments; save()
     call('GET', '/api/v1/files', expected=401)
     call('GET', '/api/v1/files', key=old['apiKey'], expected=403)

@@ -25,11 +25,29 @@
 .file-reselect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; margin: 0; }
 .file-reselect input { padding: 8px; height: auto; max-width: 100%; width: min(320px,100%); font-size: 13px; }
 .file-workspace .pagination { align-items: center; }
+.file-detail .file-detail-name { margin-top: 24px; overflow-wrap: anywhere; font-size: 20px; }
+.file-detail h4 { margin: 32px 0 12px; }
+.file-preview { background: var(--surface); min-height: 200px; padding: 16px; display: grid; place-items: center; }
+.file-preview img, .file-preview video { max-width: 100%; max-height: 560px; object-fit: contain; }
+.file-preview audio { width: min(100%,600px); }
+.file-preview iframe { width: 100%; height: 560px; border: 0; background: var(--surface); }
+.file-url-list { padding: 0; list-style: none; }
+.file-url-list li { display: flex; align-items: end; gap: 16px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.file-url-list label { flex: 1; min-width: 0; margin: 0; }
+.file-url-list input { font-size: 13px; }
+.file-url-open { min-height: 44px; display: inline-flex; align-items: center; padding-inline: 12px; }
+.file-retention-change, .retention-period { display: flex; align-items: end; gap: 16px; margin-block: 16px; }
+.file-retention-change label, .retention-period label { min-width: 0; margin: 0; flex: 1; }
+.file-retention-change, .retention-settings { max-width: 640px; }
+.file-hash, .file-description pre { overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 1100px) {
   .file-list > li { align-items: flex-start; flex-direction: column; gap: 16px; }
   .file-actions { flex-wrap: wrap; }
 }
 @media (max-width: 600px) {
+  .file-url-list li, .file-retention-change { align-items: stretch; flex-direction: column; }
+  .file-preview { padding: 8px; }
+  .file-preview iframe { height: 440px; }
   .file-workspace .section-line { align-items: flex-start; flex-direction: column; }
   .file-drop { padding: 24px 16px; }
   .file-progress-meta { flex-wrap: wrap; gap: 4px; }

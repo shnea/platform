@@ -38,6 +38,128 @@ class FilesDatabaseTest {
         service = new FilesService(db, tx, store, 10_000_000, 20);
     }
     @AfterEach void cleanup() { if (admin != null) admin.execute("DROP SCHEMA " + schema + " CASCADE"); }
+    RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
+    FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store);}
+    @Test void privateViewLinksExpireAndAllVariantsFollowVisibilityAndDeletion() {
+        UUID id=readyOld();var views=views();service.visibility(id,owner,"PRIVATE");
+        var links=views.manage(id,owner,java.time.Instant.now().plusSeconds(45));
+        String token=links.originalUrl().split("token=")[1];
+        assertThat(links.expiresAt()).isBefore(java.time.Instant.now().plusSeconds(46));
+        code("FILE_NOT_FOUND",()->views.authorize(id,null,null));
+        assertThat(views.authorize(id,token,null).id()).isEqualTo(id);
+        assertThat(views.authorize(id,token,null).id()).isEqualTo(id); // media range requests reuse the bounded viewer token
+        service.visibility(id,owner,"PUBLIC");service.visibility(id,owner,"PRIVATE");
+        code("FILE_NOT_FOUND",()->views.authorize(id,token,null));
+        String next=views.manage(id,owner,null).originalUrl().split("token=")[1];
+        db.update("UPDATE file_view_tokens SET expires_at=now()-interval '1 second'");
+        code("FILE_NOT_FOUND",()->views.authorize(id,next,null));
+        String last=views.manage(id,owner,null).originalUrl().split("token=")[1];service.delete(id,owner);
+        code("FILE_NOT_FOUND",()->views.authorize(id,last,null));
+    }
+    @Test void previewWorkerHandlesExistingFilesAndDoesNotCountAsContentUse() {
+        var input=new FilesService.Create(UUID.randomUUID(),"safe.md",(long)bytes.length,hash(bytes),"PRIVATE","default");
+        UUID id=service.create(owner,input).uploadId();append(id,0,bytes);service.complete(id,owner);
+        var before=service.detail(id,owner).lastUsedAt();var views=views();views.work();
+        assertThat(views.view(id).state()).isEqualTo("READY");assertThat(views.view(id).kind()).isEqualTo("MARKDOWN");
+        assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(before);
+        var foreign=new FileAccess.Context(owner.projectId(),UUID.randomUUID(),owner.credentialId());
+        code("FILE_NOT_FOUND",()->views.manage(id,foreign,null));
+        db.update("UPDATE file_views SET state='PROCESSING',started_at=now()-interval '3 minutes',attempts=1 WHERE file_id=?",id);
+        views.work();assertThat(views.view(id).state()).isEqualTo("READY");
+        db.update("UPDATE file_views SET state='PROCESSING',started_at=now()-interval '3 minutes',attempts=3 WHERE file_id=?",id);
+        views.work();assertThat(views.view(id).state()).isEqualTo("FAILED");
+        views.retry(id,owner);views.work();assertThat(views.view(id).state()).isEqualTo("READY");
+    }
+    @Test void unsupportedAndCorruptTextKeepOriginalWithoutRenderingExecutableContent() {
+        UUID html=create().uploadId();append(html,0,bytes);service.complete(html,owner);views().work();
+        assertThat(views().view(html).state()).isEqualTo("UNSUPPORTED");
+        String safe=FileViewsController.markdown("# 제목\n<script>alert(1)</script>\n\n[x](javascript:alert(1))");
+        assertThat(safe).contains("<h1>제목</h1>","&lt;script&gt;").doesNotContain("<script>","href=\"javascript:");
+        assertThat(service.downloadable(html).state()).isEqualTo("READY");
+    }
+    UUID readyOld() {
+        UUID id=create().uploadId();append(id,0,bytes);service.complete(id,owner);
+        db.update("UPDATE files SET last_used_at=now()-interval '2 years' WHERE id=?",id);return id;
+    }
+    void enableRetention(RetentionService retention) {
+        var overview=retention.overview(owner);
+        retention.saveSettings(owner,new RetentionService.SaveSettings(true,7,overview.settings().revision(),overview.eligibleFiles()));
+    }
+    @Test void calendarPeriodsUseUtcMonthEndAndLeapYears() {
+        assertThat(db.queryForObject("SELECT file_retention_due('2024-02-29 12:30:00+00',1,'YEAR')::text",String.class)).startsWith("2025-02-28 12:30:00");
+        assertThat(db.queryForObject("SELECT file_retention_due('2024-01-31 00:00:00+00',1,'MONTH')::text",String.class)).startsWith("2024-02-29 00:00:00");
+        assertThat(db.queryForObject("SELECT file_retention_due(now(),NULL,'FOREVER')",java.sql.Timestamp.class)).isNull();
+        tx.executeWithoutResult(s->{db.execute("SET LOCAL TIME ZONE 'America/New_York'");
+            assertThat(db.queryForObject("SELECT extract(epoch FROM file_retention_due('2024-03-09 12:00:00+00',1,'DAY')-'2024-03-09 12:00:00+00'::timestamptz)",Long.class)).isEqualTo(86400);});
+    }
+    @Test void retentionIsOptInAndGraceSurvivesRestartBeforePhysicalPurge() {
+        UUID id=readyOld();var r=retention();assertThat(r.overview(owner).settings().enabled()).isFalse();
+        r.sweepEnvironment(owner.environmentId());assertThat(service.downloadable(id).state()).isEqualTo("READY");
+        enableRetention(r);r.sweepEnvironment(owner.environmentId());
+        assertThat(r.candidates(owner,0).getFirst().deleteAfter()).isNotNull();
+        r.sweepEnvironment(owner.environmentId());assertThat(service.downloadable(id).state()).isEqualTo("READY");
+        db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);
+        retention().sweepEnvironment(owner.environmentId());code("FILE_NOT_FOUND",()->service.downloadable(id));
+        assertThat(Files.exists(store.path(id))).isTrue();service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
+        assertThat(db.queryForObject("SELECT count(*) FROM file_audit WHERE file_id=? AND action='file.retention.deleted'",Long.class,id)).isEqualTo(1);
+    }
+    @Test void policyExtensionAndPermanentChangeRescueExistingFilesAndDoNotBreakUploadIdempotency() {
+        var input=input(bytes);UUID id=service.create(owner,input).uploadId();append(id,0,bytes);service.complete(id,owner);
+        db.update("UPDATE files SET last_used_at=now()-interval '2 years' WHERE id=?",id);
+        var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());
+        var change=new RetentionService.Policy("default","기본",3,"YEAR",true,1);
+        assertThat(r.preview(owner,change).eligibleFiles()).isZero();r.savePolicy(owner,new RetentionService.SavePolicy(change,0));
+        assertThat(r.candidates(owner,0)).isEmpty();r.sweepEnvironment(owner.environmentId());
+        service.retention(id,owner,"영구","default");
+        assertThat(service.create(owner,input).uploadId()).isEqualTo(id);
+        assertThat(service.detail(id,owner).retentionCode()).isEqualTo("영구");
+        code("FILE_RETENTION_CONFLICT",()->service.retention(id,owner,"tmp","default"));
+        db.update("UPDATE files SET last_used_at=now()-interval '100 years' WHERE id=?",id);
+        r.sweepEnvironment(owner.environmentId());assertThat(r.candidates(owner,0)).isEmpty();
+        service.delete(id,owner);code("FILE_NOT_FOUND",()->service.downloadable(id));
+    }
+    @Test void previewRevisionCountsAndAuditFailureProtectPolicyChanges() {
+        var r=retention();r.overview(owner);var p=new RetentionService.Policy("default","수정",1,"DAY",true,1);
+        assertThat(r.preview(owner,p).eligibleFiles()).isZero();readyOld();
+        code("FILE_RETENTION_CONFLICT",()->r.savePolicy(owner,new RetentionService.SavePolicy(p,0)));
+        db.execute("ALTER TABLE file_retention_audit ADD CONSTRAINT reject_policy CHECK(action<>'retention.policy.saved')");
+        assertThatThrownBy(()->r.savePolicy(owner,new RetentionService.SavePolicy(p,1))).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(r.overview(owner).policies().getFirst().periodUnit()).isEqualTo("YEAR");
+        db.execute("ALTER TABLE file_retention_audit DROP CONSTRAINT reject_policy");
+        r.savePolicy(owner,new RetentionService.SavePolicy(p,1));
+        code("FILE_RETENTION_CONFLICT",()->r.savePolicy(owner,new RetentionService.SavePolicy(p,1)));
+        assertThat(r.history(owner)).hasSize(1);
+    }
+    @Test void disabledCustomCodesRejectNewUploadsButKeepExistingReferences() {
+        var r=retention();r.savePolicy(owner,new RetentionService.SavePolicy(new RetentionService.Policy("archive","자료",2,"MONTH",true,0),0));
+        var input=new FilesService.Create(UUID.randomUUID(),"old.txt",0L,hash(new byte[0]),null,"archive");
+        UUID id=service.create(owner,input).uploadId();service.complete(id,owner);
+        r.savePolicy(owner,new RetentionService.SavePolicy(new RetentionService.Policy("archive","자료",2,"MONTH",false,1),0));
+        assertThat(service.create(owner,input).uploadId()).isEqualTo(id);
+        code("FILE_RETENTION_UNKNOWN",()->service.create(owner,new FilesService.Create(UUID.randomUUID(),"new.txt",0L,hash(new byte[0]),null,"archive")));
+        assertThat(service.detail(id,owner).retentionCode()).isEqualTo("archive");
+        code("INVALID_REQUEST",()->r.preview(owner,new RetentionService.Policy("영구","영구",1,"DAY",true,1)));
+    }
+    @Test void activeDownloadsBlockRetentionAndOnlySuccessfulContentResetsUsage() {
+        UUID id=readyOld();var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());
+        db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);
+        var row=service.downloadable(id);var old=row.used();UUID lease=service.beginDownload(row);
+        r.sweepEnvironment(owner.environmentId());assertThat(service.downloadable(id).state()).isEqualTo("READY");
+        service.heartbeatDownloads();service.finishDownload(lease,row,false);
+        assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(old);
+        lease=service.beginDownload(row);service.finishDownload(lease,row,true);
+        r.sweepEnvironment(owner.environmentId());assertThat(r.candidates(owner,0)).isEmpty();
+        assertThat(service.detail(id,owner).lastUsedAt()).isAfter(old);
+    }
+    @Test void expiryAuditFailureRollsBackAndPausedCleanupRetainsFiles() {
+        UUID id=readyOld();var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());
+        db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);
+        db.execute("ALTER TABLE file_audit ADD CONSTRAINT reject_expiry CHECK(action<>'file.retention.deleted')");
+        assertThatThrownBy(()->r.sweepEnvironment(owner.environmentId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(service.downloadable(id).state()).isEqualTo("READY");
+        var overview=r.overview(owner);r.saveSettings(owner,new RetentionService.SaveSettings(false,7,overview.settings().revision(),overview.eligibleFiles()));
+        r.sweepEnvironment(owner.environmentId());assertThat(service.downloadable(id).state()).isEqualTo("READY");
+    }
     FilesService.Create input(byte[] content) { return new FilesService.Create(UUID.randomUUID(), "검증.html", (long) content.length, hash(content), null, null); }
     FilesService.Upload create() { return service.create(owner, input(bytes)); }
     void append(UUID id, long offset, byte[] data) { service.append(id, owner, offset, data.length, hash(data), new ByteArrayInputStream(data)); }

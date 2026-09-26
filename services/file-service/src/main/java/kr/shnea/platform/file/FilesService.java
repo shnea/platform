@@ -29,6 +29,7 @@ class FilesService {
     private final FileStore store;
     private final long quota;
     private final int pendingLimit;
+    private final Map<UUID,Long> downloads = new java.util.concurrent.ConcurrentHashMap<>();
     FilesService(JdbcTemplate db, TransactionTemplate tx, FileStore store,
                  @Value("${platform.files.environment-quota:50000000000}") long quota,
                  @Value("${platform.files.pending-limit:20}") int pendingLimit) {
@@ -50,7 +51,7 @@ class FilesService {
                 var old = previous.getFirst();
                 if (!old.name().equals(input.originalName()) || old.size() != input.size() || !old.hash().equals(input.sha256())
                         || !db.queryForObject("SELECT upload_visibility FROM files WHERE id=?", String.class, old.id()).equals(visibility)
-                        || !old.retention().equals(retention))
+                        || !db.queryForObject("SELECT upload_retention_code FROM files WHERE id=?",String.class,old.id()).equals(retention))
                     throw new FileFailure("FILE_REQUEST_CONFLICT", 409, "같은 요청 ID에 다른 파일 정보가 지정되었습니다.");
                 return upload(old);
             }
@@ -61,17 +62,17 @@ class FilesService {
             long remaining = db.queryForObject("SELECT coalesce(sum(size_bytes-received_bytes),0) FROM files WHERE state='UPLOADING'", Long.class);
             if (input.size() > store.usableSpace() - remaining)
                 throw new FileFailure("FILE_STORAGE_FULL", 507, "예약 가능한 파일 저장 공간이 부족합니다.");
-            db.update("INSERT INTO file_retention_policies(environment_id,code,unused_days) VALUES (?,'default',365),(?,'tmp',1),(?,'영구',NULL) ON CONFLICT DO NOTHING",
-                context.environmentId(), context.environmentId(), context.environmentId());
-            if (db.queryForObject("SELECT count(*) FROM file_retention_policies WHERE environment_id=? AND code=?", Long.class, context.environmentId(), retention) != 1)
+            RetentionService.lock(db,context.environmentId());
+            RetentionService.initialize(db,context.environmentId());
+            if (db.queryForObject("SELECT count(*) FROM file_retention_policies WHERE environment_id=? AND code=? AND enabled", Long.class, context.environmentId(), retention) != 1)
                 throw new FileFailure("FILE_RETENTION_UNKNOWN", 400, "등록된 파일 보존 코드를 선택해 주세요.");
             UUID id = UUID.randomUUID();
             db.update("""
                 INSERT INTO files(id,project_id,environment_id,owner_credential_id,request_id,original_name,size_bytes,
-                    expected_sha256,visibility,upload_visibility,retention_code,owner_kind,upload_expires_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours')
+                    expected_sha256,visibility,upload_visibility,retention_code,upload_retention_code,owner_kind,upload_expires_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours')
                 """, id, context.projectId(), context.environmentId(), context.credentialId(), input.requestId(),
-                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, context.ownerKind());
+                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, retention, context.ownerKind());
             audit(id, context, "upload.created");
             return upload(get(id, false));
         });
@@ -127,8 +128,9 @@ class FilesService {
         return tx.execute(status -> {
             Row row = managed(id, context, true);
             if (!row.visibility().equals(visibility)) {
-                db.update("UPDATE files SET visibility=? WHERE id=?", visibility, id);
+                db.update("UPDATE files SET visibility=?,access_revision=access_revision+1 WHERE id=?", visibility, id);
                 db.update("DELETE FROM file_download_tickets WHERE file_id=?", id);
+                db.update("DELETE FROM file_view_tokens WHERE file_id=?", id);
                 audit(id, context, "file.visibility." + visibility.toLowerCase(Locale.ROOT));
             }
             return info(get(id, false));
@@ -142,6 +144,7 @@ class FilesService {
             if (!row.state().equals("READY")) throw FileFailure.missing();
             db.update("UPDATE files SET state='DELETED' WHERE id=?", id);
             db.update("DELETE FROM file_download_tickets WHERE file_id=?", id);
+            db.update("DELETE FROM file_view_tokens WHERE file_id=?", id);
             audit(id, context, "file.deleted");
         });
     }
@@ -150,7 +153,49 @@ class FilesService {
         if (!row.state().equals("READY")) throw FileFailure.missing();
         return row;
     }
-    void used(UUID id) { db.update("UPDATE files SET last_used_at=now() WHERE id=? AND state='READY'", id); }
+    void used(UUID id) { db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id); }
+    FileInfo retention(UUID id,FileAccess.Context context,String code,String expectedCode) {
+        return tx.execute(status->{
+            RetentionService.lock(db,context.environmentId());Row row=managed(id,context,true);
+            if(!row.retention().equals(expectedCode))throw RetentionService.conflict();
+            if(code==null || db.queryForObject("SELECT count(*) FROM file_retention_policies WHERE environment_id=? AND code=? AND enabled",Long.class,context.environmentId(),code)!=1)
+                throw new FileFailure("FILE_RETENTION_UNKNOWN",400,"사용 중인 보존 코드를 선택해 주세요.");
+            db.update("UPDATE files SET retention_code=?,retention_marked_at=NULL WHERE id=?",code,id);
+            db.update("""
+                INSERT INTO file_retention_audit(environment_id,actor,action,policy_code,before_value,after_value,affected_files,request_id)
+                VALUES (?,?,'file.retention.changed',?,jsonb_build_object('fileId',?::text,'code',?::text),jsonb_build_object('fileId',?::text,'code',?::text),1,?)
+                """,context.environmentId(),context.actor(),code,id.toString(),row.retention(),id.toString(),code,MDC.get("requestId"));
+            audit(id,context,"file.retention.changed");return info(get(id,false));
+        });
+    }
+    UUID beginDownload(Row authorized) {
+        UUID lease=tx.execute(status->{
+            RetentionService.lock(db,authorized.environment());Row current=get(authorized.id(),true);
+            if(!current.state().equals("READY") || !current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
+            UUID key=UUID.randomUUID();db.update("INSERT INTO file_download_leases(id,file_id,expires_at) VALUES (?,?,now()+interval '2 minutes')",key,current.id());return key;
+        });
+        downloads.put(lease,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(90));return lease;
+    }
+    void finishDownload(UUID lease,Row row,boolean success) {
+        try {tx.executeWithoutResult(status->{
+            RetentionService.lock(db,row.environment());
+            if(success && db.queryForObject("SELECT count(*) FROM file_download_leases WHERE id=? AND expires_at>now()",Long.class,lease)==1)used(row.id());
+            db.update("DELETE FROM file_download_leases WHERE id=?",lease);
+        });} finally {downloads.remove(lease);}
+    }
+    void checkDownload(UUID lease) throws java.io.IOException {
+        Long deadline=downloads.get(lease);
+        if(deadline==null || System.nanoTime()>deadline)throw new java.io.IOException("Download lease expired");
+    }
+    @Scheduled(fixedDelay=20000,initialDelay=20000)
+    void heartbeatDownloads() {
+        for(UUID lease:downloads.keySet()) {
+            try {if(db.update("UPDATE file_download_leases SET expires_at=now()+interval '2 minutes' WHERE id=? AND expires_at>now()",lease)==0)downloads.remove(lease);
+                else downloads.replace(lease,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(90));}
+            catch(RuntimeException e){downloads.remove(lease);}
+        }
+        db.update("DELETE FROM file_download_leases WHERE expires_at<=now()");
+    }
     void sameEnvironment(Row row, FileAccess.Context context) {
         if (!row.environment().equals(context.environmentId()) || !row.project().equals(context.projectId())) throw FileFailure.missing();
     }

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "./api-error";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
+import { RetentionPanel, type RetentionPolicy } from "./RetentionPanel";
+import { FileDetails } from "./FileDetails";
 import { chunkHash, fileApi, fileHash, fileSize, type FileInfo, type Resumable, type Upload } from "./file-api";
 import "./files.css";
 
@@ -16,7 +18,11 @@ const message = (error: unknown) => error instanceof TypeError ? "서버에 연�
 export function FileWorkspace({ environmentId, environmentLabel, available, onBusyChange }: {
   environmentId: string; environmentLabel: string; available: boolean; onBusyChange: (value: boolean) => void;
 }) {
-  const [tab, setTab] = useState<"list" | "uploads">("list");
+  const [tab, setTab] = useState<"list" | "uploads" | "retention">("list");
+  const [detail, setDetail] = useState<FileInfo | null>(null);
+  const [policies, setPolicies] = useState<RetentionPolicy[]>([]);
+  const [retention, setRetention] = useState("default");
+  const [childBusy, setChildBusy] = useState(false);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const itemsRef = useRef<Item[]>([]);
@@ -36,7 +42,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
   const stopQueue = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const loadVersion = useRef(0);
-  const busy = active !== null || mutating;
+  const busy = active !== null || mutating || childBusy;
   function updateItems(next: Item[] | ((old: Item[]) => Item[])) {
     if (!mounted.current) return;
     itemsRef.current = typeof next === "function" ? next(itemsRef.current) : next;
@@ -58,12 +64,14 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     const version = ++loadVersion.current;
     setLoading(true); setError("");
     try {
-      const [rows, pending] = await Promise.all([
+      const [rows, pending, retentionData] = await Promise.all([
         fileApi<FileInfo[]>(environmentId, `?limit=20&offset=${page}`),
         fileApi<Resumable[]>(environmentId, "/uploads"),
+        fileApi<{policies:RetentionPolicy[]}>(environmentId, "/retention"),
       ]);
       if (!mounted.current || version !== loadVersion.current) return;
       setFiles(rows); setOffset(page); setLoaded(true);
+      setPolicies(retentionData.policies);
       updateItems(old => {
         // Creation may commit even when its response is lost. Reconcile by the original request as well as session ID.
         const merged = old.map(item => {
@@ -87,7 +95,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     if (waiting + candidates.length > 20) { setError("한 번에 대기할 수 있는 파일은 최대 20개입니다. 기존 업로드를 완료하거나 취소한 뒤 추가해 주세요."); return; }
     const accepted = candidates.filter(file => file.size <= 5_000_000_000);
     setError(accepted.length !== candidates.length ? "5GB를 초과한 파일은 제외했습니다. 나머지 파일은 업로드할 수 있습니다." : "");
-    updateItems(old => [...old, ...accepted.map(file => ({ id: crypto.randomUUID(), name: file.name, size: file.size, visibility, retention: "default", file, received: 0, stage: "queued" as Stage, hashProgress: 0 }))]);
+    updateItems(old => [...old, ...accepted.map(file => ({ id: crypto.randomUUID(), name: file.name, size: file.size, visibility, retention, file, received: 0, stage: "queued" as Stage, hashProgress: 0 }))]);
     setTab("uploads");
     if (input.current) input.current.value = "";
   }
@@ -191,24 +199,25 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
   const pending = items.filter(item => !["done", "cancelled"].includes(item.stage));
   if (!available) return <p className="warning">프로젝트가 사용 중이고 환경 설정이 완료되어야 파일을 관리할 수 있습니다.</p>;
   return <section className="file-workspace" aria-label="파일 관리">
-    <SectionTabs id="file-section" label="파일 작업" value={tab} onChange={setTab} disabled={mutating}
-      items={[{ value: "list", label: "파일 목록" }, { value: "uploads", label: pending.length ? `업로드·재개 (${pending.length})` : "업로드·재개" }]} />
+    <SectionTabs id="file-section" label="파일 작업" value={tab} onChange={value=>{setTab(value);setDetail(null);}} disabled={mutating||childBusy}
+      items={[{ value: "list", label: "파일 목록" }, { value: "uploads", label: pending.length ? `업로드·재개 (${pending.length})` : "업로드·재개" },{value:"retention",label:"보존 정책"}]} />
     {error && !confirm && <p className="alert" role="alert">{error} <button className="secondary" disabled={busy || loading} onClick={() => void load()}>다시 조회</button></p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     <div id="file-section-panel" role="tabpanel" aria-labelledby={`file-section-${tab}`}>
-      {tab === "list" ? <>
+      {tab === "retention" ? <RetentionPanel environmentId={environmentId} environmentLabel={environmentLabel} onBusyChange={setChildBusy} onChanged={()=>void load()} /> : tab === "list" && detail ? <FileDetails key={detail.fileId} file={detail} environmentId={environmentId} policies={policies} onBusyChange={setChildBusy} onChanged={()=>void load()} onClose={()=>{const id=detail.fileId;setDetail(null);void load().then(()=>requestAnimationFrame(()=>document.getElementById(`file-detail-${id}`)?.focus()));}} /> : tab === "list" ? <>
         <div className="section-line"><h3>저장된 파일</h3><div className="actions">
           <button className="secondary" disabled={busy || loading} onClick={() => void load()}>목록 새로고침</button>
           <button disabled={mutating} onClick={() => setTab("uploads")}>파일 올리기</button>
         </div></div>
-        <p className="small muted">공개 파일은 링크를 아는 사람이 받을 수 있습니다. 비공개 파일은 권한을 확인한 뒤 다운로드합니다.</p>
+        <p className="small muted">상세·보기에서 썸네일·문서·영상과 원본, 용도별 URL을 확인하세요. 비공개 파일은 권한을 확인한 뒤 임시 URL을 발급합니다.</p>
         {loading && <p role="status">파일 목록을 불러오는 중…</p>}
         {loaded && !loading && files.length === 0 && !error && <div className="empty"><h3>{offset ? "이 페이지에 파일이 없습니다" : "아직 저장된 파일이 없습니다"}</h3><p>업로드를 완료한 파일이 이곳에 표시됩니다.</p></div>}
         <ul className="file-list" aria-label="저장된 파일 목록" aria-busy={loading}>
           {files.map(file => <li key={file.fileId}>
             <div className="file-description"><strong>{file.originalName}</strong><span className="small muted">{fileSize(file.size)} · {date(file.createdAt)} 업로드</span>
-              <span className="small">{file.visibility === "PUBLIC" ? "공개 · 링크로 접근" : "비공개 · 인증 필요"}</span></div>
+              <span className="small">{file.visibility === "PUBLIC" ? "공개 · 링크로 접근" : "비공개 · 인증 필요"} · 보존 {file.retentionCode}</span></div>
             <div className="actions file-actions">
+              <button id={`file-detail-${file.fileId}`} className="secondary" disabled={busy || loading || !!error} onClick={()=>{setDetail(file);setNotice("");}} aria-label={`${file.originalName} 상세·보기`}>상세·보기</button>
               <button className="secondary" disabled={busy || loading || !!error} onClick={() => void download(file)} aria-label={`${file.originalName} 다운로드`}>다운로드</button>
               <button className="quiet" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "visibility", file }); }} aria-label={`${file.originalName} 공개 범위 변경`}>공개 범위</button>
               <button className="quiet danger" disabled={busy || loading || !!error} onClick={() => { setError(""); setConfirm({ type: "delete", file }); }} aria-label={`${file.originalName} 삭제`}>삭제</button>
@@ -229,6 +238,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         </div>
         <label className="file-visibility">추가할 파일의 공개 범위<select value={visibility} disabled={busy} onChange={event => setVisibility(event.target.value as "PUBLIC" | "PRIVATE")}>
           <option value="PUBLIC">공개 — 링크를 알면 다운로드 가능</option><option value="PRIVATE">비공개 — 인증된 접근만 허용</option></select></label>
+        <label className="file-visibility">추가할 파일의 보존 코드<select value={retention} disabled={busy||loading} onChange={e=>setRetention(e.target.value)}>{policies.filter(p=>p.enabled).map(p=><option value={p.code} key={p.code}>{p.displayName} ({p.code})</option>)}</select></label>
         <p className="small muted file-guidance">일시정지 후 다른 화면으로 이동할 수 있습니다. 돌아오면 같은 원본 파일을 다시 선택해 이어 올리세요. 원본 확인 중인 파일은 새로 추가해야 합니다.</p>
         <div className="section-line"><h3>업로드 현황 <span className="muted">{items.length}개</span></h3><div className="actions">
           {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}>일시정지</button>
@@ -241,7 +251,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         <ul className="file-upload-list" aria-label="업로드 현황">
           {items.map(item => <li key={item.id}>
             <div className="file-upload-heading"><strong>{item.name}</strong><span className={item.stage === "error" ? "danger" : "file-stage"}>{stages[item.stage]}</span></div>
-            <div className="file-progress-meta"><span>{fileSize(item.received)} / {fileSize(item.size)} · {item.visibility === "PUBLIC" ? "공개" : "비공개"}</span>
+            <div className="file-progress-meta"><span>{fileSize(item.received)} / {fileSize(item.size)} · {item.visibility === "PUBLIC" ? "공개" : "비공개"} · {item.retention}</span>
               <span>{item.stage === "hashing" ? `원본 확인 ${item.hashProgress}%` : `${item.size ? Math.floor(item.received / item.size * 100) : item.stage === "done" ? 100 : 0}%`}</span></div>
             <progress aria-label={`${item.name} ${item.stage === "hashing" ? "원본 확인" : "전송"} 진행률`} max={100} value={item.stage === "hashing" ? item.hashProgress : item.size ? item.received / item.size * 100 : item.stage === "done" ? 100 : 0} />
             {item.expires && !["done", "cancelled"].includes(item.stage) && <p className="small muted">재개 가능: {date(item.expires)}까지</p>}

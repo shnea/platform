@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class FilesHttpTest {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
     FileAccess access; FilesService files; FileStore store; MockMvc mvc;
     final UUID id = UUID.randomUUID();
     final FileAccess.Context context = new FileAccess.Context(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
@@ -26,17 +27,17 @@ class FilesHttpTest {
     }
     @Test void publicDownloadIsAttachmentNoStoreAndHeadDoesNotExtendRetention() throws Exception {
         when(files.downloadable(id)).thenReturn(row("PUBLIC"));
-        when(store.open(id)).thenAnswer(call -> new ByteArrayInputStream(new byte[]{1,2,3}));
+        var path=directory.resolve("file.bin");java.nio.file.Files.write(path,new byte[]{1,2,3});when(store.path(id)).thenReturn(path);
         mvc.perform(get("/api/v1/files/"+id+"/download"))
             .andExpect(status().isOk()).andExpect(content().bytes(new byte[]{1,2,3}))
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(header().string("X-Content-Type-Options", "nosniff"))
             .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("attachment;")))
             .andExpect(content().contentType("application/octet-stream"));
-        verify(access).requireActive(context.environmentId()); verify(files).used(id);
+        verify(access).requireActive(context.environmentId()); verify(files).finishDownload(isNull(),any(),eq(true));
         clearInvocations(files);
         mvc.perform(head("/api/v1/files/"+id+"/download")).andExpect(status().isOk());
-        verify(files, never()).used(id);
+        verify(files).finishDownload(isNull(),any(),eq(false));
     }
     @Test void privateAndConcurrentVisibilityChangesCannotUseAnonymousDownload() throws Exception {
         when(files.downloadable(id)).thenReturn(row("PRIVATE"));
@@ -46,6 +47,19 @@ class FilesHttpTest {
         when(files.downloadable(id)).thenReturn(row("PUBLIC"), row("PRIVATE"));
         mvc.perform(get("/api/v1/files/"+id+"/download")).andExpect(status().isNotFound());
         verifyNoInteractions(store);
+    }
+    @Test void singleRangesSupportSeekingAndRejectInvalidOrMultipleRanges() throws Exception {
+        when(files.downloadable(id)).thenReturn(row("PUBLIC"));var path=directory.resolve("video.bin");
+        java.nio.file.Files.write(path,new byte[]{1,2,3});when(store.path(id)).thenReturn(path);
+        mvc.perform(get("/api/v1/files/"+id+"/download").header("Range","bytes=1-"))
+            .andExpect(status().isPartialContent()).andExpect(header().string("Content-Range","bytes 1-2/3")).andExpect(content().bytes(new byte[]{2,3}));
+        mvc.perform(get("/api/v1/files/"+id+"/download").header("Range","bytes=-1"))
+            .andExpect(status().isPartialContent()).andExpect(content().bytes(new byte[]{3}));
+        for(String range:java.util.List.of("bytes=9-","bytes=0-1,2-2","bytes=oops","bytes=-0"))
+            mvc.perform(get("/api/v1/files/"+id+"/download").header("Range",range)).andExpect(status().isRequestedRangeNotSatisfiable());
+        clearInvocations(files);
+        mvc.perform(head("/api/v1/files/"+id+"/download").header("Range","bytes=1-")).andExpect(status().isOk()).andExpect(header().string("Content-Length","3"));
+        verify(files).finishDownload(isNull(),any(),eq(false));
     }
     @Test void operationsEnforceDistinctScopesAndDoNotLeakInternalErrors() throws Exception {
         mvc.perform(post("/api/v1/files/uploads").contentType("application/json").content("{broken"))

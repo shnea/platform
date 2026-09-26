@@ -19,6 +19,7 @@ class FileStore {
         Files.createDirectories(root);
     }
     Path path(UUID id) { return root.resolve(id + ".bin"); }
+    Path thumbnail(UUID id) { return root.resolve(id + ".jpg"); }
     long usableSpace() {
         try { return Math.max(0, Files.getFileStore(root).getUsableSpace() - DISK_RESERVE); }
         catch (IOException e) { throw FileFailure.unavailable(); }
@@ -75,7 +76,7 @@ class FileStore {
         catch (IOException e) { throw FileFailure.unavailable(); }
     }
     void delete(UUID id) {
-        try { Files.deleteIfExists(path(id)); }
+        try { Files.deleteIfExists(path(id)); Files.deleteIfExists(thumbnail(id)); }
         catch (IOException e) { throw FileFailure.unavailable(); }
     }
     private static MessageDigest digest() {

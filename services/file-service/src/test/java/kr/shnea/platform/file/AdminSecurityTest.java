@@ -18,11 +18,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AdminSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class})
+    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class,RetentionController.class,FileViewsController.class})
     static class Config {
         @Bean FileAccess access() { return mock(FileAccess.class); }
         @Bean FilesService files() { return mock(FilesService.class); }
         @Bean DownloadTickets tickets() { return mock(DownloadTickets.class); }
+        @Bean RetentionService retention() { return mock(RetentionService.class); }
+        @Bean FileViews views() { return mock(FileViews.class); }
+        @Bean FileStore store() { return mock(FileStore.class); }
         @Bean JsonMapper json() { return new JsonMapper(); }
         @Bean JwtDecoder decoder() { return value -> {
             if(value.equals("invalid")) throw new BadJwtException("Invalid token");
@@ -36,13 +39,14 @@ class AdminSecurityTest {
             var mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain",Filter.class)).build();
             String root="/api/v1/files/admin/environments/"+UUID.randomUUID(), id=UUID.randomUUID().toString();
             var requests=List.of(get(root),get(root+"/uploads"),post(root+"/uploads"),get(root+"/uploads/"+id),patch(root+"/uploads/"+id),
-                delete(root+"/uploads/"+id),post(root+"/uploads/"+id+"/complete"),put(root+"/"+id+"/visibility"),delete(root+"/"+id),post(root+"/"+id+"/download-ticket"));
+                delete(root+"/uploads/"+id),post(root+"/uploads/"+id+"/complete"),put(root+"/"+id+"/visibility"),delete(root+"/"+id),post(root+"/"+id+"/download-ticket"),
+                get(root+"/retention"),post(root+"/retention/preview"),put(root+"/retention/policies"),put(root+"/retention/settings"),get(root+"/retention/candidates"),get(root+"/retention/history"),put(root+"/"+id+"/retention"),post(root+"/"+id+"/views"),post(root+"/"+id+"/views/retry"));
             for(var request:requests) {
                 mvc.perform(request.header("X-Platform-Key","pk_not-an-admin")).andExpect(status().isUnauthorized());
                 mvc.perform(request.header("Authorization","Bearer member")).andExpect(status().isForbidden());
             }
             mvc.perform(get(root).header("Authorization","Bearer invalid")).andExpect(status().isUnauthorized());
-            verifyNoInteractions(context.getBean(FileAccess.class),context.getBean(FilesService.class),context.getBean(DownloadTickets.class));
+            verifyNoInteractions(context.getBean(FileAccess.class),context.getBean(FilesService.class),context.getBean(DownloadTickets.class),context.getBean(RetentionService.class),context.getBean(FileViews.class));
             mvc.perform(get(root).header("Authorization","Bearer admin")).andExpect(status().isOk());
             verify(context.getBean(FileAccess.class)).administrator(UUID.fromString(root.substring(root.lastIndexOf('/')+1)),"11111111-1111-1111-1111-111111111111");
         }

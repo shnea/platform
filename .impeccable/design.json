@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T12:22:02.000Z",
+  "generatedAt": "2026-09-26T13:21:59.000Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -29,7 +29,8 @@
       },
       {
         "name": "mobile",
-        "value": "600px"
+        "value": "600px",
+        "purpose": "파일 URL 행과 파일 보존 변경 폼을 세로로 배치한다. 미리보기 안쪽 여백은 8px, 문서 프레임 높이는 440px로 줄이며 동작은 줄바꿈한다."
       }
     ]
   },
@@ -46,7 +47,7 @@
       "name": "보조 동작",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "보조 동작 버튼",
+      "description": "보조 동작 버튼. 파일 목록의 상세·보기와 다운로드, 상세의 목록 복귀·새로고침·URL 복사에도 재사용하며 파일 화면에서는 최소 높이 44px를 적용한다.",
       "html": "<button class=\"ds-button-secondary\">취소</button>",
       "css": ".ds-button-secondary{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;border:1px solid transparent;border-radius:6px;padding:9px 15px;min-height:42px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s;background:transparent;border-color:var(--line,#34443e);color:var(--text,#e8eee8);}.ds-button-secondary:hover:not(:disabled){filter:brightness(1.1)}.ds-button-secondary:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}.ds-button-secondary:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none}}"
     },
@@ -70,7 +71,7 @@
       "name": "입력",
       "kind": "input",
       "refersTo": "input",
-      "description": "보이는 라벨을 가진 입력. 적체 경보 설정의 숫자 입력도 같은 높이·경계·포커스를 사용하며, 단위는 라벨에, 범위와 조건은 입력 아래 보조 문구에 표시한다.",
+      "description": "보이는 라벨을 가진 입력. 적체 경보와 보존 정책의 숫자 입력도 같은 높이·경계·포커스를 사용하며 단위는 라벨에, 범위와 조건은 입력 아래 보조 문구에 표시한다. 파일 상세의 기본 뷰어·원본·미리보기·썸네일·다운로드 URL은 읽기 전용 입력과 복사·열기 동작을 한 행에 배치하고 모바일에서는 세로로 쌓는다.",
       "html": "<label class=\"ds-label\">프로젝트 이름<input class=\"ds-input\" placeholder=\"예: 블로그\" /></label>",
       "css": ".ds-label{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;display:flex;flex-direction:column;gap:8px;color:var(--text,#e8eee8);font-size:14px;font-weight:600}.ds-input{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;background:var(--bg,#111918);color:var(--text,#e8eee8);border:1px solid var(--line,#34443e);border-radius:5px;height:48px;padding:0 12px;min-width:0}.ds-input::placeholder{color:var(--muted,#a5b7ae);opacity:.85}.ds-input:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}"
     },

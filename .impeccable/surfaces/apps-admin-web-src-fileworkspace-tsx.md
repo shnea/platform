@@ -2,7 +2,7 @@
 version: 1
 slug: "apps-admin-web-src-fileworkspace-tsx"
 primary_target: "apps/admin-web/src/FileWorkspace.tsx"
-related_targets: ["apps/admin-web/src/files.css","apps/admin-web/src/file-api.ts"]
+related_targets: ["apps/admin-web/src/files.css","apps/admin-web/src/file-api.ts","apps/admin-web/src/FileDetails.tsx","apps/admin-web/src/RetentionPanel.tsx"]
 ---
 
 # 관리자 파일 작업 공간
@@ -17,7 +17,7 @@ OWN-WORLD: 기존 어두운 녹색·민트와 밝은 테마, 시스템 글꼴, �
 
 STORY: 범위를 확인하고 파일 목록 또는 업로드 탭을 고른다. 파일별 진행 상태와 실패 이유를 읽고 같은 원본을 선택해 이어 올린다. 공개 범위·삭제는 대상과 영향을 확인한다.
 
-FIRST VIEWPORT: 기존 메뉴·페이지 제목·프로젝트/환경 선택 아래에 두 탭을 둔다. 목록은 파일명 중심 행, 업로드는 파일 선택 영역과 파일별 진행률이다. 모바일에서 행의 조작부가 아래로 이동한다.
+FIRST VIEWPORT: 기존 메뉴·페이지 제목·프로젝트/환경 선택 아래에 파일 목록·업로드·보존 정책 탭을 둔다. 목록은 파일명 중심 행이며 ‘상세·보기’에서 콘텐츠를 먼저 보여 주고 보기별 URL을 제공한다. 상세는 같은 작업 공간의 한 화면으로 전환하고 목록 복귀를 제공한다. 모바일에서 행의 조작부와 URL 조작부가 아래로 이동한다.
 
 FORM: 기존 운영 화면 확장, code-led. 순위·seed·새 시각 방향은 해당 없음. 별도 래스터 생성 없음.
 
@@ -29,4 +29,5 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - 업로드 진행·일시정지·원본 필요·오류·완료를 텍스트와 실제 수치로 구분한다.
 - 긴 한글 파일명, 빈 목록, 실패/재조회, 삭제 확인, 키보드 조작과 390px 모바일을 검증한다.
 - 파일 전체를 브라우저 메모리에 올리지 않으며 관리자 권한과 환경 격리를 유지한다.
-- 미구현 썸네일·미리보기·공유·보존 관리를 완료로 표시하지 않는다.
+- 이미지·영상 대표 이미지, 원본, 문서·영상·오디오 보기와 URL을 구분하고 준비 중·실패·미지원·만료를 안내한다. 비밀번호 공유는 미구현이다.
+- 자동 정리는 기본 꺼짐이며 기간 변경의 영향·삭제 유예·기존 파일 적용을 확인한다.

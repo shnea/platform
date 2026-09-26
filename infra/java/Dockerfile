@@ -8,6 +8,8 @@ ARG SERVICE
 RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked gradle --no-daemon :services:${SERVICE}:build && cp services/${SERVICE}/build/libs/*-SNAPSHOT.jar /app.jar
 
 FROM eclipse-temurin:21-jre-alpine
+ARG SERVICE
+RUN if [ "$SERVICE" = "file-service" ]; then apk add --no-cache ffmpeg; fi
 RUN apk add --no-cache curl && addgroup -S app && adduser -S -G app app
 RUN mkdir -p /app/storage && chown app:app /app/storage
 WORKDIR /app
