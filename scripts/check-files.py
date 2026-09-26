@@ -98,7 +98,7 @@ def start():
     old = key(environments[0], ['integration:read'])
     state.update(full=full, foreign=foreign, prod_key=prod_key, read=read, old=old)
     spec, _ = call('GET', '/api/v1/files/openapi', key=full['apiKey']); validate(spec)
-    assert sum(len(v) for v in spec['paths'].values()) == 39
+    assert sum(len(v) for v in spec['paths'].values()) == 41
     state['environments'] = environments; save()
     call('GET', '/api/v1/files', expected=401)
     call('GET', '/api/v1/files', key=old['apiKey'], expected=403)
@@ -119,6 +119,7 @@ def start():
 def finish():
     state.update(json.loads(STATE.read_text(encoding='utf-8'))); login(state['refresh']); save()
     full=state['full']['apiKey']; upload=state['upload']['uploadId']
+    check_duplicates()
     admin_path='/api/v1/files/admin/environments/'+state['environments'][0]['id']
     call('GET',admin_path,expected=401)
     call('GET',admin_path,key=full,expected=401)
@@ -172,6 +173,28 @@ def finish():
     call('POST','/api/v1/files/uploads',oversized,key=full,expected=413)
     call('GET','/internal/v1/files/environments/'+str(uuid.uuid4()),expected=404,raw=True)
     print('PASS finish: persisted resume, checksum, complete retry, public/private, scopes, project/environment isolation, revoked key, suspension, delete, empty file, 5GB limit, admin JWT and owner boundaries, single-use private ticket, HEAD without consumption')
+
+
+def check_duplicates():
+    full=state['full']['apiKey']; payload=b'verified duplicate content'; ids=[]
+    for index in range(3):
+        upload,_=create_file(full,payload,'renamed-'+str(index)+'.txt',visibility='PRIVATE' if index else 'PUBLIC')
+        chunk(upload['uploadId'],full,0,payload)
+        file,_=call('POST','/api/v1/files/uploads/'+upload['uploadId']+'/complete',key=full); ids.append(file['fileId'])
+    path='/api/v1/files/'+ids[0]+'/duplicates'
+    call('GET',path,expected=401);call('GET',path,key=state['old']['apiKey'],expected=403)
+    for key_name in ['foreign','prod_key']: call('GET',path,key=state[key_name]['apiKey'],expected=404)
+    result,_=call('GET',path,key=state['read']['apiKey'])
+    assert {x['fileId'] for x in result['files']}==set(ids[1:]) and not result['hasMore']
+    first,_=call('GET',path+'?limit=1',key=full);second,_=call('GET',path+'?limit=1&offset=1',key=full)
+    assert first['hasMore'] and not second['hasMore'] and first['files'][0]['fileId']!=second['files'][0]['fileId']
+    call('GET',path+'?limit=101',key=full,expected=400)
+    admin_path='/api/v1/files/admin/environments/'+state['environments'][0]['id']+'/'+ids[0]+'/duplicates'
+    call('GET',admin_path,key=full,expected=401)
+    admin_result,_=call('GET',admin_path,auth=True);assert admin_result==result
+    call('DELETE','/api/v1/files/'+ids[1],key=full,expected=204)
+    after,_=call('GET',path,key=full);assert [x['fileId'] for x in after['files']]==[ids[2]]
+    print('PASS duplicates: verified renamed private/public files, pagination, scopes, DEV/PROD isolation, admin JWT, deleted-file exclusion')
 
 
 def cleanup():

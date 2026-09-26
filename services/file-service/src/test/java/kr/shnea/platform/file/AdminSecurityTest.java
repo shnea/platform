@@ -39,7 +39,7 @@ class AdminSecurityTest {
             context.setServletContext(new MockServletContext()); context.register(Config.class); context.refresh();
             var mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain",Filter.class)).build();
             String root="/api/v1/files/admin/environments/"+UUID.randomUUID(), id=UUID.randomUUID().toString();
-            var requests=List.of(get(root),get(root+"/uploads"),post(root+"/uploads"),get(root+"/uploads/"+id),patch(root+"/uploads/"+id),
+            var requests=List.of(get(root+"/"+id+"/duplicates"),get(root),get(root+"/uploads"),post(root+"/uploads"),get(root+"/uploads/"+id),patch(root+"/uploads/"+id),
                 delete(root+"/uploads/"+id),post(root+"/uploads/"+id+"/complete"),put(root+"/"+id+"/visibility"),delete(root+"/"+id),post(root+"/"+id+"/download-ticket"),
                 get(root+"/retention"),post(root+"/retention/preview"),put(root+"/retention/policies"),put(root+"/retention/settings"),get(root+"/retention/candidates"),get(root+"/retention/history"),put(root+"/"+id+"/retention"),post(root+"/"+id+"/views"),post(root+"/"+id+"/views/retry"),post(root+"/"+id+"/video/retry"));
             for(var request:requests) {

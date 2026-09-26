@@ -27,6 +27,9 @@
 .file-workspace .pagination { align-items: center; }
 .file-detail .file-detail-name { margin-top: 24px; overflow-wrap: anywhere; font-size: 20px; }
 .file-detail h4 { margin: 32px 0 12px; }
+.file-duplicates { margin-block: 16px 24px; padding-block: 12px; border-block: 1px solid var(--line); }
+.file-duplicates summary { cursor: pointer; min-height: 44px; align-content: center; }
+.file-duplicates > .pagination { margin-bottom: 16px; }
 .file-preview { background: var(--surface); min-height: 200px; padding: 16px; display: grid; place-items: center; }
 .file-preview img, .file-preview video { max-width: 100%; max-height: 560px; object-fit: contain; }
 .file-preview audio { width: min(100%,600px); }

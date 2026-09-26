@@ -4,13 +4,14 @@ import { SectionTabs } from "./SectionTabs";
 import { Dialog } from "./Dialog";
 import type { RetentionPolicy } from "./RetentionPanel";
 import {VideoPlayer,videoState,videoReason,type FileViewsData} from "./VideoPlayer";
+import {FileDuplicates} from "./FileDuplicates";
 
 type Views=FileViewsData;
 const states:Record<string,string>={QUEUED:"미리보기 생성 대기",PROCESSING:"미리보기 생성 중",READY:"미리보기 준비 완료",UNSUPPORTED:"미리보기 미지원",FAILED:"미리보기 생성 실패"};
 const kinds:Record<string,string>={IMAGE:"이미지",VIDEO:"영상",AUDIO:"오디오",PDF:"PDF 문서",TEXT:"텍스트",MARKDOWN:"Markdown",OTHER:"일반 파일"};
 const errorMessage=(e:unknown)=>e instanceof TypeError?"연결하지 못했습니다. 다시 조회해 주세요.":e instanceof Error?e.message:"파일 정보를 조회하지 못했습니다.";
 const absolute=(url:string)=>new URL(url,location.origin).href;
-export function FileDetails({file,environmentId,policies,onClose,onBusyChange,onChanged}:{file:FileInfo;environmentId:string;policies:RetentionPolicy[];onClose:()=>void;onBusyChange:(v:boolean)=>void;onChanged:()=>void}) {
+export function FileDetails({file,environmentId,policies,onClose,onOpen,onBusyChange,onChanged}:{file:FileInfo;environmentId:string;policies:RetentionPolicy[];onClose:()=>void;onOpen:(file:FileInfo)=>void;onBusyChange:(v:boolean)=>void;onChanged:()=>void}) {
  const [data,setData]=useState<Views|null>(null),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [tab,setTab]=useState("preview"),[expired,setExpired]=useState(false),[mediaError,setMediaError]=useState(false);
  const [code,setCode]=useState(file.retentionCode),[current,setCurrent]=useState(file.retentionCode),[confirm,setConfirm]=useState(false);
@@ -29,6 +30,7 @@ export function FileDetails({file,environmentId,policies,onClose,onBusyChange,on
  return <section className="file-detail" aria-label="파일 상세·보기">
   <div className="section-line"><button className="secondary" disabled={busy} onClick={onClose}>파일 목록으로</button><button className="secondary" disabled={busy||loading} onClick={()=>void load()}>{expired?"보기 URL 재발급":"보기 정보 새로고침"}</button></div>
   <h3 className="file-detail-name" tabIndex={-1} ref={heading}>{file.originalName}</h3><p className="small muted">{fileSize(file.size)} · {file.visibility==='PUBLIC'?'공개':'비공개'} · {data?kinds[data.kind]:"형식 확인 중"}</p>
+  <FileDuplicates fileId={file.fileId} environmentId={environmentId} disabled={busy} onOpen={onOpen}/>
   {loading&&<p role="status">보기 정보를 불러오는 중…</p>}{error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {expired&&<p className="warning" role="status">임시 보기 URL이 만료되었습니다. ‘보기 URL 재발급’을 눌러 다시 확인해 주세요.</p>}
   {data&&<><p>{data.video?'원본 미리보기: ':''}{states[data.state]}{data.errorCode==='FILE_PREVIEW_INPUT_LIMIT'?' · 원본 미리보기 처리 한도를 초과했습니다.':data.errorCode==='FILE_PREVIEW_CODEC_UNSUPPORTED'?' · 원본 직접 재생을 지원하지 않는 코덱입니다.':''}</p>

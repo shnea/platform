@@ -41,6 +41,52 @@ class FilesDatabaseTest {
     RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
     FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000);}
     FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos());}
+    UUID duplicateFixture(FileAccess.Context context,String name,byte[] content,String visibility) {
+        UUID id=service.create(context,new FilesService.Create(UUID.randomUUID(),name,(long)content.length,hash(content),visibility,"default")).uploadId();
+        if(content.length>0)service.append(id,context,0,content.length,hash(content),new ByteArrayInputStream(content));
+        service.complete(id,context);return id;
+    }
+    @Test void duplicatesUseVerifiedBytesExcludeSelfAndNeverMergeFilePolicies() {
+        UUID source=duplicateFixture(owner,"original.txt",bytes,"PUBLIC");
+        UUID renamed=duplicateFixture(owner,"renamed.txt",bytes,"PRIVATE");
+        service.retention(renamed,owner,"영구","default");
+        duplicateFixture(owner,"original.txt",new byte[bytes.length],"PUBLIC");
+        UUID unverified=service.create(owner,input(bytes)).uploadId();
+        byte[] wrong=new byte[bytes.length];service.append(unverified,owner,0,wrong.length,hash(wrong),new ByteArrayInputStream(wrong));
+        code("FILE_CHECKSUM_MISMATCH",()->service.complete(unverified,owner));
+        code("FILE_NOT_FOUND",()->service.duplicates(unverified,owner,20,0));
+        var before=service.detail(source,owner);long audits=db.queryForObject("SELECT count(*) FROM file_audit",Long.class);
+        var found=service.duplicates(source,owner,20,0);
+        assertThat(found.fileId()).isEqualTo(source);assertThat(found.hasMore()).isFalse();
+        assertThat(found.files()).extracting(FilesService.FileInfo::fileId).containsExactly(renamed);
+        assertThat(found.files().getFirst().visibility()).isEqualTo("PRIVATE");assertThat(found.files().getFirst().retentionCode()).isEqualTo("영구");
+        assertThat(service.detail(source,owner)).isEqualTo(before);
+        assertThat(db.queryForObject("SELECT count(*) FROM file_audit",Long.class)).isEqualTo(audits);
+        service.delete(renamed,owner);assertThat(service.duplicates(source,owner,20,0).files()).isEmpty();
+        service.delete(source,owner);code("FILE_NOT_FOUND",()->service.duplicates(source,owner,20,0));
+    }
+    @Test void duplicateLookupIsBoundToBothProjectAndEnvironment() {
+        UUID source=duplicateFixture(owner,"source.txt",bytes,"PRIVATE");
+        UUID match=duplicateFixture(owner,"match.txt",bytes,"PUBLIC");
+        var prod=new FileAccess.Context(owner.projectId(),UUID.randomUUID(),UUID.randomUUID());
+        var foreign=new FileAccess.Context(UUID.randomUUID(),owner.environmentId(),UUID.randomUUID());
+        duplicateFixture(prod,"prod.txt",bytes,"PRIVATE");duplicateFixture(foreign,"foreign.txt",bytes,"PUBLIC");
+        assertThat(service.duplicates(source,owner,20,0).files()).extracting(FilesService.FileInfo::fileId).containsExactly(match);
+        code("FILE_NOT_FOUND",()->service.duplicates(source,prod,20,0));code("FILE_NOT_FOUND",()->service.duplicates(source,foreign,20,0));
+        var authorized=new FileAccess.Context(owner.projectId(),owner.environmentId(),UUID.randomUUID());
+        assertThat(service.duplicates(source,authorized,20,0).files()).hasSize(1);
+    }
+    @Test void duplicateLookupPaginatesVerifiedEmptyFilesAndValidatesBounds() {
+        UUID source=duplicateFixture(owner,"empty.txt",new byte[0],"PUBLIC");
+        for(int i=0;i<3;i++)duplicateFixture(owner,"empty-"+i,new byte[0],"PUBLIC");
+        var first=service.duplicates(source,owner,2,0);var next=service.duplicates(source,owner,2,2);
+        assertThat(first.files()).hasSize(2);assertThat(first.hasMore()).isTrue();assertThat(next.files()).hasSize(1);assertThat(next.hasMore()).isFalse();
+        assertThat(first.files()).doesNotContainAnyElementsOf(next.files());
+        assertThat(service.duplicates(source,owner,2,20).files()).isEmpty();
+        assertThatThrownBy(()->service.duplicates(source,owner,0,0)).isInstanceOf(FileFailure.class);
+        assertThatThrownBy(()->service.duplicates(source,owner,101,0)).isInstanceOf(FileFailure.class);
+        assertThatThrownBy(()->service.duplicates(source,owner,5,-1)).isInstanceOf(FileFailure.class);
+    }
     @Test void videoQualityPreservesPortraitAndNeverUpscales() {
         var landscape=FileVideos.variants(new FileVideos.Source(1920,1080,12,true));
         assertThat(landscape).extracting(FileVideos.Variant::quality).containsExactly(360,720,1080);

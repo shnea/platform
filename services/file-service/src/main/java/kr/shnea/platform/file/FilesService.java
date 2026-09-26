@@ -20,6 +20,7 @@ class FilesService {
                   Instant expiresAt, UUID fileId) {}
     record FileInfo(UUID fileId, String originalName, long size, String sha256, String visibility,
                     String retentionCode, Instant createdAt, Instant lastUsedAt, String downloadUrl) {}
+    record Duplicates(UUID fileId, List<FileInfo> files, boolean hasMore) {}
     record Row(UUID id, UUID project, UUID environment, UUID owner, String name, long size, String hash,
                long offset, String state, String visibility, String retention, Instant expires,
                Instant completed, Instant used, String ownerKind) {}
@@ -123,6 +124,17 @@ class FilesService {
             this::row, context.environmentId(), context.projectId(), limit, offset).stream().map(this::info).toList();
     }
     FileInfo detail(UUID id, FileAccess.Context context) { return info(managed(id, context, false)); }
+    Duplicates duplicates(UUID id, FileAccess.Context context, int limit, int offset) {
+        if (limit < 1 || limit > 100 || offset < 0) throw FileFailure.invalid();
+        // READY means complete() verified the actual stored bytes, not merely the caller's hash.
+        Row source = managed(id, context, false);
+        var matches = db.query("""
+            SELECT * FROM files WHERE project_id=? AND environment_id=? AND state='READY'
+                AND expected_sha256=? AND size_bytes=? AND id<>?
+            ORDER BY completed_at DESC,id LIMIT ? OFFSET ?
+            """, this::row, context.projectId(), context.environmentId(), source.hash(), source.size(), id, limit + 1, offset);
+        return new Duplicates(id, matches.stream().limit(limit).map(this::info).toList(), matches.size() > limit);
+    }
     FileInfo visibility(UUID id, FileAccess.Context context, String visibility) {
         if (!Set.of("PUBLIC", "PRIVATE").contains(visibility == null ? "" : visibility)) throw FileFailure.invalid();
         return tx.execute(status -> {

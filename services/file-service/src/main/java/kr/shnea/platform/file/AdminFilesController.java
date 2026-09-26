@@ -22,6 +22,11 @@ class AdminFilesController {
     Object uploads(@PathVariable UUID environmentId, @AuthenticationPrincipal Jwt user) {
         return files.resumable(access.administrator(environmentId,user.getSubject()));
     }
+    @GetMapping("/api/v1/files/admin/environments/{environmentId}/{id}/duplicates")
+    Object duplicates(@PathVariable UUID environmentId, @PathVariable UUID id, @AuthenticationPrincipal Jwt user,
+                      @RequestParam(defaultValue="20") int limit, @RequestParam(defaultValue="0") int offset) {
+        return files.duplicates(id,access.administrator(environmentId,user.getSubject()),limit,offset);
+    }
     @PostMapping("/api/v1/files/admin/environments/{environmentId}/uploads")
     @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     Object create(@PathVariable UUID environmentId, @AuthenticationPrincipal Jwt user, @RequestBody FilesService.Create input) {

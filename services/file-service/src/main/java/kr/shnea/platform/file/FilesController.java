@@ -46,6 +46,11 @@ class FilesController {
         return files.detail(id, access.require(key, "files:read"));
     }
     record Visibility(String visibility) {}
+    @GetMapping("/api/v1/files/{id}/duplicates")
+    Object duplicates(@PathVariable UUID id, @RequestHeader(value="X-Platform-Key",required=false) String key,
+                      @RequestParam(defaultValue="20") int limit, @RequestParam(defaultValue="0") int offset) {
+        return files.duplicates(id,access.require(key,"files:read"),limit,offset);
+    }
     @PutMapping("/api/v1/files/{id}/visibility")
     Object visibility(@PathVariable UUID id, @RequestHeader(value="X-Platform-Key", required=false) String key,
                       @RequestBody Visibility body) {

@@ -18,9 +18,9 @@ class FileContractTest {
             }
         var paths = spec.path("paths");
         for (String path : paths.propertyNames()) for (String method : paths.path(path).propertyNames()) documented.add(method+" "+path);
-        assertThat(documented).isEqualTo(actual).hasSize(39);
+        assertThat(documented).isEqualTo(actual).hasSize(41);
         for (var model : Map.of("Upload",FilesService.Upload.class, "UploadCreate",FilesService.Create.class,
-                "FileInfo",FilesService.FileInfo.class,"Visibility",FilesController.Visibility.class,
+                "FileDuplicates",FilesService.Duplicates.class,"FileInfo",FilesService.FileInfo.class,"Visibility",FilesController.Visibility.class,
                 "FileViewLinks",FileViews.Links.class,"VideoStatus",FileVideos.Status.class,"VideoVariant",FileVideos.Variant.class).entrySet()) {
             assertThat(spec.path("components").path("schemas").path(model.getKey()).path("properties").propertyNames())
                 .containsExactlyInAnyOrderElementsOf(Arrays.stream(model.getValue().getRecordComponents()).map(c -> c.getName()).toList());

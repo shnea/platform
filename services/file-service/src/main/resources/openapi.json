@@ -2215,6 +2215,150 @@
           }
         ]
       }
+    },
+    "/api/v1/files/{id}/duplicates": {
+      "get": {
+        "operationId": "file_duplicates",
+        "summary": "같은 프로젝트·환경의 동일 내용 파일 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "ServerApiKey": []
+          }
+        ],
+        "x-required-scope": "files:read",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDuplicates"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "description": "서버가 전체 SHA-256과 크기를 검증한 READY 파일만 비교합니다. 자기 자신과 삭제·미완료 파일은 제외하며 자동 병합·삭제하지 않습니다. 환경 파일 조회 권한이 필요합니다. 최신 업로드순, 같은 시각이면 파일 ID순입니다."
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/{id}/duplicates": {
+      "get": {
+        "operationId": "admin_file_duplicates",
+        "summary": "관리자: 동일 내용 파일 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDuplicates"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류. code/requestId로 처리합니다.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "description": "서버가 전체 SHA-256과 크기를 검증한 READY 파일만 비교합니다. 자기 자신과 삭제·미완료 파일은 제외하며 자동 병합·삭제하지 않습니다. 환경 파일 조회 권한이 필요합니다. 최신 업로드순, 같은 시각이면 파일 ID순입니다."
+      }
     }
   },
   "components": {
@@ -3013,6 +3157,30 @@
           "errorCode"
         ],
         "additionalProperties": false
+      },
+      "FileDuplicates": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "files",
+          "hasMore"
+        ],
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileInfo"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }
