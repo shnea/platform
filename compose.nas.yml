@@ -26,3 +26,19 @@ services:
       - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/loki:/loki
     depends_on:
       storage-init: {condition: service_completed_successfully}
+
+# NAS default address pools are exhausted. These /24s do not overlap the
+# supplied NAS routes (172.17-31/16, 192.168.0/24 and 192.168.16-240/20).
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 10.250.10.0/24
+  database:
+    ipam:
+      config:
+        - subnet: 10.250.11.0/24
+  logs:
+    ipam:
+      config:
+        - subnet: 10.250.12.0/24

@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from ipaddress import ip_network
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[1]
@@ -40,6 +41,11 @@ for name in ['db','file-service','loki']:
     assert config['services'][name]['depends_on']['storage-init']['condition']=='service_completed_successfully'
 assert config['services']['storage-init']['network_mode']=='none'
 assert config['networks']['logs']['internal'] is True
+assert config['networks']['database']['internal'] is True
+subnets=[ip_network(config['networks'][name]['ipam']['config'][0]['subnet']) for name in ['app','database','logs']]
+assert len(set(subnets))==3 and all(net.prefixlen==24 for net in subnets)
+assert all(not a.overlaps(b) for i,a in enumerate(subnets) for b in subnets[i+1:])
+assert all(not net.overlaps(ip_network(used)) for net in subnets for used in ['172.16.0.0/12','192.168.0.0/16'])
 assert {n for n,s in config['services'].items() if 'logs' in s.get('networks',{})}=={'loki','project-service'}
 # The same commands select local build configuration using only .env values.
 envfile.write_text(before.decode().replace('compose.yml|compose.nas.yml','compose.yml|compose.dev.yml').replace('IMAGE_REGISTRY=registry.shnea.kr','IMAGE_REGISTRY=registry.example.invalid').replace('IMAGE_TAG=configuration-check-only','IMAGE_TAG=tag-check'),encoding='utf-8')

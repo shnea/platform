@@ -39,6 +39,8 @@ sudo docker-compose --env-file .env.prod up -d
 
 데이터 폴더와 최초 관리자 설정은 자동으로 준비된다. `storage-init`·`identity-setup`의 `Exited (0)`은 정상이다.
 
+NAS의 기본 Docker 주소 대역 소진을 피하도록 `compose.nas.yml`에 플랫폼 전용 대역을 지정했다: 앱 `10.250.10.0/24`, DB `10.250.11.0/24`, 로그 `10.250.12.0/24`. 기존 NAS 라우팅 표와 겹치지 않으며 DB·로그 네트워크는 내부 전용이다. 이전 파일로 네트워크 생성이 실패했다면 **`compose.nas.yml`만 교체**하고 같은 `up -d` 명령을 다시 실행한다. 이미지 재빌드·재다운로드는 필요 없다.
+
 | 위치 | 저장 내용 |
 | --- | --- |
 | `/volume1/docker/prod/platform` | 실행 설정 |
