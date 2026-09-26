@@ -294,6 +294,60 @@ class ProvisionJobsDatabaseTest {
         assertThat(jobs.metrics(environmentId).failedLast24Hours()).isEqualTo(2);
     }
 
+    @Test void backlogNeedsConsecutiveDueWaitingAndRecoversWithoutDuplicating() {
+        var monitor=new JobBacklog(db,tx,true);
+        assertThat(monitor.settings(environmentId).enabled()).isFalse();assertThat(monitor.checkOne()).isFalse();
+        monitor.save(environmentId,new JobBacklog.Save(true,60,2,0),"admin",REQUEST);
+        var job=enqueue();db.update("UPDATE platform_jobs SET updated_at=now()-interval '2 minutes',next_run_at=now()+interval '1 hour' WHERE id=?",job.id());
+        monitor.checkOne();assertThat(monitor.settings(environmentId).breachChecks()).isZero();
+        due(job.id());backlogDue();monitor.checkOne();assertThat(monitor.settings(environmentId).breachChecks()).isEqualTo(1);
+        assertThat(monitor.checkOne()).isFalse();backlogDue();monitor.checkOne();
+        UUID opening=monitor.settings(environmentId).activeEventId();assertThat(opening).isNotNull();
+        backlogDue();monitor.checkOne();assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.backlogged'")).isEqualTo(1);
+        db.update("UPDATE platform_jobs SET state='RUNNING' WHERE id=?",job.id());
+        backlogDue();monitor.checkOne();assertThat(monitor.settings(environmentId).clearChecks()).isEqualTo(1);
+        backlogDue();new JobBacklog(db,tx,true).checkOne();assertThat(monitor.settings(environmentId).activeEventId()).isNull();
+        assertThat(db.queryForObject("SELECT causation_id FROM project_outbox WHERE event_type='job.backlog_recovered'",UUID.class)).isEqualTo(opening);
+        db.update("UPDATE platform_jobs SET state='RETRY_WAIT',updated_at=now()-interval '2 minutes' WHERE id=?",job.id());
+        backlogDue();monitor.checkOne();backlogDue();monitor.checkOne();
+        assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.backlogged'")).isEqualTo(2);
+    }
+    @Test void backlogGapAndNewWaitingEpisodeResetConsecutiveChecksAndSettingsCloseAtomically() {
+        var monitor=new JobBacklog(db,tx,true);monitor.save(environmentId,new JobBacklog.Save(true,60,2,0),"admin",REQUEST);
+        var job=enqueue();db.update("UPDATE platform_jobs SET updated_at=now()-interval '2 minutes' WHERE id=?",job.id());monitor.checkOne();
+        db.update("UPDATE job_backlog_settings SET next_check_at=now(),last_checked_at=now()-interval '2 minutes'");monitor.checkOne();
+        assertThat(monitor.settings(environmentId).breachChecks()).isEqualTo(1);
+        db.update("UPDATE platform_jobs SET updated_at=now()-interval '3 minutes' WHERE id=?",job.id());backlogDue();monitor.checkOne();
+        assertThat(monitor.settings(environmentId).breachChecks()).isEqualTo(1);
+        backlogDue();monitor.checkOne();UUID opening=monitor.settings(environmentId).activeEventId();
+        assertThatThrownBy(()->monitor.save(environmentId,new JobBacklog.Save(false,60,2,0),"admin",REQUEST)).isInstanceOf(ResponseStatusException.class);
+        assertThat(monitor.settings(environmentId).activeEventId()).isEqualTo(opening);
+        db.execute("ALTER TABLE job_backlog_settings_audit ADD CONSTRAINT reject_backlog_revision CHECK (revision<2)");
+        assertThatThrownBy(()->monitor.save(environmentId,new JobBacklog.Save(false,60,2,1),"admin",REQUEST)).isInstanceOf(Exception.class);
+        assertThat(monitor.settings(environmentId).activeEventId()).isEqualTo(opening);
+        assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.backlog_closed'")).isZero();
+        db.execute("ALTER TABLE job_backlog_settings_audit DROP CONSTRAINT reject_backlog_revision");
+        monitor.save(environmentId,new JobBacklog.Save(false,60,2,1),"admin",REQUEST);
+        assertThat(monitor.settings(environmentId).enabled()).isFalse();assertThat(monitor.settings(environmentId).activeEventId()).isNull();
+        assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.backlog_closed'")).isEqualTo(1);
+    }
+    @Test void concurrentBacklogCheckHasOneWinnerAndUnknownScopeCannotBeSaved() throws Exception {
+        var monitor=new JobBacklog(db,tx,true);
+        assertThatThrownBy(()->monitor.save(UUID.randomUUID(),new JobBacklog.Save(true,60,1,0),"admin",REQUEST)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(()->monitor.save(environmentId,new JobBacklog.Save(true,59,1,0),"admin",REQUEST)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(()->new JobBacklog(db,tx,false).save(environmentId,new JobBacklog.Save(true,60,1,0),"admin",REQUEST)).isInstanceOf(ResponseStatusException.class);
+        monitor.save(environmentId,new JobBacklog.Save(true,60,1,0),"admin",REQUEST);
+        var job=enqueue();db.update("UPDATE platform_jobs SET updated_at=now()-interval '2 minutes' WHERE id=?",job.id());
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(4)) {
+            var futures=new ArrayList<Future<Boolean>>();for(int i=0;i<4;i++)futures.add(pool.submit(()->{start.await();return monitor.checkOne();}));
+            start.countDown();int processed=0;for(var future:futures)if(future.get(10,TimeUnit.SECONDS))processed++;
+            assertThat(processed).isEqualTo(1);
+        }
+        assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.backlogged'")).isEqualTo(1);
+        assertThat(monitor.settings(environmentId).activeJobId()).isEqualTo(job.id());
+    }
+    private void backlogDue() {db.update("UPDATE job_backlog_settings SET next_check_at=now()-interval '1 second' WHERE environment_id=?",environmentId);}
     private ProvisionJobs.Job enqueue() { return jobs.enqueue(environmentId, "test-admin", REQUEST); }
     private int count(String sql) { return db.queryForObject(sql, Integer.class); }
     private void due(UUID id) { db.update("UPDATE platform_jobs SET next_run_at=now()-interval '1 second' WHERE id=?", id); }

@@ -3,6 +3,7 @@ import { api } from "./auth";
 import { Dialog } from "./Dialog";
 import { OperationalAlertsPanel } from "./OperationalAlertsPanel";
 import { SectionTabs } from "./SectionTabs";
+import { alertTitles } from "./alertLabels";
 
 type Props = { environmentId: string; environmentLabel: string; disabled: boolean; onBusyChange: (busy: boolean) => void };
 type Settings = { enabled: boolean; recipient: string; suppressionMinutes: number; recoveryEnabled: boolean; revision: number;
@@ -69,9 +70,9 @@ function EmailSettings({ environmentId, environmentLabel, disabled, onBusyChange
           placeholder="ops@example.com" autoComplete="off" onChange={e => setDraft({ ...draft, recipient: e.target.value })} /></label>
         <label>같은 실패의 이메일 간격 (분)<input type="number" min={1} max={1440} required value={Number.isFinite(draft.suppressionMinutes) ? draft.suppressionMinutes : ""}
           onChange={e => setDraft({ ...draft, suppressionMinutes: e.target.valueAsNumber })} aria-describedby="alert-suppression-help" /></label>
-        <p id="alert-suppression-help" className="small muted">1~1,440분. 같은 환경의 실패가 반복되면 이 시간 동안 이메일을 생략합니다. 복구 후 다시 실패하면 새로 알립니다.</p>
+        <p id="alert-suppression-help" className="small muted">1~1,440분. 같은 환경·종류의 실패 또는 적체가 반복되면 이 시간 동안 이메일을 생략합니다. 해소 후 다시 발생하면 새로 알립니다.</p>
         <label className="checkbox"><input type="checkbox" checked={draft.recoveryEnabled} onChange={e => setDraft({ ...draft, recoveryEnabled: e.target.checked })} />복구 이메일도 받기</label>
-        <p className="small muted">실패 이후 새 환경 반영 작업이 성공하면 복구로 기록합니다. 알림 확인 처리만으로는 복구되지 않습니다.</p>
+        <p className="small muted">환경 반영 성공과 대기 적체 해소를 각각 알립니다. 알림 확인 처리와 감시 설정 변경은 실제 복구가 아닙니다.</p>
       </fieldset>
       {saved?.updatedAt && <details className="job-event-history"><summary>최근 설정 변경 기록</summary><dl>
         <div><dt>변경 시각</dt><dd>{date(saved.updatedAt)}</dd></div><div><dt>관리자 ID</dt><dd className="identifier">{saved.updatedBy}</dd></div>
@@ -109,7 +110,7 @@ function EmailDeliveries({ environmentId, disabled }: Props) {
     <p className="small muted">발송사 접수는 수신함 도착을 보장하지 않습니다. 결과가 불확실한 이메일은 중복 발송을 막기 위해 자동 재전송하지 않습니다.</p>
     {loading && <p role="status">발송 이력을 불러오는 중…</p>}{error && <p className="alert" role="alert">{error} 새로고침으로 다시 확인해 주세요.</p>}
     {rows && (rows.length ? <ul className="job-attempts">{rows.slice(0, 20).map(row => <li key={row.eventId}>
-      <div className="section-line"><strong>{row.code === "JOB_RECOVERED" ? "환경 반영 복구" : "환경 반영 작업 최종 실패"}</strong>
+      <div className="section-line"><strong>{alertTitles[row.code] || row.code}</strong>
         <span className={`job-state ${["FAILED", "UNKNOWN", "BLOCKED"].includes(row.state) ? "job-failed" : ""}`}>{states[row.state] || row.state}</span></div>
       <p className="identifier">{row.recipient}</p><p className="small muted">접수 {date(row.createdAt)}{row.finishedAt && ` · 처리 ${date(row.finishedAt)}`}</p>
       <details className="job-event-history"><summary>발송 상세</summary><dl>

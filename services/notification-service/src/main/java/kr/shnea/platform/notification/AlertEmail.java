@@ -115,7 +115,12 @@ class AlertEmail {
             Pending p=claim();if(p==null)return;
             NcpMail.Outcome result=switch(p.deliveryMode()) {
                 case "MOCK" -> new NcpMail.Outcome("MOCK",null);
-                case "NCP" -> mail.send(p.recipient(),"[플랫폼] "+(p.code().equals("JOB_RECOVERED")?"환경 반영 복구":"환경 반영 작업 최종 실패"),
+                case "NCP" -> mail.send(p.recipient(),"[플랫폼] "+switch(p.code()) {
+                    case "JOB_RECOVERED" -> "환경 반영 복구";
+                    case "JOB_BACKLOGGED" -> "환경 반영 작업 대기 적체";
+                    case "JOB_BACKLOG_RECOVERED" -> "작업 대기 적체 해소";
+                    default -> "환경 반영 작업 최종 실패";
+                },
                     "프로젝트: "+p.projectId()+"\n환경: "+p.environmentId()+"\n작업: "+p.jobId()+"\n알림: "+p.id()+
                     "\n관리자 화면의 운영 알림에서 상세 내용을 확인해 주세요.");
                 default -> new NcpMail.Outcome("BLOCKED",null);

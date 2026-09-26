@@ -52,8 +52,8 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(37);
-        assertThat(prod.path("paths").size()).isEqualTo(32);
+        assertThat(dev.path("paths").size()).isEqualTo(38);
+        assertThat(prod.path("paths").size()).isEqualTo(33);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 
@@ -62,6 +62,7 @@ class OpenApiTest {
         var models = Map.ofEntries(
             Map.entry("OperationalAlert",OperationalAlertController.Alert.class),
             Map.entry("JobMetrics",ProvisionJobs.Metrics.class),
+            Map.entry("JobBacklogSettings",JobBacklog.Settings.class), Map.entry("JobBacklogSettingsUpdate",JobBacklog.Save.class),
             Map.entry("AlertEmailSettings",OperationalAlertController.EmailSettings.class),
             Map.entry("AlertEmailSettingsUpdate",OperationalAlertController.EmailSettingsUpdate.class),
             Map.entry("AlertEmailDelivery",OperationalAlertController.EmailDelivery.class),

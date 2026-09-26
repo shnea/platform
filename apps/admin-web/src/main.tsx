@@ -13,7 +13,7 @@ import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 import { MemberPanel } from "./MemberPanel";
 import { JobPanel } from "./JobPanel";
-import { JobMonitoring } from "./JobMonitoring";
+import { MonitoringWorkspace } from "./MonitoringWorkspace";
 import { AlertWorkspace } from "./AlertWorkspace";
 import { Dialog } from "./Dialog";
 import { SectionTabs } from "./SectionTabs";
@@ -704,7 +704,7 @@ function Workspace() {
                         }).catch(e => setError(e.message));
                       }} />
                     </>}
-                    {tab === "monitoring" && <JobMonitoring key={`monitoring:${env.id}`} environmentId={env.id}
+                    {tab === "monitoring" && <MonitoringWorkspace key={`monitoring:${env.id}`} environmentId={env.id} onBusyChange={setBusy}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy}
                       openJobs={state => { moveTo("jobs"); setJobInitialState(state); }} openAlerts={() => moveTo("alerts")} />}
                     {tab === "alerts" && <>

@@ -26,14 +26,17 @@ class JobEvents {
         if (event.schemaVersion()!=1) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT);
         if (event.id()==null || event.projectId()==null || event.environmentId()==null || event.targetId()==null ||
             event.targetRevision()<0 || event.occurredAt()==null || !"project-service".equals(event.source()) ||
-            event.causationId()!=null || event.requestId()==null || !event.requestId().matches("[a-f0-9]{32}") ||
-            event.payload()==null || event.type()==null || !List.of("job.succeeded","job.failed","job.cancelled").contains(event.type()) ||
+            event.requestId()==null || !event.requestId().matches("[a-f0-9]{32}") ||
+            event.payload()==null || event.type()==null || !List.of("job.succeeded","job.failed","job.cancelled","job.backlogged","job.backlog_recovered","job.backlog_closed").contains(event.type()) ||
             !event.type().substring(4).toUpperCase(java.util.Locale.ROOT).equals(event.payload().state()) ||
             (event.payload().errorCode()!=null && !List.of("ENVIRONMENT_PROVISION_FAILED","JOB_EXECUTION_FAILED",
-                "WORKER_INTERRUPTED","RETRY_EXHAUSTED","JOB_TARGET_CHANGED").contains(event.payload().errorCode())))
+                "WORKER_INTERRUPTED","RETRY_EXHAUSTED","JOB_TARGET_CHANGED","JOB_QUEUE_DELAYED","MONITORING_CHANGED").contains(event.payload().errorCode())) ||
+            ((event.type().equals("job.backlog_recovered") || event.type().equals("job.backlog_closed")) != (event.causationId()!=null)))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         String envelope=json.writeValueAsString(event);
         return tx.execute(status -> {
+            if(event.type().startsWith("job.backlog"))db.queryForList("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",
+                "job-backlog:"+(event.causationId()==null?event.id():event.causationId()));
             AlertEmail.lock(db,event.environmentId());
             int inserted=db.update("""
                 INSERT INTO received_job_events(id,project_id,environment_id,target_id,event_type,envelope,occurred_at)
@@ -44,7 +47,8 @@ class JobEvents {
                 Boolean same=db.queryForObject("SELECT EXISTS(SELECT 1 FROM received_job_events WHERE id=? AND envelope=?::jsonb)",
                     Boolean.class,event.id(),envelope);
                 if (!Boolean.TRUE.equals(same)) throw new ResponseStatusException(HttpStatus.CONFLICT);
-            } else JobAlertEffects.apply(db,event);
+            } else if(event.type().startsWith("job.backlog")) BacklogAlertEffects.apply(db,event);
+            else JobAlertEffects.apply(db,event);
             return new Receipt(event.id(),"ACCEPTED");
         });
     }

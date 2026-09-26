@@ -11,7 +11,8 @@ type EventDetail = { delivery: Delivery; attempts: {
   attempt: number; state: string; errorCode: string | null; httpStatus: number | null;
   startedAt: string; endedAt: string | null;
 }[] };
-const types: Record<string, string> = { "job.succeeded": "작업 완료", "job.failed": "작업 최종 실패", "job.cancelled": "작업 취소" };
+const types: Record<string, string> = { "job.succeeded": "작업 완료", "job.failed": "작업 최종 실패", "job.cancelled": "작업 취소",
+  "job.backlogged": "작업 대기 적체", "job.backlog_recovered": "대기 적체 해소", "job.backlog_closed": "적체 감시 종료" };
 const attemptStates: Record<string, string> = { RUNNING: "전달 중", DELIVERED: "전달 완료", FAILED: "전달 실패", ABANDONED: "전달 중단" };
 const errors: Record<string, string> = {
   DELIVERY_UNCONFIRMED: "수신 확인을 받지 못했습니다. 같은 이벤트를 다시 보내도 수신 기록은 중복되지 않습니다.",

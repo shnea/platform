@@ -21,7 +21,7 @@ import kr.shnea.platform.http.RequestTrace;
 class OperationalAlertController {
     record Alert(UUID id, UUID projectId, UUID environmentId, UUID jobId, String code, String errorCode,
                  String requestId, Instant occurredAt, Instant createdAt, Instant acknowledgedAt,
-                 String acknowledgedBy, String acknowledgementRequestId, UUID recoveredBy, UUID relatedAlertId, String emailDecision) {}
+                 String acknowledgedBy, String acknowledgementRequestId, UUID recoveredBy, UUID relatedAlertId, String emailDecision, String resolutionType) {}
     record Acknowledge(UUID projectId, UUID environmentId, String actor, String requestId) {}
     record EmailSettings(boolean enabled,String recipient,int suppressionMinutes,boolean recoveryEnabled,long revision,
                          String deliveryMode,Instant updatedAt,String updatedBy,String requestId) {}

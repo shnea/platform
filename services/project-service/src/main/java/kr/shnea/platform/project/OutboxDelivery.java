@@ -84,7 +84,7 @@ class OutboxDelivery {
             db.update("INSERT INTO outbox_attempts(event_id,attempt,state) VALUES (?,?,'RUNNING')",id,attempts+1);
             Event event=db.queryForObject("SELECT * FROM project_outbox WHERE id=?",(rs,n)->new Event(id,rs.getString("event_type"),
                 rs.getInt("schema_version"),rs.getString("source"),rs.getObject("project_id",UUID.class),rs.getObject("environment_id",UUID.class),
-                rs.getObject("job_id",UUID.class),rs.getLong("target_revision"),rs.getString("request_id"),null,
+                rs.getObject("job_id",UUID.class),rs.getLong("target_revision"),rs.getString("request_id"),rs.getObject("causation_id",UUID.class),
                 instant(rs,"occurred_at"),json.readTree(rs.getString("payload"))),id);
             return new Claim(event,token,attempts+1,cycle+1);
         });

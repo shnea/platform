@@ -28,6 +28,7 @@ class JobSecurityTest {
         @Bean OutboxDelivery delivery() { return mock(OutboxDelivery.class); }
         @Bean ProjectService projects() { return mock(ProjectService.class); }
         @Bean JsonMapper json() { return new JsonMapper(); }
+        @Bean JobBacklog backlog() { return new JobBacklog(mock(org.springframework.jdbc.core.JdbcTemplate.class),mock(org.springframework.transaction.support.TransactionTemplate.class),true); }
         // Verify the real authorization filter with a decoded JWT lacking the administrator role.
         @Bean JwtDecoder decoder() {
             return token -> Jwt.withTokenValue(token).header("alg", "RS256").subject("reader")
@@ -43,6 +44,8 @@ class JobSecurityTest {
             var mvc = MockMvcBuilders.webAppContextSetup(context)
                 .addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
             String id = UUID.randomUUID().toString();
+            mvc.perform(put("/api/v1/admin/environments/"+id+"/job-backlog-settings")).andExpect(status().isUnauthorized());
+            mvc.perform(put("/api/v1/admin/environments/"+id+"/job-backlog-settings").header("Authorization","Bearer reader")).andExpect(status().isForbidden());
             for (String suffix : List.of("/environments/"+id+"/provision-jobs", "/jobs/"+id+"/cancel", "/jobs/"+id+"/retry", "/events/"+id+"/retry", "/environments/"+id+"/operational-alerts/"+id+"/acknowledge")) {
                 mvc.perform(post("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(post("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
@@ -52,7 +55,7 @@ class JobSecurityTest {
             mvc.perform(put("/api/v1/admin/environments/"+id+"/operational-alerts/email-settings").header("Authorization","Bearer reader"))
                 .andExpect(status().isForbidden());
             for (String suffix : List.of("/jobs", "/jobs/"+id, "/jobs/"+id+"/events", "/environments/"+id+"/operational-alerts",
-                    "/environments/"+id+"/operational-alerts/email-settings", "/environments/"+id+"/operational-alerts/email-deliveries", "/environments/"+id+"/job-metrics")) {
+                    "/environments/"+id+"/operational-alerts/email-settings", "/environments/"+id+"/operational-alerts/email-deliveries", "/environments/"+id+"/job-metrics", "/environments/"+id+"/job-backlog-settings")) {
                 mvc.perform(get("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(get("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));

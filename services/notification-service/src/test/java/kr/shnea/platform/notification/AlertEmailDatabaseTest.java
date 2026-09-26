@@ -48,6 +48,40 @@ class AlertEmailDatabaseTest {
     String decision(JobEvents.Event event) {return db.queryForObject("SELECT email_decision FROM operational_alerts WHERE event_id=?",String.class,event.id());}
     int count(String table) {return db.queryForObject("SELECT count(*) FROM "+table,Integer.class);}
 
+    JobEvents.Event backlog(String type,UUID job,UUID cause,int seconds) {
+        return new JobEvents.Event(UUID.randomUUID(),"job."+type,1,"project-service",project,env,job,1,"a".repeat(32),cause,base.plusSeconds(seconds),
+            new JobEvents.Payload(type.toUpperCase(java.util.Locale.ROOT),type.equals("backlogged")?"JOB_QUEUE_DELAYED":type.equals("backlog_closed")?"MONITORING_CHANGED":null));
+    }
+    @Test void backlogRecoversByIncidentAndNeverRecoversFinalFailure() {
+        email.save(policy(true,true,0,"DEV"));var job=UUID.randomUUID();var open=backlog("backlogged",job,null,1);
+        events.receive(open);events.receive(open);email.dispatch();
+        var failed=new JobEvents.Event(UUID.randomUUID(),"job.failed",1,"project-service",project,env,job,1,"a".repeat(32),null,base.plusSeconds(2),new JobEvents.Payload("FAILED","JOB_EXECUTION_FAILED"));
+        events.receive(failed);email.dispatch();assertThat(count("alert_email_deliveries")).isEqualTo(2);
+        var recovered=backlog("backlog_recovered",job,open.id(),3);events.receive(recovered);events.receive(recovered);email.dispatch();
+        assertThat(count("alert_email_deliveries")).isEqualTo(3);
+        assertThat(db.queryForObject("SELECT recovered_by FROM operational_alerts WHERE event_id=?",UUID.class,open.id())).isEqualTo(recovered.id());
+        assertThat(db.queryForObject("SELECT recovered_by FROM operational_alerts WHERE event_id=?",UUID.class,failed.id())).isNull();
+        events.receive(backlog("backlogged",job,null,4));email.dispatch();assertThat(count("alert_email_deliveries")).isEqualTo(4);
+        verify(mail,never()).send(anyString(),anyString(),anyString());
+    }
+    @Test void backlogOutOfOrderCloseAndScopeCollisionDoNotSendStaleMail() {
+        email.save(policy(true,true,0,"DEV"));var job=UUID.randomUUID();var open=backlog("backlogged",job,null,1);var recovered=backlog("backlog_recovered",job,open.id(),2);
+        events.receive(recovered);events.receive(open);assertThat(count("alert_email_deliveries")).isZero();
+        assertThat(decision(open)).isEqualTo("STALE");
+        assertThat(db.queryForObject("SELECT related_alert_id FROM operational_alerts WHERE event_id=?",UUID.class,recovered.id())).isEqualTo(open.id());
+        var another=backlog("backlogged",UUID.randomUUID(),null,3);events.receive(another);
+        assertThatThrownBy(()->events.receive(backlog("backlog_recovered",UUID.randomUUID(),another.id(),4))).isInstanceOf(ResponseStatusException.class);
+        assertThat(db.queryForObject("SELECT recovered_by FROM operational_alerts WHERE event_id=?",UUID.class,another.id())).isNull();
+    }
+    @Test void backlogDisableClosesWithoutRecoveryMailAndCancelsPendingAlert() {
+        email.save(policy(true,true,0,"DEV"));var job=UUID.randomUUID();var open=backlog("backlogged",job,null,1);events.receive(open);
+        var close=backlog("backlog_closed",job,open.id(),2);events.receive(close);email.dispatch();
+        assertThat(decision(close)).isEqualTo("MONITORING_CLOSED");
+        assertThat(email.deliveries(project,env,20,0)).extracting(AlertEmail.Delivery::state).containsExactly("CANCELLED");
+        var alerts=new OperationalAlerts(db,tx).list(project,env,null,20,0);
+        assertThat(alerts.stream().filter(a->a.id().equals(open.id())).findFirst().orElseThrow().resolutionType()).isEqualTo("job.backlog_closed");
+        verify(mail,never()).send(anyString(),anyString(),anyString());
+    }
     @Test void disabledByDefaultAndDevNeverCallsProviderEvenWhenCredentialsExist() {
         assertThat(email.settings(project,env,"DEV").enabled()).isFalse();
         assertThat(email.settings(project,env,"PROD").deliveryMode()).isEqualTo("BLOCKED");

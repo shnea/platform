@@ -1,6 +1,6 @@
 # Job 이벤트 전달
 
-현재는 프로젝트 서비스의 `job.succeeded`, `job.failed`, `job.cancelled`를 알림 서비스에 전달한다. 메시지 브로커는 없고 각 서비스는 자기 DB만 사용한다. 최종 실패 알림은 [운영 알림 화면](OPERATIONAL_ALERTS.md)에서 조회·확인 처리한다. 외부 웹훅·운영 알림 발송은 후속 범위다.
+현재는 프로젝트 서비스의 `job.succeeded`, `job.failed`, `job.cancelled`와 적체 감시의 `job.backlogged`, `job.backlog_recovered`, `job.backlog_closed`를 알림 서비스에 전달한다. 메시지 브로커는 없고 각 서비스는 자기 DB만 사용한다. [운영 알림 화면](OPERATIONAL_ALERTS.md)에서 조회·확인·이메일 설정을 관리한다. 외부 웹훅은 후속 범위다.
 
 ## 계약과 수신 처리
 
@@ -8,20 +8,20 @@ Job 최종 상태와 `project_outbox`는 같은 트랜잭션에 저장한다. �
 
 | 필드 | 의미 |
 | --- | --- |
-| `id`, `type`, `schemaVersion` | 영속 이벤트 ID, 위 세 가지 유형, 현재 지원 버전 `1` |
+| `id`, `type`, `schemaVersion` | 영속 이벤트 ID, 위 여섯 가지 유형, 현재 지원 버전 `1` |
 | `source` | `project-service` |
 | `projectId`, `environmentId` | 발행한 프로젝트·환경 범위 |
-| `targetId`, `targetRevision` | Job ID와 접수 당시 환경 revision |
-| `requestId` | Job을 접수한 요청 ID. HTTP·워커 로그에서도 연결 |
-| `causationId` | 현재 `null`. 관리자 요청에 따른 Job 재시도에서 원본 Job ID를 이벤트 ID로 쓰지 않음 |
+| `targetId`, `targetRevision` | Job ID와 접수 당시 환경 revision. 적체 이벤트에서는 적체 감시 설정 revision |
+| `requestId` | 최종 Job 이벤트는 접수 요청 ID, 적체 이벤트는 감시기가 생성한 추적 ID |
+| `causationId` | 적체 해소·종료는 원래 적체 발생 이벤트 ID, 나머지는 `null` |
 | `occurredAt` | Outbox 생성 시각 |
-| `payload` | 최종 `state`, 허용된 `errorCode` 또는 `null` |
+| `payload` | 상태(`SUCCEEDED`/`FAILED`/`CANCELLED`/`BACKLOGGED`/`BACKLOG_RECOVERED`/`BACKLOG_CLOSED`), 허용된 `errorCode` 또는 `null` |
 
 비밀키·토큰·메일 본문·사용자 파일은 넣지 않는다. 알림 서비스는 별도 `X-Platform-Event-Key` 인증을 통과한 요청만 받으며 이메일 인증키로 이벤트 API를 호출할 수 없다. 지원하지 않는 버전은 422, 형식 오류는 400이다. 외부 Nginx에는 내부 이벤트 경로를 공개하지 않는다.
 
 수신 이벤트와 `job.failed`의 운영 알림 기록(`operational_alerts`, `JOB_FAILED`)은 알림 DB의 같은 트랜잭션으로 저장한다. 이후의 성공은 이전 실패의 복구 연결과 `JOB_RECOVERED` 알림을 만들며, 취소는 수신 기록만 남긴다. 환경별 잠금으로 순서 판단·중복 이메일 억제·발송 대기 등록까지 함께 커밋한다. 수신 HTTP 안에서는 외부 발송하지 않으며 별도 워커가 환경의 이메일 수신 설정에 따라 처리한다. 개발은 모의 발송만 허용한다. 중지된 프로젝트의 과거 결과도 기록할 수 있으며 로그인 설정·프로젝트 상태는 바꾸지 않는다. 세부 정책은 [운영 알림 지침](OPERATIONAL_ALERTS.md)을 따른다.
 
-같은 ID·같은 내용은 기존 결과 `{id, state: "ACCEPTED"}`를 반환한다. 같은 이벤트 ID에 프로젝트·환경 등 다른 내용을 붙이거나 같은 Job을 새 이벤트 ID로 다시 보내면 409다. 이벤트 ID와 Job ID의 DB 유일성 제약으로 동시 중복도 막는다. 수신은 이력을 추가하는 방식이므로 순서가 뒤집혀도 최신 환경 상태를 덮어쓰지 않는다. 향후 현재 상태를 갱신하는 소비자에는 별도로 revision 비교가 필요하다.
+같은 ID·같은 내용은 기존 결과 `{id, state: "ACCEPTED"}`를 반환한다. 같은 이벤트 ID에 프로젝트·환경 등 다른 내용을 붙이거나 같은 Job의 최종 결과를 새 이벤트 ID로 다시 보내면 409다. 적체는 같은 Job에서 여러 번 생길 수 있어 발생 이벤트 ID를 사건 단위로 삼고, 해소/종료는 사건당 하나만 허용한다. 사건 잠금·범위/Job 검사로 역순·동시 수신의 충돌도 차단한다. 최종 결과의 Job 유일성은 부분 인덱스로 유지한다. 수신은 이력을 추가하는 방식이므로 순서가 뒤집혀도 최신 환경 상태를 덮어쓰지 않는다.
 
 ## 전달·복구 정책
 
@@ -42,7 +42,7 @@ Job 최종 상태와 `project_outbox`는 같은 트랜잭션에 저장한다. �
 
 | API | 동작 |
 | --- | --- |
-| `GET /api/v1/admin/jobs/{id}/events` | 해당 Job의 이벤트 상태와 이벤트별 최근 100개 시도를 최신순으로 조회. 최종 상태 전이면 빈 배열 |
+| `GET /api/v1/admin/jobs/{id}/events` | 해당 Job의 최종 결과·적체 이벤트와 이벤트별 최근 100개 시도 조회. 아직 이벤트가 없으면 빈 배열 |
 | `POST /api/v1/admin/events/{id}/retry` | FAILED 이벤트 재전송 접수(202). PENDING이면 그대로 반환, DELIVERED면 409 `EVENT_NOT_RETRYABLE`. `event.requeued` 감사 기록 |
 
 전달 오류는 `DELIVERY_UNCONFIRMED`, `DELIVERY_UNAVAILABLE`, `DELIVERY_REJECTED`, 복구 오류는 `DELIVERY_INTERRUPTED`, `DELIVERY_EXHAUSTED`다. HTTP 상태도 시도별로 남는다. 202는 접수 결과이며 전달 성공을 뜻하지 않는다.

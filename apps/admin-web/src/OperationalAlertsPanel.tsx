@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./auth";
 import { Dialog } from "./Dialog";
+import { alertTitles, alertDescriptions } from "./alertLabels";
 
 type Alert = {
   id: string; projectId: string; environmentId: string; jobId: string; code: string; errorCode: string | null;
   requestId: string; occurredAt: string; createdAt: string; acknowledgedAt: string | null;
   acknowledgedBy: string | null; acknowledgementRequestId: string | null;
-  recoveredBy: string | null; relatedAlertId: string | null; emailDecision: string;
+  recoveredBy: string | null; relatedAlertId: string | null; emailDecision: string; resolutionType: string | null;
 };
 const date = (value: string) => new Date(value).toLocaleString("ko-KR");
 const message = (e: unknown) => e instanceof Error ? e.message : "운영 알림을 확인하지 못했습니다.";
@@ -16,7 +17,7 @@ const errors: Record<string, string> = {
   RETRY_EXHAUSTED: "환경 반영 작업이 실행 시도 한도에 도달했습니다.",
 };
 const emailDecisions: Record<string, string> = { DISABLED: "수신 설정 꺼짐", QUEUED: "발송 이력에 등록", SUPPRESSED: "같은 실패의 이메일 간격 내 생략",
-  STALE: "과거 이벤트로 이메일 생략", RECOVERY_DISABLED: "복구 이메일 꺼짐" };
+  STALE: "과거 이벤트로 이메일 생략", RECOVERY_DISABLED: "복구 이메일 꺼짐", MONITORING_CLOSED: "감시 종료 · 복구 이메일 없음" };
 export function OperationalAlertsPanel({ environmentId, environmentLabel, disabled, onBusyChange }: {
   environmentId: string; environmentLabel: string; disabled: boolean; onBusyChange: (busy: boolean) => void;
 }) {
@@ -57,7 +58,7 @@ export function OperationalAlertsPanel({ environmentId, environmentLabel, disabl
   return <section className="job-panel operational-alerts" aria-labelledby="operational-alerts-title">
     <div className="section-line"><h3 id="operational-alerts-title" ref={heading} tabIndex={-1}>운영 알림</h3>
       <button className="secondary" disabled={loading || disabled || busy} onClick={() => setQuery(q => ({ ...q, reload: q.reload + 1 }))}>알림 새로고침</button></div>
-    <p className="small muted">{environmentLabel}의 작업 최종 실패·복구 알림입니다. 확인은 읽었다는 기록이며, 복구는 이후 환경 반영 작업의 성공을 뜻합니다.</p>
+    <p className="small muted">{environmentLabel}의 작업 실패·복구와 대기 적체 알림입니다. 확인은 읽었다는 기록입니다. 적체 해소·감시 종료·환경 반영 성공은 각각 구분합니다.</p>
     <label className="alert-filter">확인 상태<select value={query.acknowledged} disabled={loading || disabled || busy}
       onChange={e => { setNotice(""); setQuery({ acknowledged: e.target.value, offset: 0, reload: query.reload + 1 }); }}>
       <option value="false">미확인</option><option value="true">확인됨</option><option value="">전체</option>
@@ -66,9 +67,9 @@ export function OperationalAlertsPanel({ environmentId, environmentLabel, disabl
     {loading && <p role="status">운영 알림을 불러오는 중…</p>}
     {error && <p className="alert" role="alert">{error} 알림 새로고침으로 다시 확인해 주세요.</p>}
     {rows && (rows.length ? <ul className="job-attempts">{rows.slice(0, 20).map(alert => <li key={alert.id}>
-      <div className="section-line"><strong>{alert.code === "JOB_RECOVERED" ? "환경 반영 복구" : "환경 반영 작업 최종 실패"}{alert.recoveredBy ? " · 이후 복구됨" : ""}</strong>
+      <div className="section-line"><strong>{alertTitles[alert.code] || alert.code}{alert.recoveredBy ? alert.resolutionType === "job.backlog_closed" ? " · 감시 종료됨" : alert.code === "JOB_BACKLOGGED" ? " · 이후 해소됨" : " · 이후 복구됨" : ""}</strong>
         <span className={`job-state ${alert.acknowledgedAt ? "" : "job-running"}`}>{alert.acknowledgedAt ? "확인됨" : "미확인"}</span></div>
-      <p>{alert.code === "JOB_RECOVERED" ? "이전 실패 이후의 환경 반영 작업이 성공했습니다. 원래 작업의 실패 이력은 유지합니다." : alert.errorCode && errors[alert.errorCode] || "작업 상태와 서버 기록을 확인해 주세요."}</p>
+      <p>{alertDescriptions[alert.code] || (alert.errorCode && errors[alert.errorCode]) || "작업 상태와 서버 기록을 확인해 주세요."}</p>
       <p className="small muted">발생 {date(alert.occurredAt)} · 알림 수신 {date(alert.createdAt)}</p>
       <details className="job-event-history"><summary>알림 상세·확인 기록</summary>
         <dl><div><dt>알림 ID</dt><dd className="identifier">{alert.id}</dd></div>
@@ -76,8 +77,8 @@ export function OperationalAlertsPanel({ environmentId, environmentLabel, disabl
           <div><dt>실패 코드</dt><dd className="identifier">{alert.errorCode || "—"}</dd></div>
           <div><dt>작업 요청 ID</dt><dd className="identifier">{alert.requestId}</dd></div>
           <div><dt>이메일 처리</dt><dd>{emailDecisions[alert.emailDecision] || alert.emailDecision}</dd></div>
-          {alert.recoveredBy && <div><dt>복구 이벤트 ID</dt><dd className="identifier">{alert.recoveredBy}</dd></div>}
-          {alert.relatedAlertId && <div><dt>관련 실패 알림 ID</dt><dd className="identifier">{alert.relatedAlertId}</dd></div>}
+          {alert.recoveredBy && <div><dt>해소·종료 이벤트 ID</dt><dd className="identifier">{alert.recoveredBy}</dd></div>}
+          {alert.relatedAlertId && <div><dt>관련 알림 ID</dt><dd className="identifier">{alert.relatedAlertId}</dd></div>}
           {alert.acknowledgedAt && <><div><dt>최초 확인 시각</dt><dd>{date(alert.acknowledgedAt)}</dd></div>
             <div><dt>확인 관리자 ID</dt><dd className="identifier">{alert.acknowledgedBy}</dd></div>
             <div><dt>확인 요청 ID</dt><dd className="identifier">{alert.acknowledgementRequestId}</dd></div></>}

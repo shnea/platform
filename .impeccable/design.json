@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-26T09:54:12.949Z",
+  "generatedAt": "2026-09-26T10:33:43.192Z",
   "title": "Design System: SHNEA Platform",
   "extensions": {
     "shadows": [
@@ -69,7 +69,7 @@
       "name": "입력",
       "kind": "input",
       "refersTo": "input",
-      "description": "보이는 라벨을 가진 입력",
+      "description": "보이는 라벨을 가진 입력. 적체 경보 설정의 숫자 입력도 같은 높이·경계·포커스를 사용하며, 단위는 라벨에, 범위와 조건은 입력 아래 보조 문구에 표시한다.",
       "html": "<label class=\"ds-label\">프로젝트 이름<input class=\"ds-input\" placeholder=\"예: 블로그\" /></label>",
       "css": ".ds-label{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;display:flex;flex-direction:column;gap:8px;color:var(--text,#e8eee8);font-size:14px;font-weight:600}.ds-input{font-family:\"Apple SD Gothic Neo\",\"Malgun Gothic\",system-ui,sans-serif;font-size:15px;line-height:1.6;background:var(--bg,#111918);color:var(--text,#e8eee8);border:1px solid var(--line,#34443e);border-radius:5px;height:48px;padding:0 12px;min-width:0}.ds-input::placeholder{color:var(--muted,#a5b7ae);opacity:.85}.ds-input:focus-visible{outline:3px solid var(--accent,#b0e1c7);outline-offset:3px}"
     },

@@ -37,7 +37,7 @@ def main():
         spec, _ = call('GET', '/api/v1/admin/openapi', headers)
         validate(spec)
         assert spec == json.loads(Path('/contracts/project.json').read_text())
-        assert len(spec['paths']) == 37 and sum(len(v) for v in spec['paths'].values()) == 43
+        assert len(spec['paths']) == 38 and sum(len(v) for v in spec['paths'].values()) == 45
         assert not any(path.startswith('/internal') for path in spec['paths'])
 
         def verify(schema, value):
@@ -61,7 +61,7 @@ def main():
             prefix = '/api/v1/admin/environments/'+env['id']
             template = '/api/v1/admin/environments/{id}'
             for suffix in ['/credentials','/credential-scopes','/authentication-policy','/social-providers','/users','/email-inbox',
-                           '/operational-alerts','/operational-alerts/email-settings','/operational-alerts/email-deliveries','/job-metrics']:
+                           '/operational-alerts','/operational-alerts/email-settings','/operational-alerts/email-deliveries','/job-metrics','/job-backlog-settings']:
                 _, hdr = get(prefix+suffix, template+suffix)
                 if suffix in ['/authentication-policy','/email-inbox']:
                     print('TRACE project-to-notification requestId='+hdr['X-Request-ID'])

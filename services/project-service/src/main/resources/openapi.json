@@ -1945,6 +1945,90 @@
           }
         }
       }
+    },
+    "/api/v1/admin/environments/{id}/job-backlog-settings": {
+      "get": {
+        "operationId": "getJobBacklogSettings",
+        "summary": "작업 적체 감시 설정·상태 조회",
+        "description": "환경 반영 작업의 대기 적체 감시. 기본 꺼짐, 300초, 연속 2회. 최소 30초 간격으로 검사하며 90초 초과 관측 공백은 연속 횟수를 초기화한다. 예약 시간이 남은 재시도는 제외한다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobBacklogSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveJobBacklogSettings",
+        "summary": "작업 적체 감시 설정 저장",
+        "description": "관리자 전용. revision 충돌은 409. 저장 시 연속 감지 횟수를 초기화하고 열린 적체는 감시 종료로 기록한다. 실제 복구로 표시하거나 복구 이메일을 보내지 않는다. 설정과 감사·종료 이벤트는 함께 저장한다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobBacklogSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobBacklogSettingsUpdate"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3436,7 +3520,8 @@
           "acknowledgedAt",
           "recoveredBy",
           "relatedAlertId",
-          "emailDecision"
+          "emailDecision",
+          "resolutionType"
         ],
         "properties": {
           "id": {
@@ -3510,6 +3595,13 @@
           },
           "emailDecision": {
             "type": "string"
+          },
+          "resolutionType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "복구 또는 감시 종료를 구분하는 이벤트 종류"
           }
         }
       },
@@ -3743,6 +3835,122 @@
               "null"
             ],
             "minimum": 0
+          }
+        }
+      },
+      "JobBacklogSettingsUpdate": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "thresholdSeconds",
+          "consecutiveChecks",
+          "revision"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "thresholdSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          },
+          "consecutiveChecks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "JobBacklogSettings": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "thresholdSeconds",
+          "consecutiveChecks",
+          "revision",
+          "updatedAt",
+          "lastCheckedAt",
+          "updatedBy",
+          "requestId",
+          "breachChecks",
+          "clearChecks",
+          "activeJobId",
+          "activeEventId",
+          "monitoringAvailable"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "thresholdSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          },
+          "consecutiveChecks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastCheckedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "breachChecks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "clearChecks": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeJobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "activeEventId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "monitoringAvailable": {
+            "type": "boolean"
           }
         }
       }

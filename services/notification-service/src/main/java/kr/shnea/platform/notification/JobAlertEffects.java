@@ -46,22 +46,25 @@ final class JobAlertEffects {
             """,Boolean.class,event.projectId(),event.environmentId(),event.id(),event.targetRevision(),Timestamp.from(event.occurredAt())));
     }
     private static void queue(JdbcTemplate db,JobEvents.Event event,boolean recovery) {
+        queue(db,event,recovery,"JOB_FAILED");
+    }
+    static void queue(JdbcTemplate db,JobEvents.Event event,boolean recovery,String failureCode) {
         var policies=db.queryForList("SELECT * FROM alert_email_settings WHERE project_id=? AND environment_id=? AND enabled",event.projectId(),event.environmentId());
         if(policies.isEmpty())return;
         var policy=policies.getFirst();
         if(recovery && !(boolean)policy.get("recovery_enabled")) {decision(db,event.id(),"RECOVERY_DISABLED");return;}
         if(!recovery && Boolean.TRUE.equals(db.queryForObject("""
             SELECT EXISTS(SELECT 1 FROM alert_email_deliveries d JOIN operational_alerts a ON a.event_id=d.event_id
-            WHERE a.project_id=? AND a.environment_id=? AND a.code='JOB_FAILED' AND a.recovered_by IS NULL
+            WHERE a.project_id=? AND a.environment_id=? AND a.code=? AND a.recovered_by IS NULL
             AND d.state<>'CANCELLED' AND d.created_at>now()-(? * interval '1 minute'))
-            """,Boolean.class,event.projectId(),event.environmentId(),policy.get("suppression_minutes")))) {
+            """,Boolean.class,event.projectId(),event.environmentId(),failureCode,policy.get("suppression_minutes")))) {
             decision(db,event.id(),"SUPPRESSED");return;
         }
         db.update("INSERT INTO alert_email_deliveries(event_id,recipient,settings_revision,state) VALUES (?,?,?,'PENDING')",
             event.id(),policy.get("recipient"),policy.get("revision"));
         decision(db,event.id(),"QUEUED");
     }
-    private static void decision(JdbcTemplate db,UUID id,String value) {
+    static void decision(JdbcTemplate db,UUID id,String value) {
         db.update("UPDATE operational_alerts SET email_decision=? WHERE event_id=?",value,id);
     }
 }
