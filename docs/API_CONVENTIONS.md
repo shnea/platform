@@ -84,6 +84,8 @@ docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint
 
 ## 오류 코드 목록
 
+내부 이벤트 수신에는 `EVENT_ACCESS_DENIED`(403), `INVALID_EVENT`(400), `EVENT_CONFLICT`(409), `EVENT_VERSION_UNSUPPORTED`(422)를 사용한다. 전달 시도에 저장하는 오류 코드와 재전송 정책은 [이벤트 지침](EVENTS.md)을 따른다.
+
 기준 구현은 [`ApiCode.java`](../services/project-service/src/main/java/kr/shnea/platform/project/ApiCode.java)다. 표와 실제 구현은 함께 갱신한다. 한국어 문구는 개선할 수 있지만 코드의 의미·HTTP 상태 변경은 API 호환성 검토 대상이다.
 
 | 코드 | HTTP | 안내 |
@@ -91,6 +93,7 @@ docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint
 | `JOB_STATE_CHANGED` | 409 | 작업 상태가 변경되었습니다. 작업 목록을 다시 확인해 주세요. |
 | `JOB_NOT_CANCELLABLE` | 409 | 대기 중이거나 재시도를 기다리는 작업만 취소할 수 있습니다. |
 | `JOB_NOT_RETRYABLE` | 409 | 최종 실패한 작업만 다시 시도할 수 있습니다. |
+| `EVENT_NOT_RETRYABLE` | 409 | 최종 실패한 이벤트만 다시 전달할 수 있습니다. |
 | `INVALID_REQUEST` | 400 | 요청 형식과 입력값을 확인해 주세요. |
 | `VALIDATION_FAILED` | 400 | 입력 조건에 맞지 않는 항목을 확인해 주세요. |
 | `AUTHENTICATION_REQUIRED` | 401 | 인증이 필요합니다. 다시 로그인해 주세요. |

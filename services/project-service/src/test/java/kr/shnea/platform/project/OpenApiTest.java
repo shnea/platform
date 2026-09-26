@@ -52,14 +52,16 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(30);
-        assertThat(prod.path("paths").size()).isEqualTo(25);
+        assertThat(dev.path("paths").size()).isEqualTo(32);
+        assertThat(prod.path("paths").size()).isEqualTo(27);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 
     @Test void recordFieldsAndSchemaPropertiesStayInSync() throws Exception {
         var schemas = new OpenApiController(json, "dev").specification().getBody().path("components").path("schemas");
         var models = Map.ofEntries(
+            Map.entry("EventDelivery",OutboxDelivery.Delivery.class), Map.entry("EventAttempt",OutboxDelivery.Attempt.class),
+            Map.entry("EventDeliveryDetail",OutboxDelivery.Detail.class),
             Map.entry("Job", ProvisionJobs.Job.class), Map.entry("JobAttempt", ProvisionJobs.Attempt.class),
             Map.entry("JobDetail", ProvisionJobs.Detail.class),
             Map.entry("Project", ProjectService.Project.class), Map.entry("Environment", ProjectService.Environment.class),

@@ -39,6 +39,14 @@ class EmailErrors extends ResponseEntityExceptionHandler {
             default -> status.is5xxServerError() ? new String[]{"INTERNAL_ERROR", "이메일 처리 중 오류가 발생했습니다."}
                 : new String[]{"INVALID_EMAIL_REQUEST", "이메일 요청 형식과 입력 조건을 확인해 주세요."};
         };
+        if (((ServletWebRequest)request).getRequest().getRequestURI().startsWith("/internal/v1/events/")) {
+            message=switch(status.value()) {
+                case 409 -> new String[]{"EVENT_CONFLICT","같은 이벤트 또는 작업 ID에 다른 내용이 지정되었습니다."};
+                case 422 -> new String[]{"EVENT_VERSION_UNSUPPORTED","지원하지 않는 이벤트 버전입니다."};
+                default -> status.is5xxServerError() ? new String[]{"INTERNAL_ERROR","이벤트 처리 중 오류가 발생했습니다."}
+                    : new String[]{"INVALID_EVENT","이벤트 형식과 입력 조건을 확인해 주세요."};
+            };
+        }
         return response(message[0], status.value(), message[1], request, headers, error);
     }
     private ResponseEntity<Object> response(String code, int status, String detail, WebRequest web, HttpHeaders original, Exception error) {

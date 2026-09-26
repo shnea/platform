@@ -1569,6 +1569,85 @@
           }
         ]
       }
+    },
+    "/api/v1/admin/jobs/{id}/events": {
+      "get": {
+        "operationId": "get_api_v1_admin_jobs_id_events",
+        "summary": "작업 이벤트 전달 상태와 최근 시도 이력",
+        "description": "해당 Job의 이벤트 전달 상태와 이벤트별 최근 시도 100건을 최신순으로 반환합니다. 진행 중 Job은 빈 배열입니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventDeliveryDetail"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/events/{id}/retry": {
+      "post": {
+        "operationId": "post_api_v1_admin_events_id_retry",
+        "summary": "최종 실패 이벤트 재전송 접수",
+        "description": "같은 이벤트 ID로 최대 5회 전달을 다시 시도합니다. 기존 이력은 보존하며 PENDING 요청은 그대로 반환합니다. 전달 완료 이벤트는 409입니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "접수 결과 (완료 여부는 state 조회)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDelivery"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2913,6 +2992,135 @@
           "job",
           "attempts"
         ]
+      },
+      "EventDelivery": {
+        "type": "object",
+        "required": [
+          "id",
+          "jobId",
+          "environmentId",
+          "eventType",
+          "state",
+          "attempts",
+          "cycleAttempts",
+          "errorCode",
+          "nextRunAt",
+          "deliveredAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "DELIVERED",
+              "FAILED"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "cycleAttempts": {
+            "type": "integer"
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "EventAttempt": {
+        "type": "object",
+        "required": [
+          "attempt",
+          "state",
+          "errorCode",
+          "httpStatus",
+          "startedAt",
+          "endedAt"
+        ],
+        "properties": {
+          "attempt": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "RUNNING",
+              "DELIVERED",
+              "FAILED",
+              "ABANDONED"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "httpStatus": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "EventDeliveryDetail": {
+        "type": "object",
+        "required": [
+          "delivery",
+          "attempts"
+        ],
+        "properties": {
+          "delivery": {
+            "$ref": "#/components/schemas/EventDelivery"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventAttempt"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {

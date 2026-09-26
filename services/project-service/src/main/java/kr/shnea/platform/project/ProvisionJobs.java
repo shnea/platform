@@ -165,9 +165,9 @@ class ProvisionJobs {
     private void finish(Job job, String state, String error, String actor) {
         db.update("UPDATE platform_jobs SET state=?,error_code=?,lease_token=NULL,lease_until=NULL,completed_at=now(),updated_at=now() WHERE id=?", state, error, job.id());
         db.update("""
-            INSERT INTO project_outbox(id,event_type,project_id,environment_id,job_id,request_id,payload)
-            VALUES (?,?,?,?,?,?,jsonb_build_object('state',?::text,'errorCode',?::text)) ON CONFLICT DO NOTHING
-            """, UUID.randomUUID(), "job."+state.toLowerCase(java.util.Locale.ROOT), job.projectId(), job.environmentId(), job.id(), job.requestId(), state, error);
+            INSERT INTO project_outbox(id,event_type,project_id,environment_id,job_id,request_id,target_revision,payload)
+            VALUES (?,?,?,?,?,?,?,jsonb_build_object('state',?::text,'errorCode',?::text)) ON CONFLICT DO NOTHING
+            """, UUID.randomUUID(), "job."+state.toLowerCase(java.util.Locale.ROOT), job.projectId(), job.environmentId(), job.id(), job.requestId(), job.targetRevision(), state, error);
         audit(actor, "job."+state.toLowerCase(java.util.Locale.ROOT), job.id(), job.environmentId());
     }
     private void audit(String actor, String action, UUID id, UUID environmentId) {

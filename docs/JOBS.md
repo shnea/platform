@@ -42,7 +42,7 @@ HTTP 오류 `JOB_STATE_CHANGED`, `JOB_NOT_CANCELLABLE`, `JOB_NOT_RETRYABLE`은 �
 - 점유는 60초다. 실행 중에는 작업 행을 잠그므로 시간이 지나도 다른 워커가 그 행을 재실행하지 않는다. 프로세스 종료로 실행 트랜잭션이 롤백되면, 커밋돼 있던 RUNNING 점유가 만료된 뒤 복구한다. 점유 토큰이 달라진 이전 실행자의 완료·실패 기록은 무시한다.
 - 환경 반영은 프로젝트 잠금 아래에서 수행한다. 외부 Keycloak 반영과 DB 커밋은 하나의 원자적 작업이 아니므로, 장애 후 같은 인증 영역을 다시 확인·반영할 수 있다. 기존 `ensureRealm`의 소유권 확인과 재실행 가능한 반영을 사용한다. 외부 호출의 정확히 한 번 실행을 보장하지 않는다.
 - 접수·실행·대기·복구·완료·취소를 감사 이력에 남긴다. 요청 ID는 작업과 Outbox에 저장하고 실행 로그에 이어 준다. 관리자 취소·재시도 요청 자체는 HTTP 추적에 별도로 남는다.
-- 최종 상태와 `project_outbox` 행은 같은 DB 트랜잭션에서 커밋한다. 이벤트는 `job.succeeded`, `job.failed`, `job.cancelled`, `schema_version=1`이며 상태·실패 코드만 payload에 포함한다. **전달 워커·소비자는 아직 없으므로 PENDING 저장까지만 구현됐다.**
+- 최종 상태와 `project_outbox` 행은 같은 DB 트랜잭션에서 커밋한다. 이벤트는 `job.succeeded`, `job.failed`, `job.cancelled`, `schema_version=1`이며 상태·실패 코드만 payload에 포함한다. [이벤트 전달 지침](EVENTS.md)의 워커가 알림 서비스로 전달하며 수신 중복 방지·실패 재시도·관리 API를 제공한다. 외부 발송과 이벤트 관리 화면은 후속 범위다.
 - `PLATFORM_JOBS_ENABLED=false`를 적용하고 프로젝트 서비스 컨테이너를 재생성하면 새 실행·복구를 멈춘다. 접수·조회·취소와 기존 동기 API는 유지된다. 현재 이력은 자동 삭제하지 않는다. 보존 정책·전체 프로젝트 통합 조회·운영 알림은 후속 범위다.
 
 ## 재현 가능한 검증
@@ -56,7 +56,7 @@ docker compose -p platform-job-checks -f compose.jobs-test.yml down
 docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py
 ```
 
-첫 검사는 별도 PostgreSQL의 테스트별 스키마에 V1~V7을 적용하고 실제 JDBC·트랜잭션·워커 코드를 검증한다. 인증 서버만 모의 처리한다. 중복 접수·동시 점유·지연된 실행·재시도 간격/한도·수동 재시도·만료 점유 복구·이전 점유 차단·revision 취소·Outbox 실패 롤백·중지 상태 유지·MDC 복원을 포함한다. 복구는 커밋된 점유를 남기고 새 워커 객체로 실행하는 방식이며 실제 OS 프로세스 강제 종료 검사는 아니다. 전체 단위 검사와 실제 보안 필터의 일반 사용자 403 검사도 함께 수행한다.
+첫 검사는 별도 PostgreSQL의 테스트별 스키마에 V1~V8을 적용하고 실제 JDBC·트랜잭션·워커 코드를 검증한다. 인증 서버만 모의 처리한다. 중복 접수·동시 점유·지연된 실행·재시도 간격/한도·수동 재시도·만료 점유 복구·이전 점유 차단·revision 취소·Outbox 실패 롤백·중지 상태 유지·MDC 복원을 포함한다. 복구는 커밋된 점유를 남기고 새 워커 객체로 실행하는 방식이며 실제 OS 프로세스 강제 종료 검사는 아니다. 전체 단위 검사와 실제 보안 필터의 일반 사용자 403 검사도 함께 수행한다.
 
 테스트 DB는 호스트 포트와 영속 데이터 볼륨이 없는 임시 DB다. 기존 Compose와 합치지 않는다. Gradle 캐시만 재사용하며 검사 결과는 Git에서 제외한 `output/job-checks/results`에 남긴다. 일반 이미지 빌드에서는 DB 검사가 생략되므로 위 별도 검사를 반드시 실행해야 한다.
 

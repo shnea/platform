@@ -37,7 +37,7 @@ def main():
         spec, _ = call('GET', '/api/v1/admin/openapi', headers)
         validate(spec)
         assert spec == json.loads(Path('/contracts/project.json').read_text())
-        assert len(spec['paths']) == 30 and sum(len(v) for v in spec['paths'].values()) == 35
+        assert len(spec['paths']) == 32 and sum(len(v) for v in spec['paths'].values()) == 37
         assert not any(path.startswith('/internal') for path in spec['paths'])
 
         def verify(schema, value):

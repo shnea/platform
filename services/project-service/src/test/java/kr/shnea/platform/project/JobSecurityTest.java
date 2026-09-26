@@ -22,9 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class JobSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, JobController.class})
+    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, JobController.class, OutboxController.class})
     static class Config {
         @Bean ProvisionJobs jobs() { return mock(ProvisionJobs.class); }
+        @Bean OutboxDelivery delivery() { return mock(OutboxDelivery.class); }
         @Bean JsonMapper json() { return new JsonMapper(); }
         // Verify the real authorization filter with a decoded JWT lacking the administrator role.
         @Bean JwtDecoder decoder() {
@@ -41,17 +42,18 @@ class JobSecurityTest {
             var mvc = MockMvcBuilders.webAppContextSetup(context)
                 .addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
             String id = UUID.randomUUID().toString();
-            for (String suffix : List.of("/environments/"+id+"/provision-jobs", "/jobs/"+id+"/cancel", "/jobs/"+id+"/retry")) {
+            for (String suffix : List.of("/environments/"+id+"/provision-jobs", "/jobs/"+id+"/cancel", "/jobs/"+id+"/retry", "/events/"+id+"/retry")) {
                 mvc.perform(post("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(post("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
             }
-            for (String suffix : List.of("/jobs", "/jobs/"+id)) {
+            for (String suffix : List.of("/jobs", "/jobs/"+id, "/jobs/"+id+"/events")) {
                 mvc.perform(get("/api/v1/admin"+suffix)).andExpect(status().isUnauthorized());
                 mvc.perform(get("/api/v1/admin"+suffix).header("Authorization", "Bearer reader"))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
             }
             verifyNoInteractions(context.getBean(ProvisionJobs.class));
+            verifyNoInteractions(context.getBean(OutboxDelivery.class));
         }
     }
 }

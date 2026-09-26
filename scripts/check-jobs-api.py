@@ -21,7 +21,8 @@ def main():
     missing = str(uuid.uuid4())
     for method, path in [('GET', A+'/jobs'), ('GET', A+'/jobs/'+missing),
                          ('POST', A+'/environments/'+missing+'/provision-jobs'),
-                         ('POST', A+'/jobs/'+missing+'/cancel'), ('POST', A+'/jobs/'+missing+'/retry')]:
+                         ('POST', A+'/jobs/'+missing+'/cancel'), ('POST', A+'/jobs/'+missing+'/retry'),
+                         ('GET', A+'/jobs/'+missing+'/events'), ('POST', A+'/events/'+missing+'/retry')]:
         call(method, path, expected=401)
     form = {'Content-Type': 'application/x-www-form-urlencoded'}
     session, _ = call('POST', contracts.OIDC+'/token', form, urlencode(dict(grant_type='password',
@@ -43,6 +44,8 @@ def main():
         error('GET', A+'/jobs?limit=0', 400, 'INVALID_PAGINATION')
         error('GET', A+'/jobs?state=unknown', 400, 'INVALID_REQUEST')
         error('GET', A+'/jobs/'+missing, 404, 'RESOURCE_NOT_FOUND')
+        error('GET', A+'/jobs/'+missing+'/events', 404, 'RESOURCE_NOT_FOUND')
+        error('POST', A+'/events/'+missing+'/retry', 404, 'RESOURCE_NOT_FOUND')
         error('POST', A+'/environments/'+missing+'/provision-jobs', 404, 'RESOURCE_NOT_FOUND')
         code = 'job-check-'+uuid.uuid4().hex[:10]
         project, _ = call('POST', A+'/projects', headers, json.dumps({'code': code, 'name': 'Job API 검증'}).encode(), 201)
@@ -71,6 +74,17 @@ def main():
         events, _ = call('GET', A+'/audit-events?limit=100', headers)
         actions = {e['action'] for e in events if e['target_id'] == job['id']}
         assert {'job.queued', 'job.started', 'job.succeeded'} <= actions
+        deadline = time.monotonic()+60
+        while True:
+            delivered, _ = call('GET', path+'/events', headers)
+            for row in delivered: verify('EventDeliveryDetail', row)
+            if delivered and delivered[0]['delivery']['state'] != 'PENDING': break
+            assert time.monotonic() < deadline, 'Outbox scheduler did not deliver the event'
+            time.sleep(0.5)
+        assert len(delivered) == 1 and delivered[0]['delivery']['state'] == 'DELIVERED'
+        assert delivered[0]['attempts'][0]['state'] == 'DELIVERED'
+        error('POST', A+'/events/'+delivered[0]['delivery']['id']+'/retry', 409, 'EVENT_NOT_RETRYABLE')
+        print('PASS Outbox HTTP delivery, attempt schemas and 401/404/409; EVENT '+delivered[0]['delivery']['id'])
         print('PASS Job 202, scheduler success, detail/history schemas, request ID, filtering, audit, 400/401/404/409')
         print('FIXTURE '+code)
     finally:

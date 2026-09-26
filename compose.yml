@@ -118,6 +118,8 @@ services:
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_project
       PLATFORM_JOBS_ENABLED: ${PLATFORM_JOBS_ENABLED:-true}
+      PLATFORM_EVENTS_ENABLED: ${PLATFORM_EVENTS_ENABLED:-false}
+      PLATFORM_EVENTS_SECRET: ${PLATFORM_EVENTS_SECRET:-}
       PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
       DB_USERNAME: platform_project
       DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
@@ -144,6 +146,7 @@ services:
     cpus: ${NOTIFICATION_CPUS:-1.0}
     environment:
       DB_URL: jdbc:postgresql://db:5432/platform_notification
+      PLATFORM_EVENTS_SECRET: ${PLATFORM_EVENTS_SECRET:-}
       PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
       DB_USERNAME: platform_notification
       DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Generate .env first}

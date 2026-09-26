@@ -17,7 +17,7 @@ class EmailBoundaryTest {
         var mvc = MockMvcBuilders.standaloneSetup(new EmailController(db, mock(TransactionTemplate.class), ncp,
             "prod", secret, "http://127.0.0.1:1"))
             .setControllerAdvice(new EmailErrors()).addFilters(new kr.shnea.platform.http.RequestTrace(),
-                new InternalSecurity(secret, new tools.jackson.databind.json.JsonMapper())).build();
+                new InternalSecurity(secret, "", new tools.jackson.databind.json.JsonMapper())).build();
         assertEquals(403, mvc.perform(get("/internal/v1/email/readiness")).andReturn().getResponse().getStatus());
         assertEquals(404, mvc.perform(get("/internal/v1/email/inbox/" + UUID.randomUUID()).header("X-Platform-Mail-Key", secret)).andReturn().getResponse().getStatus());
         var invalid = mvc.perform(post("/internal/v1/email").header("X-Platform-Mail-Key", secret)
