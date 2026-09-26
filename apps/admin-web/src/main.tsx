@@ -12,6 +12,7 @@ import { MockLoginPanel } from "./MockLoginPanel";
 import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 import { MemberPanel } from "./MemberPanel";
+import { JobPanel } from "./JobPanel";
 import { Dialog } from "./Dialog";
 
 type Project = {
@@ -741,6 +742,14 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    <JobPanel key={`jobs:${env.id}`} environmentId={env.id}
+                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`}
+                      ready={env.state === "READY"} disabled={busy} onBusyChange={setBusy}
+                      onSettled={() => {
+                        void api<Environment[]>(`/projects/${project.id}/environments`).then(rows => {
+                          setEnvs(current => current.some(item => item.id === env.id) ? rows : current);
+                        }).catch(e => setError(e.message));
+                      }} />
                     <MemberPanel
                       key={`members:${env.id}:${env.state}:${project.status}:${memberRefresh}`}
                       environmentId={env.id}

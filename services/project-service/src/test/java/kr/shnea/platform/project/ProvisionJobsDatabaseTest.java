@@ -88,8 +88,8 @@ class ProvisionJobsDatabaseTest {
             verify(identity, times(1)).ensureRealm(any(), eq(true));
             assertThat(count("SELECT count(*) FROM project_outbox WHERE event_type='job.succeeded' AND request_id='" + REQUEST + "'")).isEqualTo(1);
             assertThat(count("SELECT count(*) FROM audit_events WHERE action='job.succeeded'")).isEqualTo(1);
-            assertThat(jobs.list(environmentId, "SUCCEEDED", 20, 0)).hasSize(1);
-            assertThat(jobs.list(UUID.randomUUID(), null, 20, 0)).isEmpty();
+            assertThat(jobs.list(environmentId, "SUCCEEDED", 20, 0, null, null)).hasSize(1);
+            assertThat(jobs.list(UUID.randomUUID(), null, 20, 0, null, null)).isEmpty();
         }
     }
 
@@ -232,9 +232,20 @@ class ProvisionJobsDatabaseTest {
         assertThat(jobs.job(job.id()).errorCode()).isEqualTo("JOB_EXECUTION_FAILED");
         assertThat(MDC.get("requestId")).isEqualTo("previous-context");
         assertThat(MDC.get("jobId")).isNull();
-        assertThatThrownBy(() -> jobs.list(null, "unknown", 20, 0)).isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(() -> jobs.list(null, null, 101, 0)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> jobs.list(null, "unknown", 20, 0, null, null)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> jobs.list(null, null, 101, 0, null, null)).isInstanceOf(ResponseStatusException.class);
         assertThatThrownBy(() -> jobs.enqueue(UUID.randomUUID(), "test-admin", REQUEST)).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test void creationRangeIncludesStartExcludesEndAndCombinesWithEnvironmentAndState() {
+        var job = enqueue();
+        var start = Instant.parse("2026-01-01T00:00:00Z");
+        db.update("UPDATE platform_jobs SET created_at=? WHERE id=?", java.sql.Timestamp.from(start), job.id());
+        assertThat(jobs.list(environmentId, "QUEUED", 20, 0, start, start.plusSeconds(1))).hasSize(1);
+        assertThat(jobs.list(environmentId, "QUEUED", 20, 0, start.minusSeconds(1), start)).isEmpty();
+        assertThat(jobs.list(environmentId, "FAILED", 20, 0, start, null)).isEmpty();
+        assertThat(jobs.list(UUID.randomUUID(), null, 20, 0, start, null)).isEmpty();
+        assertThatThrownBy(() -> jobs.list(null, null, 20, 0, start, start)).isInstanceOf(ResponseStatusException.class);
     }
 
     private ProvisionJobs.Job enqueue() { return jobs.enqueue(environmentId, "test-admin", REQUEST); }

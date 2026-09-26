@@ -1432,6 +1432,26 @@
               "maximum": 1000000,
               "default": 0
             }
+          },
+          {
+            "name": "createdFrom",
+            "in": "query",
+            "required": false,
+            "description": "접수 시각 시작 (포함). 시간대가 있는 ISO 8601.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "createdTo",
+            "in": "query",
+            "required": false,
+            "description": "접수 시각 끝 (제외). 시작보다 뒤여야 합니다.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         ]
       }

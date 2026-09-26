@@ -49,14 +49,18 @@ class ProvisionJobs {
         return active.getFirst();
     }
 
-    List<Job> list(UUID environmentId, String state, int limit, int offset) {
+    List<Job> list(UUID environmentId, String state, int limit, int offset, Instant createdFrom, Instant createdTo) {
         if (limit < 1 || limit > 100 || offset < 0 || offset > 1_000_000) throw ApiCode.INVALID_PAGINATION.failure();
         if (state != null && !List.of("QUEUED","RUNNING","RETRY_WAIT","SUCCEEDED","FAILED","CANCELLED").contains(state))
             throw ApiCode.INVALID_REQUEST.failure();
         var clauses = new java.util.ArrayList<String>();
         var values = new java.util.ArrayList<Object>();
+        if (createdFrom != null && createdTo != null && !createdFrom.isBefore(createdTo))
+            throw ApiCode.INVALID_REQUEST.failure();
         if (environmentId != null) { clauses.add("environment_id=?"); values.add(environmentId); }
         if (state != null) { clauses.add("state=?"); values.add(state); }
+        if (createdFrom != null) { clauses.add("created_at>=?"); values.add(java.sql.Timestamp.from(createdFrom)); }
+        if (createdTo != null) { clauses.add("created_at<?"); values.add(java.sql.Timestamp.from(createdTo)); }
         values.add(limit); values.add(offset);
         return db.query("SELECT * FROM platform_jobs" + (clauses.isEmpty() ? "" : " WHERE " + String.join(" AND ", clauses))
             + " ORDER BY created_at DESC,id LIMIT ? OFFSET ?", (rs, row) -> map(rs), values.toArray());

@@ -3,6 +3,7 @@ package kr.shnea.platform.project;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 import kr.shnea.platform.http.RequestTrace;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,8 +20,9 @@ class JobController {
     }
     @GetMapping("/api/v1/admin/jobs")
     List<ProvisionJobs.Job> jobs(@RequestParam(required=false) UUID environmentId, @RequestParam(required=false) String state,
-            @RequestParam(defaultValue="20") int limit, @RequestParam(defaultValue="0") int offset) {
-        return jobs.list(environmentId, state, limit, offset);
+            @RequestParam(defaultValue="20") int limit, @RequestParam(defaultValue="0") int offset,
+            @RequestParam(required=false) Instant createdFrom, @RequestParam(required=false) Instant createdTo) {
+        return jobs.list(environmentId, state, limit, offset, createdFrom, createdTo);
     }
     @GetMapping("/api/v1/admin/jobs/{id}")
     ProvisionJobs.Detail detail(@PathVariable UUID id) { return jobs.detail(id); }
