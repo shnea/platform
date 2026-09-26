@@ -6,13 +6,16 @@ import {parseDocument,EditorError,type EditorDocument} from './document/document
 import {fromMarkdown} from './document/markdown.js';
 import {attachmentRuntime,type AttachmentAdapter,type AttachmentKind,type AttachmentRef} from './media/attachments.js';
 import {mountAttachmentView} from './media/attachment-view.js';
+import {mountBlockControls,moveBlock} from './editing/blocks.js';
+import {applyAppearance,type EditorAppearance} from './styles/appearance.js';
+export type {EditorAppearance} from './styles/appearance.js';
 export type {AttachmentAdapter,AttachmentKind,AttachmentRef,AttachmentViews} from './media/attachments.js';
 export {parseDocument,emptyDocument,EditorError,type EditorDocument,type EditorErrorCode} from './document/document.js';
 export {fromMarkdown} from './document/markdown.js';
 
 export type Change={document:EditorDocument;origin:'edit'|'replace'};
 export type EditorCommand='paragraph'|'h1'|'h2'|'h3'|'bold'|'italic'|'underline'|'strike'|'code'|'bulletList'|'orderedList'|'taskList'|'blockquote'|'codeBlock'|'horizontalRule'|'table'|'addRow'|'deleteRow'|'addColumn'|'deleteColumn'|'deleteTable'|'indent'|'outdent'|'clear'|'link'|'unlink'|'undo'|'redo';
-export type CoreOptions={element:HTMLElement;value?:unknown;editable?:boolean;label?:string;attachments?:AttachmentAdapter;onChange?:(change:Change)=>void;onError?:(error:EditorError)=>void;onStateChange?:()=>void;onKeyDown?:(event:KeyboardEvent)=>boolean;onBeforeInput?:(event:InputEvent)=>boolean;onMarkdownPaste?:(source:string)=>void};
+export type CoreOptions={element:HTMLElement;value?:unknown;editable?:boolean;label?:string;attachments?:AttachmentAdapter;blockControls?:HTMLElement;onChange?:(change:Change)=>void;onError?:(error:EditorError)=>void;onStateChange?:()=>void;onKeyDown?:(event:KeyboardEvent)=>boolean;onBeforeInput?:(event:InputEvent)=>boolean;onMarkdownPaste?:(source:string)=>void};
 const mounted=new WeakSet<HTMLElement>();
 
 /** Browser-only editing engine. Slash menu and file transport are separate layers. */
@@ -60,6 +63,7 @@ export function createEditorCore(options:CoreOptions){
     onTransaction:()=>options.onStateChange?.(),
     onSelectionUpdate:()=>options.onStateChange?.()
   });
+  const blockControls=options.blockControls&&engine.isEditable?mountBlockControls(engine,options.blockControls):undefined;
   // Native keyboard selection may precede ProseMirror's selectionchange notification.
   // Capture it before moving focus to a slash/paste dialog, scoped to this editor only.
   function syncSelection(){
@@ -106,6 +110,7 @@ export function createEditorCore(options:CoreOptions){
       attachments.reset();
       // A different host document must never be reachable through the previous document's undo history.
       engine.view.updateState(EditorState.create({schema:engine.schema,doc:engine.schema.nodeFromJSON(next.content),plugins:engine.state.plugins}));
+      blockControls?.refresh();
       options.onStateChange?.();
       if(emitChange)options.onChange?.({document:value(),origin:'replace'});
     },
@@ -113,6 +118,7 @@ export function createEditorCore(options:CoreOptions){
     insertText(source:string){editable();if(typeof source!=='string')throw new EditorError('DOCUMENT_INVALID','문자열이 필요합니다.');engine.view.dispatch(engine.state.tr.insertText(source));},
     undo(){editable();return engine.commands.undo();},
     redo(){editable();return engine.commands.redo();},
+    moveBlock(fromIndex:number,toIndex:number){editable();return moveBlock(engine,fromIndex,toIndex);},
     run(name:EditorCommand,payload?:string,{removeSlash=false}:{removeSlash?:boolean}={}){editable();return command(name,false,payload,removeSlash);},
     can(name:EditorCommand){ensure();return command(name,true);},
     isActive(name:string){ensure();return /^h[1-3]$/.test(name)?engine.isActive('heading',{level:Number(name[1])}):engine.isActive(name);},
@@ -124,15 +130,16 @@ export function createEditorCore(options:CoreOptions){
     pickAttachment(kind:AttachmentKind,{removeSlash=false,onClose}:{removeSlash?:boolean;onClose?:()=>void}={}){editable();if(!options.attachments?.scope()){onClose?.();options.onError?.(new EditorError('ATTACHMENT_ERROR','첨부를 올릴 프로젝트·환경을 먼저 선택해 주세요.'));return;}if(removeSlash){const range=slash();if(range)engine.commands.deleteRange(range);}attachments.pick(engine,kind,onClose);},
     setPasteMode(mode:'markdown'|'text'){ensure();pasteMode=mode;},
     focus(){ensure();engine.view.focus();},
-    destroy(){if(destroyed)return;destroyed=true;attachments.destroy();engine.destroy();mounted.delete(options.element);}
+    destroy(){if(destroyed)return;destroyed=true;blockControls?.destroy();attachments.destroy();engine.destroy();mounted.delete(options.element);}
   };
 }
 
 /** Read-only DOM renderer uses exactly the editing schema and never enables contenteditable. */
-export function renderViewer(element:HTMLElement,input:unknown,options:{attachments?:AttachmentAdapter}={}):()=>void{
+export function renderViewer(element:HTMLElement,input:unknown,options:{attachments?:AttachmentAdapter;appearance?:EditorAppearance}={}):()=>void{
   if(mounted.has(element))throw new EditorError('EDITOR_MOUNTED','이 영역에는 이미 에디터 또는 뷰어가 있습니다.');
   const document=parseDocument(input),fragment=DOMSerializer.fromSchema(schema).serializeFragment(schema.nodeFromJSON(document.content).content,{document:element.ownerDocument});
   const wrapper=element.ownerDocument.createElement('article');wrapper.className='shnea-viewer';wrapper.setAttribute('aria-label','문서 내용');wrapper.append(fragment);
+  applyAppearance(wrapper,options.appearance);
   const attachments=new Map<string,AttachmentRef>();schema.nodeFromJSON(document.content).descendants(node=>{if(node.type.name==='attachment')attachments.set(node.attrs.id,node.attrs as AttachmentRef);});
   const disposers:(()=>void)[]=[];for(const item of wrapper.querySelectorAll<HTMLElement>('[data-attachment-id]')){const ref=attachments.get(item.dataset.attachmentId!);if(ref){item.replaceChildren();item.classList.remove('shnea-attachment');disposers.push(mountAttachmentView(item,ref,options.attachments));}}
   // Retain the editing table's content width (including its action gutter) without exposing controls.

@@ -10,7 +10,7 @@
 | 편집·읽기 공통 스키마, 다중 인스턴스·자원 해제 | 구현 |
 | Markdown 제목·서식·표·중첩 목록·체크리스트·코드·링크·이미지 참조 | 구현·DOM 자동 검증 |
 | 종류별 슬래시 메뉴·서식·표 직접 조작·붙여넣기 선택·양 테마 | 구현·관리자 체험 제공 |
-| 드래그 이동·호스트 디자인 설정 UI | 후속 작업 |
+| 최상위 블록 드래그·위/아래 이동, 호스트 모양 설정 API·체험 UI | 구현·브라우저 검증 |
 | 파일 식별자 기반 네 종류 첨부·업로드·붙여넣기·드롭 | 구현·관리자 파일 서비스 연결 |
 | 이미지 한 줄 1~3개·옆에 추가·개별 삭제·모바일 세로 배치 | 구현 |
 | 변환 상태 갱신·본문 내 HLS·오디오·공통 이미지 확대 | 구현 |
@@ -21,7 +21,7 @@
 
 ## 버전과 문서
 
-내부 패키지는 `@shnea/editor@0.1.0-alpha.4`, 문서 버전은 `3`다. version 1·2 문서를 입력하면 구조를 보존해 3으로 반환한다. version 2의 imageRow는 mediaRow로 이전한다. 첨부 노드는 2부터 허용하며 이전 패키지는 새 문서를 거부한다. 알파 단계이며 외부 운영 도입을 권장하는 배포본은 아니다. 문서 형식과 패키지 버전은 별개다.
+내부 패키지는 `@shnea/editor@0.1.0-alpha.5`, 문서 버전은 `3`다. version 1·2 문서를 입력하면 구조를 보존해 3으로 반환한다. version 2의 imageRow는 mediaRow로 이전한다. 첨부 노드는 2부터 허용하며 이전 패키지는 새 문서를 거부한다. 알파 단계이며 외부 운영 도입을 권장하는 배포본은 아니다. 문서 형식과 패키지 버전은 별개다.
 
 ```json
 {
@@ -52,22 +52,59 @@
 | `onChange({document,origin})` | 편집은 edit, 명시적으로 알림을 켠 값 교체는 replace. 저장 성공을 뜻하지 않음 |
 | `insertMarkdown(text)` / `insertText(text)` | 현재 선택 위치 삽입. 읽기 전용이면 거부 |
 | `undo()` / `redo()` / `focus()` | 현재 인스턴스에만 적용 |
+| `moveBlock(fromIndex,toIndex)` | 0부터 시작하는 최상위 블록 순서를 변경. 같은 위치·범위 밖은 false, 읽기 전용은 거부. 한 번에 실행 취소 |
 | `captureSelection()` | 외부 UI로 포커스를 옮기기 전에 현재 에디터의 DOM 선택을 엔진에 반영. 다른 에디터의 선택은 가져오지 않음 |
 | `run(command,payload?)` / `can(command)` / `isActive(command)` | 현재 선택 위치에서 서식·블록·표·실행 취소 명령 실행/가능 여부/적용 상태 |
 | `onMarkdownPaste(source)` / `setPasteMode(mode)` | 코어의 Markdown 선택 UI 연결 또는 원문/변환 모드. 공통 UI는 선택 팝업을 직접 제공 |
 | `destroy()` | 엔진·이벤트 자원 해제. 반복 호출 가능, 이후 값 접근은 EDITOR_DESTROYED |
-| `renderViewer(element,value,{attachments})` | 같은 스키마로 읽기 전용 article 생성, 해제 함수 반환. 체크박스는 비활성 |
+| `renderViewer(element,value,{attachments,appearance})` | 같은 스키마로 읽기 전용 article 생성, 해제 함수 반환. 체크박스는 비활성 |
 | `fromMarkdown(text)` | Markdown을 버전 문서로 변환. 서버 저장·파일 업로드 없음 |
 
 같은 컨테이너에 두 인스턴스를 마운트하면 `EDITOR_MOUNTED`로 거부한다. 두 인스턴스의 문서·이벤트·실행 취소는 독립적이다. 외부 값 교체는 기본적으로 변경 이벤트를 발생시키지 않아 호스트의 양방향 바인딩 반복을 막는다. 본문 저장·저장 실패·동시 수정 충돌·사용자 권한은 호스트가 처리한다.
 
 ## Markdown·붙여넣기 정책
 
+굵게·기울임은 편집/읽기 본문에서 `font-synthesis: weight style`과 명시적 굵기·기울기를 적용한다. 사이트 전역의 `font-synthesis: none`이 한글 대체 글꼴의 서식 표시를 막던 문제를 본문 범위에서 수정했다. 전역 스타일은 변경하지 않는다. [CSS font-synthesis](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/font-synthesis)
+
 Markdown 변환은 markdown-it의 토큰에서 스키마 JSON을 직접 만든다. HTML 문자열을 페이지에 주입하지 않는다. 제목·문단·굵게/기울임/취소선·인라인 코드·인용·구분선·순서/비순서/중첩 목록·체크리스트·표/정렬·코드 언어/들여쓰기·링크·이미지 참조를 지원한다. 혼합 체크/일반 목록은 연속된 같은 종류끼리 나눠 보존한다.
 
 붙여넣기는 `text/markdown` → `text/plain` 순서이며 HTML 표현은 사용하지 않는다. HTML만 있는 클립보드는 삽입하지 않는다. 웹 페이지의 풍부한 HTML 서식 변환은 이 단계에 포함하지 않는다. 공통 UI는 지원 블록·글자 서식이 발견되면 삽입 전에 **원문 그대로 / Markdown 서식 적용 / 취소**를 제공한다. 일반 텍스트와 코드 블록 안은 바로 붙인다. 변환은 한 번의 실행 취소 단위다. 코어만 사용할 때는 기본 자동 변환이며 `onMarkdownPaste(source)`로 호스트가 선택 UI를 연결할 수 있다. `setPasteMode('text'|'markdown')`은 코어의 원문 모드 설정이다.
 
 원시 HTML·수식 등의 미지원 문법은 텍스트로 보존하며 스크립트를 실행하지 않는다. 상대 링크는 경로를 텍스트로 남기고 자동 이동시키지 않는다. 원본 PC의 상대 이미지 파일을 자동 업로드하지 않는다. 외부 이미지 로딩 실패 UI와 파일 연결은 후속 단계다. 코드블록의 마지막 문법상 줄바꿈은 제거하고 내부 줄바꿈·공백을 보존한다.
+
+## 블록 이동과 호스트 모양 설정
+
+공통 UI 하단 왼쪽은 현재 선택한 최상위 블록의 위치와 드래그 손잡이·위/아래 버튼을 제공한다. 본문에서 옮길 블록을 선택하고 손잡이를 드래그하면 삽입 위치를 표시한다. 모바일·키보드는 위/아래 버튼으로 같은 동작을 수행한다. 읽기 화면에는 편집 도구를 표시하지 않는다. 표·목록·미디어 묶음은 통째로 이동하며 내부 행·항목을 개별 드래그하는 기능은 아직 없다.
+
+이동은 노드·서식·첨부 ID를 보존하는 한 번의 실행 취소 단위다. 업로드 중 이동해도 완료 파일을 원래 ID에 연결하며, 완료 후 이동을 취소해도 파일 연결을 유지한다. 드래그 도중 본문이 변경되면 이동을 취소하고 다시 선택하도록 안내한다. 완료 메타데이터는 문서 교체·해제 시 비우며 원본 바이트를 보관하지 않는다. 이동으로 영상 뷰어가 다시 마운트될 수 있으므로 재생 상태 유지를 보장하지 않는다.
+
+```js
+import {mountEditor} from '@shnea/editor/ui';
+import {renderViewer} from '@shnea/editor';
+import '@shnea/editor/style.css';
+
+const appearance = {fontSize: 18, lineHeight: 1.7, paragraphSpacing: 16, radius: 8};
+const editor = mountEditor({element: editorElement, value, appearance});
+editor.moveBlock(0, 2); // 첫 최상위 블록을 세 번째로 이동
+editor.setAppearance(appearance); // 설정을 바꿀 때도 편집/읽기에 같은 값을 전달
+const disposeViewer = renderViewer(viewerElement, editor.getValue(), {appearance});
+editor.setAppearance(); // 호스트 기본 모양으로 복원
+// 화면 해제 시 disposeViewer(); editor.destroy();
+```
+
+`appearance`는 `mountEditor`와 `renderViewer`의 선택 옵션이다. `setAppearance`는 공통 UI 인스턴스에서 제공하며 전체 설정을 교체한다. 생략한 속성은 기본값으로 돌아가고, 잘못된 값은 일부 적용 없이 오류를 발생시킨다. 이미 만든 읽기 뷰어의 모양을 변경하려면 해제 후 새 설정으로 다시 렌더링한다. 모양만 바꿔도 본문·변경 이벤트·실행 취소 이력은 바뀌지 않으며 JSON 입출력에는 포함되지 않는다.
+
+| 속성 | 허용 값 |
+| --- | --- |
+| `fontFamily` | 글꼴·대체 글꼴 문자열, 1~200자. `;`, 중괄호, 줄바꿈 제외. 글꼴은 호스트가 제공하며 자동 다운로드 없음 |
+| `fontSize` | 12~32px |
+| `lineHeight` | 1.2~2.4배 |
+| `paragraphSpacing` | 0~48px |
+| `contentPadding` | 8~64px. 모바일 실제 여백은 최대 20px |
+| `radius` | 0~24px |
+| `colors` | `background`, `text`, `muted`, `border`, `accent`, `raised`의 선택 값. 각각 `#RRGGBB` |
+
+관리자·게스트의 접힌 **에디터 모양 설정**에서 편집/읽기에 같은 옵션을 전달한다. 모양은 페이지 메모리에서만 유지한다. 코어만 사용하는 호스트는 자체 스타일/UI를 연결한다.
 
 ## 호스트 적용과 검증
 

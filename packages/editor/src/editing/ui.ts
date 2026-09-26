@@ -1,5 +1,6 @@
 import {createIcon,decorateAction,type IconName} from '../icons/index.js';
 import {createEditorCore,type CoreOptions,type EditorCommand,type AttachmentKind} from '../index.js';
+import {applyAppearance,type EditorAppearance} from '../styles/appearance.js';
 
 type Category='전체'|'본문'|'목록'|'글자 서식'|'표'|'첨부'|'편집';
 type Action=EditorCommand|AttachmentKind;
@@ -41,13 +42,14 @@ export const editorCommands:Item[]=[
  {id:'redo',label:'다시 실행',keyword:'redo',category:'편집'}
 ];
 const commandIcons:Record<Action,IconName>={"file": "file", "image": "image", "video": "video", "audio": "music", "paragraph": "file-text", "h1": "heading", "h2": "heading", "h3": "heading", "blockquote": "quote", "codeBlock": "code-xml", "horizontalRule": "minus", "bulletList": "list", "orderedList": "list-ordered", "taskList": "list-checks", "indent": "indent-increase", "outdent": "indent-decrease", "bold": "bold", "italic": "italic", "underline": "underline", "strike": "strikethrough", "code": "code-xml", "link": "link", "unlink": "unlink", "clear": "remove-formatting", "table": "table", "addRow": "rows-3", "deleteRow": "rows-3", "addColumn": "columns-3", "deleteColumn": "columns-3", "deleteTable": "trash-2", "undo": "undo-2", "redo": "redo-2"};
-type UIOptions=Omit<CoreOptions,'onKeyDown'|'onStateChange'|'onBeforeInput'|'onMarkdownPaste'>;
+type UIOptions=Omit<CoreOptions,'onKeyDown'|'onStateChange'|'onBeforeInput'|'onMarkdownPaste'|'blockControls'>&{appearance?:EditorAppearance};
 let instance=0;
 
 /** One selection-preserving palette, opened by slash or the mobile insertion menu. */
 export function mountEditor(options:UIOptions){
  const doc=options.element.ownerDocument,win=doc.defaultView!,prefix=`shnea-menu-${++instance}`;
  const root=doc.createElement('section');root.className='shnea-editor';root.setAttribute('aria-label','문서 편집기');
+ applyAppearance(root,options.appearance);
  if(options.element.querySelector('.shnea-editor'))throw new Error('이 영역에는 이미 에디터가 있습니다.');
  const body=doc.createElement('div');body.className='se-body';
  const menu=doc.createElement('div');menu.id=prefix;menu.className='se-insert-menu';menu.hidden=true;menu.setAttribute('role','dialog');menu.setAttribute('aria-label','편집 기능');
@@ -70,7 +72,7 @@ export function mountEditor(options:UIOptions){
  const hint=doc.createElement('p');hint.className='se-hint';hint.textContent='/ 모든 편집 기능 · /table 표 · 글자 선택 후 / 서식 · Ctrl/Cmd+Z 실행 취소';
  const mobileActions=doc.createElement('div');mobileActions.className='se-mobile-actions';mobileActions.hidden=options.editable===false;
  const insertButton=doc.createElement('button');insertButton.type='button';decorateAction(insertButton,'layout-grid','삽입 메뉴');insertButton.setAttribute('aria-haspopup','dialog');insertButton.setAttribute('aria-controls',prefix);insertButton.setAttribute('aria-expanded','false');
- const mobileHint=doc.createElement('span');mobileHint.textContent='/ 로도 열 수 있어요';mobileActions.append(mobileHint,insertButton);
+ insertButton.classList.add('se-mobile-insert');const blockControls=doc.createElement('div');mobileActions.append(blockControls,insertButton);
  root.append(body,menu,hint,message,mobileActions);options.element.append(root);
  let core:ReturnType<typeof createEditorCore>|undefined,disposed=false,category:Category='전체',selected=0,items:Item[]=[],removeSlash=false,dismissed='',pasteSource='',openedByButton=false;
  const mobile=()=>win.innerWidth<=600;
@@ -158,8 +160,8 @@ export function mountEditor(options:UIOptions){
  const trigger=()=>{if(!core?.canOpenSlash())return false;open();return true;};
  const reposition=()=>position();win.addEventListener('resize',reposition);win.addEventListener('scroll',reposition,true);win.visualViewport?.addEventListener('resize',reposition);win.visualViewport?.addEventListener('scroll',reposition);
  function cleanup(){doc.removeEventListener('pointerdown',outside);win.removeEventListener('resize',reposition);win.removeEventListener('scroll',reposition,true);win.visualViewport?.removeEventListener('resize',reposition);win.visualViewport?.removeEventListener('scroll',reposition);}
- try{core=createEditorCore({...options,element:body,onStateChange:refresh,onMarkdownPaste:choosePaste,onError:error=>{status(error.message);options.onError?.(error);},onKeyDown:event=>event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&trigger(),onBeforeInput:event=>event.inputType==='insertText'&&event.data==='/'&&trigger()});}
+ try{core=createEditorCore({...options,element:body,blockControls,onStateChange:refresh,onMarkdownPaste:choosePaste,onError:error=>{status(error.message);options.onError?.(error);},onKeyDown:event=>event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&trigger(),onBeforeInput:event=>event.inputType==='insertText'&&event.data==='/'&&trigger()});}
  catch(error){cleanup();root.remove();throw error;}
  position();
- return {...core,setValue:(...args:Parameters<typeof core.setValue>)=>{close();core!.setValue(...args);status('');},destroy:()=>{if(disposed)return;disposed=true;cleanup();core!.destroy();root.remove();}};
+ return {...core,setAppearance:(appearance:EditorAppearance={})=>{if(disposed)throw new Error('이미 해제한 에디터입니다.');applyAppearance(root,appearance);position();},setValue:(...args:Parameters<typeof core.setValue>)=>{close();core!.setValue(...args);status('');},destroy:()=>{if(disposed)return;disposed=true;cleanup();core!.destroy();root.remove();}};
 }

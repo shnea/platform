@@ -2,7 +2,7 @@ import {createIcon,decorateAction} from '../icons/index.js';
 import {Node,type Editor} from '@tiptap/core';
 import {closeHistory} from '@tiptap/pm/history';
 import {mountMediaLayout,mediaStyle,type MediaLayout} from './media-layout.js';
-import {TextSelection} from '@tiptap/pm/state';
+import {Plugin,TextSelection} from '@tiptap/pm/state';
 import {mountAttachmentView,attachmentSize,type AttachmentAdapter,type AttachmentKind,type AttachmentRef} from './attachment-view.js';
 export type {AttachmentAdapter,AttachmentKind,AttachmentRef,AttachmentViews} from './attachment-view.js';
 type Task={file:File;ref:AttachmentRef;requestId:string;state:'queued'|'uploading'|'failed'|'done';progress:number;label:string;controller?:AbortController;listeners:Set<()=>void>};
@@ -23,6 +23,9 @@ const autoKind=(file:File):AttachmentKind=>file.type.startsWith('image/')?'image
 
 export function attachmentRuntime(adapter:AttachmentAdapter|undefined,report:(message:string)=>void){
  const tasks=new Map<string,Task>(),pickers=new Set<HTMLInputElement>();let disposed=false,running=false;
+ // Undo may restore an earlier pending node after a move. Keep completed metadata (never bytes)
+ // for this document session so undo/redo cannot turn an uploaded file back into an orphan.
+ const completed=new Map<string,AttachmentRef>();
  function selectFiles(editor:Editor,accept:string,multiple:boolean,receive:(files:File[])=>void,onClose?:()=>void){
   const doc=editor.view.dom.ownerDocument,input=doc.createElement('input'),previous=doc.activeElement as HTMLElement|null;
   input.type='file';input.accept=accept;input.multiple=multiple;input.tabIndex=-1;input.setAttribute('aria-label','첨부할 파일 선택');input.className='se-file-picker';
@@ -41,7 +44,7 @@ export function attachmentRuntime(adapter:AttachmentAdapter|undefined,report:(me
     const result=await adapter.upload(task.file,{scope:task.ref.scope,kind:task.ref.kind,requestId:task.requestId,signal:task.controller.signal,progress:(value,label)=>{task.progress=Math.max(0,Math.min(100,value));task.label=label;notify(task);}});
     if(disposed||task.controller.signal.aborted)continue;
     if(typeof result.fileId!=='string'||!result.fileId||result.fileId.length>1000||typeof result.name!=='string'||!result.name||result.name.length>1000||result.scope!==task.ref.scope||result.kind!==task.ref.kind||!Number.isSafeInteger(result.size)||result.size<0||result.size>5_000_000_000)throw Error('업로드 결과가 올바르지 않습니다.');
-    const at=position(editor,id);if(at!==undefined)editor.view.dispatch(editor.state.tr.setNodeMarkup(at,undefined,{...editor.state.doc.nodeAt(at)!.attrs,id,...result}).setMeta('addToHistory',false));task.state='done';tasks.delete(id);
+    const at=position(editor,id);if(at!==undefined){completed.set(id,{fileId:result.fileId,scope:result.scope,kind:result.kind,name:result.name,size:result.size});editor.view.dispatch(editor.state.tr.setNodeMarkup(at,undefined,{...editor.state.doc.nodeAt(at)!.attrs,id,...result}).setMeta('addToHistory',false));}task.state='done';tasks.delete(id);
    }catch(error){if(disposed)break;task.state='failed';task.label=task.controller.signal.aborted?'업로드가 중단되었습니다.':error instanceof Error?error.message:'업로드하지 못했습니다.';notify(task);}
   }}finally{running=false;}
  }
@@ -71,7 +74,11 @@ export function attachmentRuntime(adapter:AttachmentAdapter|undefined,report:(me
   addButton.addEventListener('click',()=>{choices.hidden=!choices.hidden;addButton.setAttribute('aria-expanded',String(!choices.hidden));if(!choices.hidden)(choices.firstElementChild as HTMLElement).focus();});tools.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();choices.hidden=true;addButton.setAttribute('aria-expanded','false');addButton.focus();}});tools.addEventListener('focusout',event=>{if(!tools.contains(event.relatedTarget as globalThis.Node)){choices.hidden=true;addButton.setAttribute('aria-expanded','false');}});
   return {dom,contentDOM,update:next=>{if(next.type!==current.type)return false;current=next;refresh();return true;},stopEvent:event=>tools.contains(event.target as globalThis.Node),ignoreMutation:mutation=>mutation.type!=='selection'&&(mutation.target===dom||tools.contains(mutation.target))};
  };}});
- const extension=Attachment.extend({addNodeView(){return ({node,editor,getPos,view})=>{
+ const extension=Attachment.extend({addProseMirrorPlugins(){return [new Plugin({appendTransaction:(transactions,_old,state)=>{
+  if(!transactions.some(tr=>tr.docChanged)||!completed.size)return null;
+  const tr=state.tr;state.doc.descendants((node,pos)=>{if(node.type.name!=='attachment'||node.attrs.fileId)return;const saved=completed.get(node.attrs.id);if(saved)tr.setNodeMarkup(pos,undefined,{...node.attrs,...saved});});
+  return tr.docChanged?tr.setMeta('addToHistory',false):null;
+ }})];},addNodeView(){return ({node,editor,getPos,view})=>{
   const doc=view.dom.ownerDocument,dom=doc.createElement('div');dom.className='se-attachment-node';dom.contentEditable='false';let layout:ReturnType<typeof mountMediaLayout>|undefined;let current=node,cleanup:(()=>void)|undefined,unsubscribe:(()=>void)|undefined;
   function render(){
    layout?.destroy();layout=undefined;cleanup?.();cleanup=undefined;unsubscribe?.();unsubscribe=undefined;dom.replaceChildren();const id=String(current.attrs.id),ref=current.attrs as AttachmentRef,task=tasks.get(id);const media=['image','video'].includes(ref.kind);dom.classList.toggle('se-media-frame',media);dom.style.cssText=media?mediaStyle(current.attrs as MediaLayout):'';
@@ -87,6 +94,6 @@ export function attachmentRuntime(adapter:AttachmentAdapter|undefined,report:(me
   }
   render();return {dom,stopEvent:event=>!['drop','dragover','dragenter'].includes(event.type),ignoreMutation:()=>true,update:next=>{if(next.type!==current.type)return false;const changed=['id','fileId','scope','kind','name','size'].some(key=>next.attrs[key]!==current.attrs[key]);current=next;if(changed)render();else {dom.style.cssText=['image','video'].includes(current.attrs.kind)?mediaStyle(current.attrs as MediaLayout):'';layout?.refresh();}return true;},destroy:()=>{layout?.destroy();cleanup?.();unsubscribe?.();}};
  };}});
- const reset=()=>{for(const task of tasks.values())task.controller?.abort();tasks.clear();for(const input of pickers)input.remove();pickers.clear();};
+ const reset=()=>{for(const task of tasks.values())task.controller?.abort();tasks.clear();completed.clear();for(const input of pickers)input.remove();pickers.clear();};
  return {extension,rowExtension,add,reset,insert,pick(editor:Editor,kind:AttachmentKind,onClose?:()=>void){selectFiles(editor,kind==='file'?'':`${kind}/*`,true,files=>add(editor,files,undefined,kind),onClose);},abortMissing(editor:Editor){for(const [id,task]of tasks)if(position(editor,id)===undefined){task.controller?.abort();tasks.delete(id);}},destroy(){disposed=true;reset();}};
 }

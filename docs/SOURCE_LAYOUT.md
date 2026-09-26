@@ -14,11 +14,11 @@
 | `apps/admin-web/public/assets/demo/` | 직접 제작한 공개 샘플과 제작 기록 |
 | `packages/editor/src/index.ts` | 호스트가 사용하는 코어 API |
 | `packages/editor/src/document/` | 문서 계약·검증·이전·Markdown·스키마 |
-| `packages/editor/src/editing/` | 슬래시·붙여넣기 UI와 표 조작 |
+| `packages/editor/src/editing/` | 슬래시·붙여넣기 UI, 표 조작과 최상위 블록 이동 |
 | `packages/editor/src/media/` | 첨부 업로드·조회·미디어 줄·크기 조절 |
 | `packages/editor/src/viewer/` | 공통 이미지 확대 뷰어 |
 | `packages/editor/src/icons/` | 선택한 Lucide SVG 노드·DOM 생성·조작 버튼 스타일 |
-| `packages/editor/src/styles/` | 에디터·읽기 공통 CSS |
+| `packages/editor/src/styles/` | 에디터·읽기 공통 CSS와 호스트 모양 설정 검증·적용 |
 
 호스트는 내부 폴더를 직접 import하지 않고 `@shnea/editor`, `@shnea/editor/ui`, `@shnea/editor/style.css`, `@shnea/editor/image-viewer`를 사용한다. 내부 이동 후에도 이 진입점 이름은 유지한다.
 

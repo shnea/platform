@@ -1,6 +1,6 @@
 # SHNEA 에디터·뷰어
 
-`@shnea/editor@0.1.0-alpha.4` — 편집 엔진·문서 계약·공통 슬래시 UI의 내부 검증용 패키지다. 블록 드래그 이동·배포용 연결 예제 등이 남아 있어 첫 출시 전체 완료는 아니다. 공개 레지스트리에 발행하지 않았으며 `private: true`를 유지한다.
+`@shnea/editor@0.1.0-alpha.5` — 편집 엔진·문서 계약·공통 슬래시 UI의 내부 검증용 패키지다. React/Vue 연결 컴포넌트·일반 JS/JSP 실행 예제 등이 남아 있어 첫 출시 전체 완료는 아니다. 공개 레지스트리에 발행하지 않았으며 `private: true`를 유지한다.
 
 ## 실행
 
@@ -41,5 +41,7 @@ editor.destroy();
 관리자 **에디터** 메뉴에서 편집/읽기·예제·JSON 입출력을 확인할 수 있다. 메뉴 간 이동은 메모리 문서를 유지하지만 새로고침·로그아웃하면 사라진다. 첨부 저장 위치를 고른 뒤 /file·/image·/video·/audio, 이미지 Ctrl+V와 파일 드롭으로 실제 업로드를 체험한다. 이미지는 공통 돋보기 뷰어, 영상은 HLS, 오디오는 본문 플레이어를 사용한다. 본문은 저장하지 않지만 완료 파일은 파일 서비스에 남는다. 문서 version 1·2는 3으로 이전하며 첨부 ID·환경만 저장하고 임시 URL은 제외한다. 호스트의 `AttachmentAdapter`와 접근 권한 처리는 상세 계약을 따른다.
 
 상세 계약·현재 한계·다음 단계: 저장소의 [docs/EDITOR.md](../../docs/EDITOR.md). tarball을 전달할 때는 이 문서도 같이 제공한다.
+
+공통 UI의 하단 왼쪽에서 선택한 최상위 블록을 드래그하거나 위·아래로 이동한다. `editor.moveBlock(0, 2)`는 첫 블록을 세 번째로 옮긴다. 표·목록·미디어 묶음은 통째로 이동하며 실행 취소를 지원한다. `mountEditor({element, appearance: {fontSize: 18, lineHeight: 1.7}})`와 `editor.setAppearance(...)`로 모양을 지정하고, 읽기에는 `renderViewer(element, value, {appearance})`로 같은 설정을 전달한다. 설정은 본문 JSON에 저장하지 않는다.
 
 모바일 600px 이하는 하단 오른쪽의 격자 아이콘·삽입 메뉴로도 기능을 연다. 원래 커서와 선택 글자를 유지하며 이미지·영상·파일·오디오·표를 먼저 보여 준다. /도 계속 지원한다. 공통 아이콘은 로컬 Lucide SVG이며 @shnea/editor/icons, @shnea/editor/icons.css로 재사용한다. 배포 시 LICENSE-LUCIDE를 보존한다.

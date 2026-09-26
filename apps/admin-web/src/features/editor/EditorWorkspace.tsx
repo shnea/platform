@@ -1,6 +1,7 @@
 import {Icon} from '../../shared/Icon';
 import {useEffect,useRef,useState} from 'react';
-import {fromMarkdown,parseDocument,renderViewer,type EditorDocument} from '@shnea/editor';
+import {fromMarkdown,parseDocument,renderViewer,type EditorDocument,type EditorAppearance} from '@shnea/editor';
+import {EditorAppearanceSettings} from './EditorAppearanceSettings';
 import {mountEditor} from '@shnea/editor/ui';
 import '@shnea/editor/style.css';
 import {SectionTabs} from '../../shared/SectionTabs';
@@ -37,6 +38,7 @@ export function EditorWorkspace({draft}:{draft:{current:unknown}}){
  const editRoot=useRef<HTMLDivElement>(null),viewRoot=useRef<HTMLDivElement>(null),editor=useRef<ReturnType<typeof mountEditor>|null>(null);
  const [tab,setTab]=useState<'edit'|'read'>('edit'),[error,setError]=useState(''),[jsonError,setJsonError]=useState(''),[notice,setNotice]=useState(''),[json,setJson]=useState(''),[changed,setChanged]=useState(!!draft.current),[pending,setPending]=useState<{value:EditorDocument;title:string}|null>(null);
  const [initial]=useState(()=>draft.current??fromMarkdown(example));
+ const [appearance,setAppearance]=useState<EditorAppearance>({});
  const scope=useRef<string|undefined>(undefined),[attachments]=useState(()=>editorAttachments(()=>scope.current));
  const [projects,setProjects]=useState<Project[]>([]),[project,setProject]=useState(''),[environments,setEnvironments]=useState<Environment[]>([]),[environment,setEnvironment]=useState(''),[scopeError,setScopeError]=useState(''),[loading,setLoading]=useState(false),[reload,setReload]=useState(0);
  useEffect(()=>{let stopped=false;setLoading(true);setScopeError('');void (async()=>{const rows:Project[]=[];for(let offset=0;;offset+=100){const page=await api<Project[]>(`/projects?limit=100&offset=${offset}`);rows.push(...page);if(page.length<100)break;}if(!stopped)setProjects(rows);})().catch(e=>{if(!stopped)setScopeError(e.message);}).finally(()=>{if(!stopped)setLoading(false);});return()=>{stopped=true;};},[reload]);
@@ -48,8 +50,9 @@ export function EditorWorkspace({draft}:{draft:{current:unknown}}){
  },[]);
  useEffect(()=>{
   if(tab!=='read'||!editor.current||!viewRoot.current)return;
-  try{return renderViewer(viewRoot.current,editor.current.getValue(),{attachments});}catch(e){setError(e instanceof Error?e.message:'읽기 화면을 열지 못했습니다.');}
- },[tab]);
+  try{return renderViewer(viewRoot.current,editor.current.getValue(),{attachments,appearance});}catch(e){setError(e instanceof Error?e.message:'읽기 화면을 열지 못했습니다.');}
+ },[tab,appearance]);
+ useEffect(()=>{editor.current?.setAppearance(appearance);},[appearance]);
  useEffect(()=>{if(!changed)return;const guard=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',guard);return()=>window.removeEventListener('beforeunload',guard);},[changed]);
  function replace(){if(!pending||!editor.current)return;editor.current.setValue(pending.value,{emitChange:true});setPending(null);setTab('edit');setError('');setNotice('문서를 바꿨습니다. 이전 문서의 실행 취소 이력은 초기화됩니다.');}
  function getJSON(){return JSON.stringify(editor.current?.getValue()??initial,null,2);}
@@ -58,6 +61,7 @@ export function EditorWorkspace({draft}:{draft:{current:unknown}}){
   <div className="editor-intro"><p><strong>/ 로 편집 기능을 골라 보세요.</strong> 내용은 메뉴 이동 시 유지되지만 서버에 저장하지 않으며 새로고침·로그아웃하면 사라집니다.</p></div>
   <details className="editor-attachment-settings"><summary>첨부 저장 위치 {environment?'· 선택됨':'· 프로젝트와 환경 선택'}</summary><p className="small muted">글 편집은 선택 없이 사용할 수 있습니다. 첨부는 선택한 환경에 공개 파일·기본 보존 정책으로 실제 저장됩니다. 문서에서 지워도 저장된 파일은 남으며 파일 메뉴에서 관리합니다.</p><div className="editor-scope-fields"><label>첨부 프로젝트<select aria-label="첨부 프로젝트" value={project} disabled={loading} onChange={e=>{scope.current=undefined;setProject(e.target.value);}}><option value="">프로젝트 선택</option>{projects.map(p=><option key={p.id} value={p.id} disabled={p.status!=='ACTIVE'||!p.filesEnabled}>{p.name}{!p.filesEnabled?' · 파일 사용 안 함':p.status!=='ACTIVE'?' · 중지됨':''}</option>)}</select></label><label>첨부 환경<select aria-label="첨부 환경" value={environment} disabled={loading||!project} onChange={e=>{setEnvironment(e.target.value);scope.current=e.target.value||undefined;}}><option value="">환경 선택</option>{environments.map(e=><option key={e.id} value={e.id} disabled={e.state!=='READY'}>{e.code} ({e.kind}){e.state!=='READY'?' · 준비되지 않음':''}</option>)}</select></label></div>{loading&&<p role="status">저장 위치 조회 중…</p>}{scopeError&&<p role="alert" className="alert">{scopeError}</p>}<button className="secondary" disabled={loading} onClick={()=>setReload(value=>value+1)} aria-label="목록 새로 조회" title="목록 새로 조회" data-tooltip="목록 새로 조회" data-icon-only="true"><Icon name="refresh-cw"/></button></details>
   <div className="editor-workspace-actions"><SectionTabs id="editor-mode" label="문서 화면" value={tab} disabled={false} onChange={value=>{setError('');setNotice('');setTab(value);}} items={[{value:'edit',label:'편집'},{value:'read',label:'읽기'}]}/><div className="actions"><button className="secondary" onClick={()=>setPending({value:fromMarkdown(example),title:'예제 문서로 바꿀까요?'})}><Icon name="folder-open"/>예제 불러오기</button><button className="secondary" onClick={()=>setPending({value:parseDocument(null),title:'문서를 비울까요?'})}><Icon name="trash-2"/>문서 비우기</button></div></div>
+  <EditorAppearanceSettings value={appearance} onChange={setAppearance}/>
   {error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   <div id="editor-mode-panel" role="tabpanel" aria-labelledby={`editor-mode-${tab}`}><div hidden={tab!=='edit'} ref={editRoot}/>{tab==='read'&&<div ref={viewRoot}/>}</div>
   <p className="small muted editor-limit">/file · /image · /video · /audio로 첨부하거나 이미지를 붙여넣고 파일을 본문에 놓아 보세요. 미디어 위의 ‘추가’로 이미지·영상을 한 줄에 최대 3개 배치합니다. 하나일 때는 모서리로 크기를 조절하고 정렬을 바꿀 수 있습니다. 모바일은 전체 너비로 표시합니다.</p>

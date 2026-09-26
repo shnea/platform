@@ -168,8 +168,40 @@ test('공통 UI의 슬래시 삽입·닫기·문서 교체와 두 인스턴스�
  a.setValue(fromMarkdown('문서'));assert.equal(a.undo(),false);assert.deepEqual(b.getValue(),parseDocument(null));
  a.destroy();a.destroy();b.destroy();assert.equal(one.childElementCount,0);one.remove();two.remove();
 });
+
+test('블록 이동은 표·목록·미디어 묶음과 서식을 보존하고 한 번에 취소·재실행한다',()=>{
+ const node=target(),editor=mountEditor({element:node,value:fromMarkdown('**첫 문단**\n\n- 하나\n- 둘\n\n| A | B |\n| --- | --- |\n| C | D |\n\n마지막')});
+ const initial=editor.getValue(),items=initial.content.content;
+ assert.equal(editor.moveBlock(0,3),true);assert.deepEqual(editor.getValue().content.content,[items[1],items[2],items[3],items[0]]);
+ assert.equal(editor.undo(),true);assert.deepEqual(editor.getValue(),initial);assert.equal(editor.redo(),true);
+ assert.equal(editor.moveBlock(1,0),true);assert.equal(editor.getValue().content.content[0].type,'table');assert.equal(editor.undo(),true);assert.deepEqual(editor.getValue().content.content,[items[1],items[2],items[3],items[0]]);
+ editor.moveBlock(3,0);const moved=editor.getValue();editor.insertText('입력');assert.equal(editor.undo(),true);assert.deepEqual(editor.getValue(),moved);assert.equal(editor.undo(),true);assert.deepEqual(editor.getValue().content.content,[items[1],items[2],items[3],items[0]]);
+ for(const [from,to] of [[0,0],[-1,2],[0,99],[0,1.2]])assert.equal(editor.moveBlock(from,to),false);
+ editor.setValue(document2([{type:'imageRow',attrs:{id:'20000000-0000-4000-8000-000000000001'},content:[attached({kind:'image'})]},{type:'paragraph',content:[{type:'text',text:'뒤'}]}]));
+ const row=editor.getValue().content.content[0];assert.equal(editor.moveBlock(0,1),true);assert.deepEqual(editor.getValue().content.content[1],row);editor.destroy();node.remove();
+ const read=target(),reader=createEditorCore({element:read,editable:false});rejects(()=>reader.moveBlock(0,1),'EDITOR_READ_ONLY');reader.destroy();read.remove();
+});
+
+test('블록 이동 중에도 업로드 작업과 식별자를 보존하고 완료를 원래 첨부에 반영한다',async()=>{
+ const node=target();let complete,signal;
+ const editor=mountEditor({element:node,value:fromMarkdown('첫째\n\n둘째'),attachments:{scope:()=> 'environment',upload:(_file,ctx)=>{signal=ctx.signal;return new Promise(resolve=>{complete=resolve;});},resolve:async file=>views(file)}});
+ pasteFiles(node,[new window.File(['x'],'moving.txt')]);await tick();
+ const initial=editor.getValue().content.content,from=initial.findIndex(item=>item.type==='attachment'),id=initial[from].attrs.id;
+ assert.equal(editor.moveBlock(from,initial.length-1),true);assert.equal(signal.aborted,false);complete({fileId:'moved-upload',scope:'environment',kind:'file',name:'moving.txt',size:1});await tick();await tick();
+ const saved=editor.getValue().content.content.find(item=>item.type==='attachment');assert.equal(saved.attrs.id,id);assert.equal(saved.attrs.fileId,'moved-upload');assert.equal(signal.aborted,false);
+ assert.equal(editor.undo(),true);assert.equal(editor.getValue().content.content.find(item=>item.type==='attachment').attrs.fileId,'moved-upload');editor.destroy();node.remove();
+});
+
+test('모양 설정은 인스턴스·읽기에 적용하되 JSON·실행 취소와 다른 에디터를 바꾸지 않는다',()=>{
+ const one=target(),two=target(),read=target();const appearance={fontFamily:'serif',fontSize:20,lineHeight:2,paragraphSpacing:24,contentPadding:16,radius:0,colors:{background:'#ffffff',text:'#183126',accent:'#245c43'}};
+ const a=mountEditor({element:one,value:fromMarkdown('**굵게** *기울임*'),appearance}),b=mountEditor({element:two});const initial=a.getValue();
+ const dispose=renderViewer(read,initial,{appearance});assert.equal(one.querySelector('.shnea-editor').style.getPropertyValue('--se-font-size'),'20px');assert.equal(read.querySelector('.shnea-viewer').style.getPropertyValue('--se-font-size'),'20px');assert.equal(two.querySelector('.shnea-editor').style.getPropertyValue('--se-font-size'),'');
+ assert.throws(()=>a.setAppearance({fontSize:24,colors:{text:'url(https://invalid.example)'}}));assert.equal(one.querySelector('.shnea-editor').style.getPropertyValue('--se-font-size'),'20px');
+ a.setAppearance({fontSize:18});assert.deepEqual(a.getValue(),initial);assert.equal(a.undo(),false);assert.equal(one.querySelector('.shnea-editor').style.getPropertyValue('--se-accent'),'');
+ a.setAppearance();assert.equal(one.querySelector('.shnea-editor').style.getPropertyValue('--se-font-size'),'');dispose();a.destroy();b.destroy();one.remove();two.remove();read.remove();
+});
 test('삽입 메뉴 버튼은 선택 글자와 중간 커서를 유지하며 읽기 전용에는 숨긴다',()=>{
- const node=target(),editor=mountEditor({element:node,value:fromMarkdown('앞 선택 뒤')}),body=node.querySelector('.tiptap'),button=node.querySelector('.se-mobile-actions button');
+ const node=target(),editor=mountEditor({element:node,value:fromMarkdown('앞 선택 뒤')}),body=node.querySelector('.tiptap'),button=node.querySelector('.se-mobile-insert');
  const select=(from,to=from)=>{body.focus();const range=document.createRange();range.setStart(body.querySelector('p').firstChild,from);range.setEnd(body.querySelector('p').firstChild,to);window.getSelection().removeAllRanges();window.getSelection().addRange(range);button.dispatchEvent(new window.Event('pointerdown',{bubbles:true,cancelable:true}));button.click();};
  select(2,4);assert.equal(button.getAttribute('aria-expanded'),'true');assert.equal(document.activeElement,node.querySelector('.se-menu-header button'));
  node.querySelector('[id$="-bold"]').click();assert.equal(body.querySelector('strong').textContent,'선택');assert.equal(body.textContent,'앞 선택 뒤');assert.equal(editor.undo(),true);
@@ -177,12 +209,12 @@ test('삽입 메뉴 버튼은 선택 글자와 중간 커서를 유지하며 읽
  assert.deepEqual(editor.getValue().content.content.map(item=>item.type),['paragraph','table','paragraph']);assert.equal(body.firstElementChild.textContent,'앞');assert.equal(body.lastElementChild.textContent,'뒤');
  assert.equal(body.querySelectorAll('table').length,1);assert.equal(editor.undo(),true);assert.equal(body.textContent,'앞뒤');
  button.click();node.querySelector('.se-menu-header button').click();assert.equal(document.activeElement,button);assert.equal(button.getAttribute('aria-expanded'),'false');editor.destroy();node.remove();
- const read=target(),reader=mountEditor({element:read,editable:false});assert.equal(read.querySelector('.se-mobile-actions').hidden,true);read.querySelector('.se-mobile-actions button').click();assert.equal(read.querySelector('[role=dialog]').hidden,true);reader.destroy();read.remove();
+ const read=target(),reader=mountEditor({element:read,editable:false});assert.equal(read.querySelector('.se-mobile-actions').hidden,true);read.querySelector('.se-mobile-insert').click();assert.equal(read.querySelector('[role=dialog]').hidden,true);reader.destroy();read.remove();
 });
 
 test('모바일 삽입 메뉴는 첨부·표를 먼저 보여주고 검색·취소와 문서 교체를 유지한다',()=>{
  const previous=window.innerWidth;Object.defineProperty(window,'innerWidth',{configurable:true,value:390});
- const node=target(),editor=mountEditor({element:node}),button=node.querySelector('.se-mobile-actions button');
+ const node=target(),editor=mountEditor({element:node}),button=node.querySelector('.se-mobile-insert');
  try{
   button.click();assert.deepEqual([...node.querySelectorAll('[role=option]')].slice(0,5).map(el=>el.querySelector('span').textContent),['이미지 업로드','영상 업로드','파일 업로드','오디오 업로드','표 삽입']);
   const search=node.querySelector('[role=combobox]');search.value='없는명령';search.dispatchEvent(new window.Event('input'));assert.equal(node.querySelectorAll('[role=option]').length,0);
