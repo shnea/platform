@@ -1,8 +1,8 @@
 ---
 version: 1
 slug: "apps-admin-web-src-editorworkspace-tsx"
-primary_target: "apps/admin-web/src/EditorWorkspace.tsx"
-related_targets: ["packages/editor/src/ui.ts", "packages/editor/src/editor.css"]
+primary_target: "apps/admin-web/src/features/editor/EditorWorkspace.tsx"
+related_targets: ["packages/editor/src/editing/ui.ts", "packages/editor/src/styles/editor.css"]
 ---
 
 # 관리자 에디터 체험
@@ -16,3 +16,5 @@ FORM: 한 열의 문서 캔버스. 사용자 추가 지시로 상단 문단 선�
 STATES: 빈 값·현재 위치 사용 불가·검색 결과 없음·붙여넣기 선택/취소·입력 오류·교체 확인. 문서는 서버/브라우저 저장소에 영속 저장하지 않는다.
 QUALITY BAR: 1440px/390px·양 테마, 드러나는 키보드 포커스, 도구 상태·단축키·한국어 오류, 편집/뷰어 문서 일치, 메뉴 이동 시 메모리 문서 유지.
 SCOPE: 파일·이미지·영상·오디오 첨부, 이미지 Ctrl+V 업로드·파일 드롭 위치 삽입·HLS·공통 이미지 확대를 연결한다. 저장 위치는 기본 접힘으로 두며 본문 미저장과 첨부 실제 저장을 구분한다. 편집/읽기와 파일 기본 이미지 뷰어에서 같은 확대·이동 UI를 재사용한다. 긴 표 셀은 여러 줄로 표시한다. 이미지·영상은 카드·파일명·용량 없이 미디어 자체만 표시한다. 옆에 이미지 추가로 한 줄 1~3개를 저장하고 모바일은 세로로 표시한다. 3개면 추가를 숨기며 삭제 후 균등 분배한다. 블록 드래그 이동은 후속 단계다.
+
+MEDIA LAYOUT: 이미지·영상 혼합 mediaRow 최대 3개. 단일 미디어는 비율 유지 너비 25~100%, 기본 가운데 정렬, 축소 시만 좌/중/우. 모바일 <=600px 전체 너비·세로 표시, 저장값 유지. 드래그·키보드·실행 취소, 영상 인스턴스 보존.

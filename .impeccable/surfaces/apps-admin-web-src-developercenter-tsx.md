@@ -1,8 +1,8 @@
 ---
 version: 1
 slug: "apps-admin-web-src-developercenter-tsx"
-primary_target: "apps/admin-web/src/DeveloperCenter.tsx"
-related_targets: ["apps/admin-web/src/developer.css", "apps/admin-web/src/ProjectFilesSettings.tsx", "apps/admin-web/src/FilePublicShare.tsx"]
+primary_target: "apps/admin-web/src/features/developer/DeveloperCenter.tsx"
+related_targets: ["apps/admin-web/src/features/developer/developer.css", "apps/admin-web/src/features/projects/ProjectFilesSettings.tsx", "apps/admin-web/src/features/files/FilePublicShare.tsx"]
 ---
 
 # 파일 연동·개발자 센터

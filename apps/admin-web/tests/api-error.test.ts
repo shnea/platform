@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readApiError } from "../src/api-error.ts";
+import { readApiError } from "../src/shared/api-error.ts";
 
 test("표준 오류의 한국어 안내·코드·요청 ID를 보존한다", async () => {
   const id = "1".repeat(32);

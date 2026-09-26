@@ -17,9 +17,9 @@ const attached=(attrs={})=>({type:'attachment',attrs:{id:'10000000-0000-4000-800
 const document2=content=>({...docOf(content),version:2});
 const views=file=>({fileId:file.fileId,kind:'TEXT',state:'READY',originalUrl:'/original',downloadUrl:'/download',viewerUrl:'/view',previewUrl:'/preview',thumbnailUrl:null,expiresAt:null});
 
-test('version 1은 2로 이전하며 첨부 식별자·범위·크기를 검사하고 임시 URL을 거부한다',()=>{
- assert.equal(parseDocument(docOf([{type:'paragraph'}])).version,2);
- assert.deepEqual({...parseDocument(document2([attached()])).content.content[0].attrs},attached().attrs);
+test('version 1은 3으로 이전하며 첨부 식별자·범위·크기를 검사하고 임시 URL을 거부한다',()=>{
+ assert.equal(parseDocument(docOf([{type:'paragraph'}])).version,3);
+ assert.deepEqual({...parseDocument(document2([attached()])).content.content[0].attrs},{...attached().attrs,widthPercent:100,align:'center'});
  for(const value of [document2([{type:'attachment'}]),docOf([attached()]),document2([attached(),attached()]),document2([attached({scope:''})]),document2([attached({size:-1})]),document2([attached({downloadUrl:'/temporary-secret'})])])rejects(()=>parseDocument(value));
 });
 
@@ -28,7 +28,7 @@ test('이미지 붙여넣기는 업로드 중 위치·환경을 보존하고 파
  const attachments={scope:()=>scope,upload:(file,ctx)=>{context=ctx;return new Promise(resolve=>{complete=()=>resolve({fileId:'saved-file',scope:ctx.scope,kind:ctx.kind,name:file.name,size:file.size});});},resolve:async file=>views(file)};
  const editor=createEditorCore({element:node,attachments});pasteFiles(node,[new File(['image'],'photo.png',{type:'image/png'})]);
  assert.equal(node.querySelectorAll('.sa-pending').length,1);assert.equal(context.kind,'image');scope='second';editor.insertText('나중 입력');complete();await tick();
- const saved=editor.getValue();assert.match(JSON.stringify(saved),/나중 입력/);const ref=saved.content.content.find(n=>n.type==='imageRow').content[0].attrs;assert.equal(ref.scope,'first');assert.equal(ref.fileId,'saved-file');assert.ok(!JSON.stringify(saved).includes('/download'));assert.equal(node.querySelectorAll('.sa-pending').length,0);
+ const saved=editor.getValue();assert.match(JSON.stringify(saved),/나중 입력/);const ref=saved.content.content.find(n=>n.type==='mediaRow').content[0].attrs;assert.equal(ref.scope,'first');assert.equal(ref.fileId,'saved-file');assert.ok(!JSON.stringify(saved).includes('/download'));assert.equal(node.querySelectorAll('.sa-pending').length,0);
  editor.destroy();node.remove();
 });
 
@@ -67,7 +67,7 @@ test('옆에 추가한 이미지는 같은 줄에 저장되고 네 번째 추가
  const original=window.HTMLInputElement.prototype.click;
  let count=3;
  window.HTMLInputElement.prototype.click=function(){Object.defineProperty(this,'files',{value:Array.from({length:count},(_,i)=>new File(['2'],`next-${i}.png`,{type:'image/png'}))});this.dispatchEvent(new window.Event('change'));};
- try{node.querySelector('.se-image-row-tools button').click();assert.equal(errors.length,1);assert.match(errors[0].message,/최대 3개/);count=2;node.querySelector('.se-image-row-tools button').click();await tick();assert.equal(node.querySelector('.se-image-row').dataset.count,'3');const saved=parseDocument(editor.getValue());assert.equal(saved.content.content.filter(n=>n.type==='imageRow').length,1);assert.equal(saved.content.content.find(n=>n.type==='imageRow').content.length,3);}finally{window.HTMLInputElement.prototype.click=original;editor.destroy();node.remove();}
+ try{node.querySelector('.se-image-row-tools button').click();node.querySelector('.se-media-choices button').click();assert.equal(errors.length,1);assert.match(errors[0].message,/최대 3개/);count=2;node.querySelector('.se-image-row-tools button').click();node.querySelector('.se-media-choices button').click();await tick();assert.equal(node.querySelector('.se-image-row').dataset.count,'3');const saved=parseDocument(editor.getValue());assert.equal(saved.content.content.filter(n=>n.type==='mediaRow').length,1);assert.equal(saved.content.content.find(n=>n.type==='mediaRow').content.length,3);}finally{window.HTMLInputElement.prototype.click=original;editor.destroy();node.remove();}
 });
 
 test('파일 선택 입력은 DOM에 연결되고 취소·문서 교체 후 제거하며 늦은 선택은 무시한다',()=>{

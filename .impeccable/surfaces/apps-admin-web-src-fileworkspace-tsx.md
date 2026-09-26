@@ -1,8 +1,8 @@
 ---
 version: 1
 slug: "apps-admin-web-src-fileworkspace-tsx"
-primary_target: "apps/admin-web/src/FileWorkspace.tsx"
-related_targets: ["apps/admin-web/src/files.css","apps/admin-web/src/file-api.ts","apps/admin-web/src/FileDetails.tsx","apps/admin-web/src/RetentionPanel.tsx"]
+primary_target: "apps/admin-web/src/features/files/FileWorkspace.tsx"
+related_targets: ["apps/admin-web/src/features/files/files.css","apps/admin-web/src/features/files/file-api.ts","apps/admin-web/src/features/files/FileDetails.tsx","apps/admin-web/src/features/files/RetentionPanel.tsx"]
 ---
 
 # 관리자 파일 작업 공간

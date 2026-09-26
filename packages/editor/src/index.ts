@@ -1,14 +1,14 @@
 import {Editor} from '@tiptap/core';
 import {EditorState,TextSelection} from '@tiptap/pm/state';
 import {DOMSerializer} from '@tiptap/pm/model';
-import {extensions,schema,safeLink} from './schema.js';
-import {parseDocument,EditorError,type EditorDocument} from './document.js';
-import {fromMarkdown} from './markdown.js';
-import {attachmentRuntime,type AttachmentAdapter,type AttachmentKind,type AttachmentRef} from './attachments.js';
-import {mountAttachmentView} from './attachment-view.js';
-export type {AttachmentAdapter,AttachmentKind,AttachmentRef,AttachmentViews} from './attachments.js';
-export {parseDocument,emptyDocument,EditorError,type EditorDocument,type EditorErrorCode} from './document.js';
-export {fromMarkdown} from './markdown.js';
+import {extensions,schema,safeLink} from './document/schema.js';
+import {parseDocument,EditorError,type EditorDocument} from './document/document.js';
+import {fromMarkdown} from './document/markdown.js';
+import {attachmentRuntime,type AttachmentAdapter,type AttachmentKind,type AttachmentRef} from './media/attachments.js';
+import {mountAttachmentView} from './media/attachment-view.js';
+export type {AttachmentAdapter,AttachmentKind,AttachmentRef,AttachmentViews} from './media/attachments.js';
+export {parseDocument,emptyDocument,EditorError,type EditorDocument,type EditorErrorCode} from './document/document.js';
+export {fromMarkdown} from './document/markdown.js';
 
 export type Change={document:EditorDocument;origin:'edit'|'replace'};
 export type EditorCommand='paragraph'|'h1'|'h2'|'h3'|'bold'|'italic'|'underline'|'strike'|'code'|'bulletList'|'orderedList'|'taskList'|'blockquote'|'codeBlock'|'horizontalRule'|'table'|'addRow'|'deleteRow'|'addColumn'|'deleteColumn'|'deleteTable'|'indent'|'outdent'|'clear'|'link'|'unlink'|'undo'|'redo';
@@ -22,7 +22,7 @@ export function createEditorCore(options:CoreOptions){
   let destroyed=false,pasteMode:'markdown'|'text'='markdown';
   const ensure=()=>{if(destroyed)throw new EditorError('EDITOR_DESTROYED','이미 해제한 에디터입니다.');};
   const editable=()=>{ensure();if(!engine.isEditable)throw new EditorError('EDITOR_READ_ONLY','읽기 전용 문서는 편집할 수 없습니다.');};
-  const value=():EditorDocument=>({format:'shnea-editor',version:2,content:engine.getJSON()});
+  const value=():EditorDocument=>({format:'shnea-editor',version:3,content:engine.getJSON()});
   const attachments=attachmentRuntime(options.attachments,message=>options.onError?.(new EditorError('ATTACHMENT_ERROR',message)));
   const engine=new Editor({
     element:options.element,extensions:extensions(attachments.extension,attachments.rowExtension),content:initial.content,editable:options.editable??true,
@@ -119,6 +119,7 @@ export function createEditorCore(options:CoreOptions){
     getSlash(){ensure();return slash();},
     canOpenSlash(){ensure();syncSelection();const {empty,$from}=engine.state.selection;return engine.isEditable&&!engine.view.composing&&!engine.isActive('codeBlock')&&(!empty||$from.parentOffset===0||/\s$/u.test($from.parent.textBetween(0,$from.parentOffset)));},
     getMenuAnchor(){ensure();return engine.view.coordsAtPos(engine.state.selection.from);},
+    insertAttachment(file:AttachmentRef){editable();const attrs={...file,id:crypto.randomUUID()};parseDocument({format:'shnea-editor',version:3,content:{type:'doc',content:[{type:'attachment',attrs}]}});if(!file.fileId)throw new EditorError('ATTACHMENT_ERROR','저장된 파일 식별자가 필요합니다.');attachments.insert(engine,[{type:'attachment',attrs}]);},
     pickAttachment(kind:AttachmentKind,{removeSlash=false,onClose}:{removeSlash?:boolean;onClose?:()=>void}={}){editable();if(!options.attachments?.scope()){onClose?.();options.onError?.(new EditorError('ATTACHMENT_ERROR','첨부를 올릴 프로젝트·환경을 먼저 선택해 주세요.'));return;}if(removeSlash){const range=slash();if(range)engine.commands.deleteRange(range);}attachments.pick(engine,kind,onClose);},
     setPasteMode(mode:'markdown'|'text'){ensure();pasteMode=mode;},
     focus(){ensure();engine.view.focus();},
