@@ -47,6 +47,13 @@ class EmailErrors extends ResponseEntityExceptionHandler {
                     : new String[]{"INVALID_EVENT","이벤트 형식과 입력 조건을 확인해 주세요."};
             };
         }
+        if (((ServletWebRequest)request).getRequest().getRequestURI().startsWith("/internal/v1/operational-alerts")) {
+            message=switch(status.value()) {
+                case 404 -> new String[]{"RESOURCE_NOT_FOUND","선택한 환경의 알림을 찾을 수 없습니다."};
+                default -> status.is5xxServerError() ? new String[]{"INTERNAL_ERROR","운영 알림 처리 중 오류가 발생했습니다."}
+                    : new String[]{"INVALID_REQUEST","알림 요청 형식과 입력 조건을 확인해 주세요."};
+            };
+        }
         return response(message[0], status.value(), message[1], request, headers, error);
     }
     private ResponseEntity<Object> response(String code, int status, String detail, WebRequest web, HttpHeaders original, Exception error) {

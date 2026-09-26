@@ -13,6 +13,7 @@ import { SocialProviderPanel } from "./SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "./AuthenticationPolicyPanel";
 import { MemberPanel } from "./MemberPanel";
 import { JobPanel } from "./JobPanel";
+import { OperationalAlertsPanel } from "./OperationalAlertsPanel";
 import { Dialog } from "./Dialog";
 
 type Project = {
@@ -742,6 +743,8 @@ function Workspace() {
                         설정 변경
                       </button>
                     </section>
+                    <OperationalAlertsPanel key={`alerts:${env.id}`} environmentId={env.id}
+                      environmentLabel={`${project.name} / ${env.code} (${env.kind})`} disabled={busy} onBusyChange={setBusy} />
                     <JobPanel key={`jobs:${env.id}`} environmentId={env.id}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`}
                       ready={env.state === "READY"} disabled={busy} onBusyChange={setBusy}

@@ -21,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class JobEventsDatabaseTest {
     private JdbcTemplate admin,db;
     private JobEvents events;
+    private OperationalAlerts alerts;
     private String schema;
     private final JsonMapper json=new JsonMapper();
     private static final String SECRET="event-test-"+"e".repeat(40),MAIL="mail-test-"+"m".repeat(40);
@@ -32,6 +33,7 @@ class JobEventsDatabaseTest {
         var ds=new DriverManagerDataSource(url+"?currentSchema="+schema,"job_checks","isolated-test-only");
         Flyway.configure().dataSource(ds).defaultSchema(schema).locations("classpath:db/migration").load().migrate();
         db=new JdbcTemplate(ds); events=new JobEvents(db,new TransactionTemplate(new DataSourceTransactionManager(ds)),json);
+        alerts=new OperationalAlerts(db,new TransactionTemplate(new DataSourceTransactionManager(ds)));
     }
     @AfterEach void cleanup() { if(admin!=null && schema!=null)admin.execute("DROP SCHEMA "+schema+" CASCADE"); }
     private JobEvents.Event event(UUID project,UUID env,Instant occurred) {
@@ -39,6 +41,51 @@ class JobEventsDatabaseTest {
             "0123456789abcdef0123456789abcdef",null,occurred,new JobEvents.Payload("FAILED","ENVIRONMENT_PROVISION_FAILED"));
     }
     private int count(String table) { return db.queryForObject("SELECT count(*) FROM "+table,Integer.class); }
+
+    @Test void alertScopesFiltersAndConcurrentAcknowledgementPreserveFirstAudit() throws Exception {
+        UUID project=UUID.randomUUID(),env=UUID.randomUUID();
+        var first=event(project,env,Instant.now());var second=event(project,env,Instant.now());
+        events.receive(first);events.receive(second);events.receive(event(UUID.randomUUID(),UUID.randomUUID(),Instant.now()));
+        assertThat(alerts.list(project,env,false,100,0)).hasSize(2);
+        assertThat(alerts.list(project,env,null,1,0)).hasSize(1);
+        assertThat(alerts.list(project,env,null,1,1)).hasSize(1);
+        assertThat(alerts.list(project,UUID.randomUUID(),null,100,0)).isEmpty();
+        assertThat(alerts.list(UUID.randomUUID(),env,null,100,0)).isEmpty();
+        assertThatThrownBy(()->alerts.list(project,env,null,101,0)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(()->alerts.acknowledge(first.id(),new OperationalAlerts.Acknowledge(project,UUID.randomUUID(),"wrong","a".repeat(32))))
+            .isInstanceOf(ResponseStatusException.class);
+        try(var pool=Executors.newFixedThreadPool(4)) {
+            var start=new CountDownLatch(1);var futures=new java.util.ArrayList<Future<OperationalAlerts.Alert>>();
+            for(int i=0;i<4;i++){String actor="admin-"+i; futures.add(pool.submit(()->{start.await();return alerts.acknowledge(first.id(),new OperationalAlerts.Acknowledge(project,env,actor,"a".repeat(32)));}));}
+            start.countDown(); var winner=futures.getFirst().get(10,TimeUnit.SECONDS);
+            for(var future:futures)assertThat(future.get(10,TimeUnit.SECONDS)).isEqualTo(winner);
+            assertThat(alerts.acknowledge(first.id(),new OperationalAlerts.Acknowledge(project,env,"later-admin","b".repeat(32)))).isEqualTo(winner);
+        }
+        assertThat(count("alert_acknowledgements")).isEqualTo(1);
+        assertThat(alerts.list(project,env,true,100,0)).extracting(OperationalAlerts.Alert::id).containsExactly(first.id());
+        assertThat(alerts.list(project,env,false,100,0)).extracting(OperationalAlerts.Alert::id).containsExactly(second.id());
+        events.receive(first);assertThat(alerts.list(project,env,false,100,0)).hasSize(1);
+    }
+    @Test void alertAuthenticationValidationAndAuditFailureRemainUnacknowledged() throws Exception {
+        var event=event(UUID.randomUUID(),UUID.randomUUID(),Instant.now());events.receive(event);
+        var mvc=MockMvcBuilders.standaloneSetup(alerts).setControllerAdvice(new EmailErrors())
+            .addFilters(new kr.shnea.platform.http.RequestTrace(),new InternalSecurity(MAIL,SECRET,json)).build();
+        String path="/internal/v1/operational-alerts/"+event.id()+"/acknowledge";
+        var ack=new OperationalAlerts.Acknowledge(event.projectId(),event.environmentId(),"admin","c".repeat(32));
+        String body=json.writeValueAsString(ack);
+        mvc.perform(post(path).contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(post(path).header("X-Platform-Mail-Key",MAIL).contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(post(path).header("X-Platform-Event-Key",SECRET).contentType("application/json").content(body.replace("\"admin\"","\"\"")))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        mvc.perform(get("/internal/v1/operational-alerts").header("X-Platform-Event-Key",SECRET)).andExpect(status().isBadRequest());
+        db.execute("ALTER TABLE alert_acknowledgements ADD CONSTRAINT injected_failure CHECK (actor<>'admin')");
+        assertThatThrownBy(()->alerts.acknowledge(event.id(),ack)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(alerts.list(event.projectId(),event.environmentId(),false,20,0)).hasSize(1);
+        assertThat(count("alert_acknowledgements")).isZero();
+        db.execute("ALTER TABLE alert_acknowledgements DROP CONSTRAINT injected_failure");
+        mvc.perform(post(path).header("X-Platform-Event-Key",SECRET).contentType("application/json").content(body))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.acknowledgedBy").value("admin"));
+    }
 
     @Test void simultaneousDuplicatesAndResponseLossReplayCreateOnlyOneAlert() throws Exception {
         var event=event(UUID.randomUUID(),UUID.randomUUID(),Instant.now());

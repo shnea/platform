@@ -432,7 +432,7 @@ class ProjectService {
         }
     }
 
-    private Environment findEnvironment(UUID id) {
+    Environment findEnvironment(UUID id) {
         return db.query("SELECT * FROM environments WHERE id=?", (rs, row) -> environment(rs), id)
             .stream().findFirst().orElseThrow(ProjectService::notFound);
     }

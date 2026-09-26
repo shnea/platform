@@ -29,7 +29,8 @@ class InternalSecurity extends OncePerRequestFilter {
             throws IOException, ServletException {
         String path = request.getRequestURI();
         if (path.startsWith("/actuator/health")) { chain.doFilter(request, response); return; }
-        if (path.equals("/internal/v1/events/jobs")) {
+        if (path.equals("/internal/v1/events/jobs") || path.equals("/internal/v1/operational-alerts") ||
+                path.matches("/internal/v1/operational-alerts/[a-fA-F0-9-]{36}/acknowledge")) {
             String provided=request.getHeader("X-Platform-Event-Key");
             if (eventsSecret.length<32 || provided==null || !MessageDigest.isEqual(eventsSecret,provided.getBytes(StandardCharsets.UTF_8))) {
                 kr.shnea.platform.http.HttpProblems.write("EVENT_ACCESS_DENIED",403,"이벤트 내부 API에 접근할 권한이 없습니다.",request,response,json);

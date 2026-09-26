@@ -33,6 +33,8 @@
 .job-event { padding-block: 16px; border-bottom: 1px solid var(--line); }
 .job-event-history { margin-top: 16px; }
 .job-event-history summary { cursor: pointer; padding-block: 12px; min-height: 44px; }
+.alert-filter { max-width: 280px; }
+.operational-alerts .job-attempts > li { padding-block: 20px; }
 @media (max-width: 900px) {
   .job-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

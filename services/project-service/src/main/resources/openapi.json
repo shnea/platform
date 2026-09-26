@@ -1648,6 +1648,122 @@
           }
         ]
       }
+    },
+    "/api/v1/admin/environments/{id}/operational-alerts": {
+      "get": {
+        "operationId": "get_environment_operational_alerts",
+        "summary": "환경 운영 알림 조회",
+        "description": "선택한 환경의 Job 최종 실패 알림을 조회합니다. 확인 처리는 문제 해결과 다릅니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationalAlert"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "acknowledged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{id}/operational-alerts/{eventId}/acknowledge": {
+      "post": {
+        "operationId": "acknowledge_environment_operational_alert",
+        "summary": "운영 알림 확인 처리",
+        "description": "최초 확인 관리자·시각·요청 ID를 보존합니다. 같은 환경의 반복 확인은 기존 결과를 반환하며 Job을 변경하지 않습니다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalAlert"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3119,6 +3235,80 @@
             "items": {
               "$ref": "#/components/schemas/EventAttempt"
             }
+          }
+        }
+      },
+      "OperationalAlert": {
+        "type": "object",
+        "required": [
+          "id",
+          "projectId",
+          "environmentId",
+          "jobId",
+          "code",
+          "requestId",
+          "errorCode",
+          "acknowledgedBy",
+          "acknowledgementRequestId",
+          "occurredAt",
+          "createdAt",
+          "acknowledgedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledgedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledgementRequestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledgedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }
