@@ -33,11 +33,14 @@ NAS SSH에서 실행한다.
 
 ```sh
 cd /volume1/docker/prod/platform
+sudo chmod 644 infra/loki/loki.yml
 sudo docker-compose --env-file .env.prod pull
 sudo docker-compose --env-file .env.prod up -d
 ```
 
 데이터 폴더와 최초 관리자 설정은 자동으로 준비된다. `storage-init`·`identity-setup`의 `Exited (0)`은 정상이다.
+
+ZIP의 일반 설정 파일은 `644`, 비밀값이 있는 `.env.prod`는 `600` 권한이다. 복사 도구가 권한을 바꿀 수 있어 위 명령에서 Loki 설정 파일의 읽기 권한을 설정한다. Loki가 `open /etc/loki/platform.yml: permission denied`로 재시작 중이면 `sudo chmod 644 infra/loki/loki.yml` 후 `sudo docker-compose --env-file .env.prod restart loki`를 실행한다. 이미지 재빌드는 필요 없다. 같은 오류가 계속되면 NAS의 해당 파일 ACL을 확인한다.
 
 NAS 커널의 CPU CFS 제한 미지원에 맞춰 `.env.prod`의 `*_CPUS`는 모두 `0`(제한 없음)으로 준비한다. 메모리 제한과 개발용 CPU 설정은 유지한다. 이전 파일로 `NanoCPUs can not be set` 오류가 나면 수정된 `.env.prod`를 복사하고 같은 `up -d` 명령을 다시 실행한다.
 

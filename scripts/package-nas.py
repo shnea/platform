@@ -16,7 +16,9 @@ out=root/'output/releases'/('platform-nas-deploy.zip' if environment else 'platf
 with ZipFile(out,'w',ZIP_DEFLATED) as archive:
     for name in files:
         assert name!='.env' and '..' not in Path(name).parts
-        archive.writestr(name,(root/name).read_text(encoding='utf-8').replace('\r\n','\n'))
+        # Container users must be able to read bind-mounted, non-secret config files.
+        entry=ZipInfo(name);entry.create_system=3;entry.external_attr=0o100644<<16
+        archive.writestr(entry,(root/name).read_text(encoding='utf-8').replace('\r\n','\n'),compress_type=ZIP_DEFLATED)
     if environment:
         entry=ZipInfo('.env.prod');entry.create_system=3;entry.external_attr=0o100600<<16
         archive.writestr(entry,environment.replace('\r\n','\n'))
