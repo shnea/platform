@@ -2,6 +2,11 @@
 
 ## 현재 단계
 
+### NAS CPU CFS 제한 미지원 대응 (2026-09-27)
+
+- 사용자의 최신 `up -d`는 네트워크/구성 해석을 통과하고 컨테이너 생성에서 `NanoCPUs can not be set`으로 중단됐다. NAS 커널의 CFS CPU quota 미지원에 맞춰 실제 `.env.prod`의 `*_CPUS` 8개만 0으로 수정했다. 비밀값·메모리·개발 CPU 설정은 유지한다.
+- 두 운영 환경 생성 경로(`init-env.py --nas`, `prepare-environments.py`)에도 같은 규칙을 반영했다. `check-nas-config.py`로 모든 NAS 서비스의 CPU 제한 없음·메모리 제한 유지를 검증하고 배포 ZIP을 갱신했다. NAS에서는 운영 파일 CPU 설정 수정 후 동일한 `up -d`를 재실행하면 되며 이미지 재빌드/다운로드는 필요 없다. 실제 NAS 기동 성공은 사용자 확인 전이다.
+
 ### NAS Docker 기본 주소 대역 소진 대응 (2026-09-27)
 
 - 사용자는 이미지 다운로드 후 `up -d`에서 `could not find an available, non-overlapping IPv4 address pool`을 보고했다. 제공한 NAS 라우팅 표에서 172.17~31의 /16, 192.168.16~240의 /20 및 LAN 192.168.0.0/24가 사용 중이었다.

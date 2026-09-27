@@ -31,11 +31,13 @@ assert re.fullmatch(r'[a-zA-Z0-9.-]+(?::[0-9]+)?', registry)
 assert re.fullmatch(r'[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}', tag)
 write('.env.dev', changed(source, {'COMPOSE_FILE':'compose.yml|compose.dev.yml', 'COMPOSE_PATH_SEPARATOR':'|'}))
 write('.env.build', changed(build, {'COMPOSE_FILE':'compose.build.yml'}))
-write('.env.prod', changed(source, {
+production = changed(source, {
     'COMPOSE_FILE':'compose.yml|compose.nas.yml', 'COMPOSE_PATH_SEPARATOR':'|',
     'COMPOSE_PROJECT_NAME':'shnea-platform-prod', 'IMAGE_REGISTRY':registry, 'IMAGE_TAG':tag,
     'PLATFORM_MODE':'prod', 'BIND_ADDRESS':'192.168.0.93', 'HTTP_PORT':'30140',
     'PLATFORM_WEB_URL':'https://platform.shnea.kr', 'KEYCLOAK_PUBLIC_URL':'https://platform.shnea.kr/auth',
     'PLATFORM_DATA_ROOT':'/volume2/homes/platform', 'NGINX_TRUSTED_PROXY':'127.0.0.1',
-}))
+})
+# NAS kernel lacks CFS quota support; retain development and memory limits.
+write('.env.prod', changed(production, {key+'_CPUS':'0' for key in ['DB','KEYCLOAK','PROJECT','LOKI','FILE','NOTIFICATION','NGINX','ADMIN_WEB']}))
 print('Prepared .env.dev/.env.build/.env.prod from .env; private values were not displayed')

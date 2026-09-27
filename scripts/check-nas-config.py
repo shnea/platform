@@ -32,6 +32,8 @@ for service,path,target in [('db','postgres','/var/lib/postgresql/data'),('file-
 for name,service in config['services'].items():
     assert 'build' not in service,name
     if name!='nginx':assert not service.get('ports'),name
+    assert float(service.get('cpus',0))==0,name
+    assert service.get('mem_limit') not in (None,0,'0'),name
 assert config['services']['project-service']['environment']['PLATFORM_MODE']=='prod'
 assert len(config['services'])==10 and 'storage-init' in config['services']
 assert not config['services']['identity-setup'].get('profiles')

@@ -32,6 +32,8 @@ if args.nas:
             lines[index]=key+'='+replacements[key]
     template = '\n'.join(lines)+'\n'
     template += ''.join(key+'='+value+'\n' for key,value in replacements.items() if key not in existing_keys)
+    # Synology kernel does not support Docker NanoCPUs/CFS quotas.
+    template = re.sub(r'^([A-Z_]+_CPUS)=.*$', r'\g<1>=0', template, flags=re.M)
 for key in ("POSTGRES_PASSWORD", "PROJECT_DB_PASSWORD", "FILE_DB_PASSWORD",
             "NOTIFICATION_DB_PASSWORD", "IDENTITY_DB_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD",
             "PLATFORM_ADMIN_PASSWORD", "KEYCLOAK_PROVISIONER_SECRET", "PLATFORM_MAIL_SECRET", "PLATFORM_EVENTS_SECRET", "PLATFORM_MONITORING_SECRET", "PLATFORM_FILES_SECRET"):
