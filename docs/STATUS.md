@@ -7,7 +7,7 @@
 - 사용자가 운영 파일 업로드 후 유형/날짜 폴더와 `original.png`·`thumbnail.jpg` 생성을 확인했다. 이어 로그 메뉴의 `LOG_BACKEND_UNAVAILABLE`(요청 ID `17b27bcb13b4c1d0b05a6ba8bb480cc4`)을 보고했다. NAS 출력에서 Loki `Restarting (1)`과 `open /etc/loki/platform.yml: permission denied`를 확인했다.
 - 기존 배포 ZIP의 Loki 설정 파일 권한은 `600`(create_system=0)이었다. ZIP 생성기가 일반 설정에 명시적 권한을 주지 않는 문제를 수정해 일반 파일은 Unix 일반 파일 `644`, 실제 `.env.prod`는 기존 `600`으로 보존한다. NAS 배포 명령에도 해당 비밀값 없는 설정 파일 하나에 대한 `chmod 644`를 포함했다. Docker 컨테이너를 root로 변경하거나 데이터 전체 권한을 열지 않는다.
 - **검증:** `python scripts/package-nas.py` 및 `python scripts/package-nas.py --env-file .env.prod`로 두 ZIP을 갱신했다. ZipFile로 각 파일 목록·Unix 일반 파일 속성·설정 644/비밀값 600·UTF-8을 확인했다. 실제 비밀값은 출력/커밋하지 않았다. 이미지 변경이나 재빌드는 필요 없다.
-- **운영 확인/다음:** 사용자가 NAS에서 설정 파일 `chmod 644`와 Loki 재시작을 실행했다. 회신 로그의 `Loki started`, WAL 복구 오류 없음, scheduler 요청 수락을 통해 기동 복구를 확인했다. 관리자 로그 화면의 실제 조회 성공과 신규 수집은 아직 미확인으로, 화면 새로고침 후 재조회가 다음 단계다. 상주 프로세스 추가 없음.
+- **운영 확인:** 사용자가 NAS에서 설정 파일 `chmod 644`와 Loki 재시작을 실행했다. 회신 로그의 `Loki started`, WAL 복구 오류 없음, scheduler 요청 수락을 통해 기동 복구를 확인했고, 이후 관리자 로그 화면에서도 오류가 사라졌다고 확인했다. 이번 설정 파일 권한 장애는 해결 완료다. 외부 프로젝트의 신규 로그 수집 전체 흐름과 백업·복원 검수는 별도로 남는다. 상주 프로세스 추가 없음.
 
 ### 파일 유형·날짜별 실제 저장 폴더 정리 (2026-09-27)
 
