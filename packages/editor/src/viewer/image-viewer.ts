@@ -1,5 +1,5 @@
 import {createIcon,decorateAction,type IconName} from '../icons/index.js';
-export type ImageViewOptions={src:string;previewUrl?:string|null;originalUrl?:string;downloadUrl?:string;name:string;onError?:()=>void};
+export type ImageViewOptions={src:string;desktopSrc?:string;previewUrl?:string|null;originalUrl?:string;downloadUrl?:string;name:string;onError?:()=>void};
 
 /** Shared, framework-neutral image viewer. Zoom state never enters the document. */
 export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
@@ -9,7 +9,9 @@ export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
  const root=doc.createElement('div');root.className='shnea-image-viewer';
  const trigger=doc.createElement('button');trigger.type='button';trigger.className='siv-thumbnail';trigger.setAttribute('aria-label',`${options.name} 확대 보기`);
  if(options.previewUrl===null){trigger.disabled=true;trigger.setAttribute('aria-label',`${options.name} 미리보기 준비 중`);}
- const thumbnail=doc.createElement('img');thumbnail.src=source;thumbnail.alt=options.name;thumbnail.loading='lazy';thumbnail.referrerPolicy='no-referrer';trigger.append(thumbnail);
+ const picture=doc.createElement('picture');
+ if(options.desktopSrc){const desktop=doc.createElement('source');desktop.media='(min-width: 601px)';desktop.srcset=url(options.desktopSrc);picture.append(desktop);}
+ const thumbnail=doc.createElement('img');thumbnail.src=source;thumbnail.alt=options.name;thumbnail.loading='lazy';thumbnail.referrerPolicy='no-referrer';picture.append(thumbnail);trigger.append(picture);
  const hint=doc.createElement('span');hint.append(createIcon(doc,'zoom-in'));hint.setAttribute('aria-hidden','true');hint.className='siv-open';trigger.append(hint);root.append(trigger);element.append(root);
  const dialog=doc.createElement('dialog');dialog.className='shnea-image-viewer siv-dialog';dialog.setAttribute('aria-label',`${options.name} 이미지 확대 보기`);
  const tools=doc.createElement('div');tools.className='siv-tools';

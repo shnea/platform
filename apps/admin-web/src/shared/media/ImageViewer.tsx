@@ -1,8 +1,8 @@
 import {useEffect,useRef} from 'react';
 import {mountImageViewer,type ImageViewOptions} from '@shnea/editor/image-viewer';
 import '@shnea/editor/style.css';
-export function ImageViewer({src,previewUrl,originalUrl,downloadUrl,name,onError}:ImageViewOptions){
+export function ImageViewer({src,desktopSrc,previewUrl,originalUrl,downloadUrl,name,onError}:ImageViewOptions){
  const root=useRef<HTMLDivElement>(null),error=useRef(onError);error.current=onError;
- useEffect(()=>mountImageViewer(root.current!,{src,previewUrl,originalUrl,downloadUrl,name,onError:()=>error.current?.()}),[src,previewUrl,originalUrl,downloadUrl,name]);
+ useEffect(()=>mountImageViewer(root.current!,{src,desktopSrc,previewUrl,originalUrl,downloadUrl,name,onError:()=>error.current?.()}),[src,desktopSrc,previewUrl,originalUrl,downloadUrl,name]);
  return <div ref={root}/>;
 }

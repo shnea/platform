@@ -43,7 +43,7 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
   if(audio&&file.kind==='audio'&&data.kind==='AUDIO'&&data.previewUrl){const source=safeURL(data.previewUrl,doc);if(audio.src!==source){const time=audio.currentTime,playing=!audio.paused;audio.addEventListener('loadedmetadata',()=>{audio.currentTime=Math.min(time,Number.isFinite(audio.duration)?audio.duration:time);if(playing)void audio.play().catch(()=>{});},{once:true});audio.src=source;}key=next;return;}
   if(next===key)return;key=next;clear();
   if(readyImage){
-   cleanup=mountImageViewer(content,{src:data.thumbnailUrl!,previewUrl:data.previewUrl,originalUrl:data.originalUrl,downloadUrl:data.downloadUrl,name:file.name,onError:()=>{actions.hidden=false;retry.hidden=false;status.textContent='이미지를 표시하지 못했습니다. 보기 정보를 다시 조회해 주세요.';}});
+   cleanup=mountImageViewer(content,{src:data.thumbnailUrl!,desktopSrc:data.previewUrl??undefined,previewUrl:data.previewUrl,originalUrl:data.originalUrl,downloadUrl:data.downloadUrl,name:file.name,onError:()=>{actions.hidden=false;retry.hidden=false;status.textContent='이미지를 표시하지 못했습니다. 보기 정보를 다시 조회해 주세요.';}});
   }else if(file.kind==='video'){
    if(expanded&&data.streamUrl){if(adapter?.video)video=adapter.video(content,data);else {const iframe=doc.createElement('iframe');iframe.src=safeURL(data.viewerUrl,doc);iframe.title=`${file.name} 영상 재생`;iframe.allowFullscreen=true;iframe.referrerPolicy='no-referrer';content.append(iframe);}}
    else {

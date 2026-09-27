@@ -1,17 +1,17 @@
 # SHNEA 에디터 연동 지침
 
-`@shnea/editor@0.1.0-alpha.7` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
+`@shnea/editor@0.1.0-alpha.8` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
 
 ## 설치와 전달
 
-패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.7.tgz
+패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.8.tgz
 
 SHA-256: https://platform.shnea.kr/integrations/checksums.json
 
 패키지를 내려받아 체크섬을 확인한 뒤 호스트 프로젝트에서 설치한다. 플랫폼 저장소는 필요 없다.
 
 ```sh
-npm install ./shnea-editor-0.1.0-alpha.7.tgz
+npm install ./shnea-editor-0.1.0-alpha.8.tgz
 ```
 
 공개 npm 발행은 하지 않았다. `react` 또는 `vue`는 호스트가 설치한다. React 18~19, Vue 3.5를 대상으로 하며 이번 검증 버전은 React 19.3.0·Vue 3.5.43이다. 프레임워크별 실제 하위 버전과 모바일 기기는 호스트에서 추가 검수한다. 번들러가 있는 호스트는 `@shnea/editor/style.css`를 한 번 불러온다. SSR에서는 빈 컨테이너만 출력하고 클라이언트 마운트 후 편집기를 만든다.
@@ -134,20 +134,20 @@ const attachments = {
 
 | 응답 필드 | 용도 | 플랫폼 경로 |
 | --- | --- | --- |
-| `thumbnailUrl` | 이미지 본문 | `/api/v1/files/{id}/content/thumbnail` |
-| `previewUrl` | 이미지 클릭 후 확대창 | `/api/v1/files/{id}/content/preview` |
+| `thumbnailUrl` | 모바일 본문(600px 이하) | `/api/v1/files/{id}/content/thumbnail` |
+| `previewUrl` | PC 본문(601px 이상)·모든 화면의 클릭 확대창 | `/api/v1/files/{id}/content/preview` |
 | `originalUrl` | 확대창 안의 원본 보기 | `/api/v1/files/{id}/content/original` |
 | `viewerUrl` | 독립 파일 보기 화면 | `/api/v1/files/{id}/view` |
 | `downloadUrl` | 다운로드 | `/api/v1/files/{id}/content/download` |
 
 - 표는 경로 구분이다. 파일 ID로 URL을 임의 생성하지 말고 플랫폼 보기 API가 반환한 URL·상태·만료 정보를 사용한다. URL의 토큰 쿼리를 보존하고, 제공되지 않은 URL의 `null`도 유지한다. 임시 URL을 본문 JSON에 저장하지 않는다.
 - 플랫폼 상대 URL을 직접 전달하려면 `https://platform.shnea.kr`를 기준으로 절대 URL로 변환한다. 블로그 주소를 기준으로 해석하지 않는다. 보호 파일의 링크는 호스트에서 권한을 확인한 뒤 발급·전달하고 서버 API 키는 브라우저에 보내지 않는다.
-- 같은 출처 중계가 필요하면 호스트 주소를 써도 된다. 다만 **본문 → thumbnail, 확대창 → preview, 원본 버튼 → original** 구분을 서버까지 전달한다. 예를 들어 호스트가 `/api/files/{id}/content?variant=thumbnail`을 구현했다면 해당 요청을 플랫폼의 `/content/thumbnail`로 중계한다. 주소에 variant만 붙이고 서버가 계속 원본을 내려주면 수정된 것이 아니다. 중계 서버는 허용한 variant와 사용자·파일 접근 권한을 검사한다.
+- 같은 출처 중계가 필요하면 호스트 주소를 써도 된다. 다만 **PC 본문 → preview, 모바일 본문 → thumbnail, 확대창 → preview, 원본 버튼 → original** 구분을 서버까지 전달한다. 예를 들어 호스트가 `/api/files/{id}/content?variant=thumbnail`을 구현했다면 해당 요청을 플랫폼의 `/content/thumbnail`로 중계한다. 주소에 variant만 붙이고 서버가 계속 원본을 내려주면 수정된 것이 아니다. 중계 서버는 허용한 variant와 사용자·파일 접근 권한을 검사한다.
 - `thumbnailUrl`, `previewUrl`, `originalUrl`, `viewerUrl`을 전부 `/api/files/{id}/content` 하나로 채우지 않는다. 에디터는 `thumbnailUrl`을 사용해도 실제 주소가 원본이면 원본을 받는다.
 - 기존 이미지의 별도 미리보기가 없을 때 원본으로 대체하는 것은 **플랫폼의 preview 응답 내부 처리**다. 호스트가 `previewUrl`을 `originalUrl`로 덮어쓰거나 썸네일까지 원본으로 대체할 이유가 아니다.
 - 이미지 블록은 자체 확대창을 사용하므로 `viewerUrl`로 이미지를 대신 로드하지 않는다. 기본 뷰어는 독립 화면용이며 영상의 기본 iframe 사용에는 위 출처 제한이 적용된다.
 
-**완료 기준:** 실제 호스트의 편집/읽기 화면에서 캐시를 끄고 Network 요청을 확인한다. 처음에는 thumbnail, 이미지를 클릭하면 preview, 원본 버튼을 누르면 original이어야 한다. 호스트 중계라면 실제 플랫폼 요청 대상도 확인하고 응답의 형식·크기가 해당 파일과 일치하는지 검사한다. 기존 파일의 preview는 생성 전 원본일 수 있다. 합성 URL·패키지 테스트만으로 호스트 연결까지 완료됐다고 보고하지 않는다.
+**완료 기준:** 실제 호스트의 편집/읽기 화면에서 캐시를 끄고 Network 요청을 확인한다. 처음에는 PC에서 preview만, 모바일에서 thumbnail만 요청해야 한다. 클릭하면 두 화면 모두 preview를 표시하고 원본 버튼을 누르면 original을 요청한다. 창 너비를 600px↔601px로 바꿔 본문 선택이 전환되는지도 확인한다. 호스트 중계라면 실제 플랫폼 요청 대상도 확인하고 응답의 형식·크기가 해당 파일과 일치하는지 검사한다. 기존 파일의 preview는 생성 전 원본일 수 있다. 합성 URL·패키지 테스트만으로 호스트 연결까지 완료됐다고 보고하지 않는다.
 
 ## 검수와 공식 참고
 
@@ -155,4 +155,4 @@ const attachments = {
 
 연결 수명 주기와 양방향 값 전달은 [React Effect](https://react.dev/reference/react/useEffect), [Vue 수명 주기](https://vuejs.org/api/composition-api-lifecycle.html), [Vue v-model](https://vuejs.org/guide/components/v-model.html)에 따른다. 정적 번들은 [esbuild 번들링](https://esbuild.github.io/api/#bundle)을 사용한다.
 
-이미지 조회 어댑터는 `thumbnailUrl`(본문), `previewUrl`(클릭 미리보기), `originalUrl`(미리보기 안의 원본 보기)을 각각 전달한다. 썸네일이 없으면 본문에서 원본을 자동 로드하지 않는다. 미리보기가 없는 기존 이미지의 원본 대체와 후속 생성은 파일 서비스가 처리한다. `@shnea/editor/image-viewer`의 `previewUrl` 생략 시 `src`를 확대하며, 명시적 null은 준비 중으로 클릭을 막는다.
+이미지 조회 어댑터는 `thumbnailUrl`(모바일 본문), `previewUrl`(PC 본문·클릭 미리보기), `originalUrl`(미리보기 안의 원본 보기)을 각각 전달한다. 미리보기가 준비되지 않았으면 PC도 썸네일을 표시한다. URL을 같은 주소로 바꾸지 않으면 화면별 선택은 에디터가 처리하므로 호스트에서 기기를 판별하지 않는다. 미리보기가 없는 기존 이미지의 원본 대체와 후속 생성은 파일 서비스가 처리한다. `@shnea/editor/image-viewer`의 `previewUrl` 생략 시 `src`를 확대하며, 명시적 null은 준비 중으로 클릭을 막는다. 독립 공통 뷰어의 `desktopSrc`는 선택 사항이며, 에디터 이미지 블록이 PC용 미리보기 주소를 전달한다.
