@@ -68,12 +68,14 @@ class FilesService {
             if (db.queryForObject("SELECT count(*) FROM file_retention_policies WHERE environment_id=? AND code=? AND enabled", Long.class, context.environmentId(), retention) != 1)
                 throw new FileFailure("FILE_RETENTION_UNKNOWN", 400, "등록된 파일 보존 코드를 선택해 주세요.");
             UUID id = UUID.randomUUID();
+            Instant created = Instant.now();
             db.update("""
                 INSERT INTO files(id,project_id,environment_id,owner_credential_id,request_id,original_name,size_bytes,
-                    expected_sha256,visibility,upload_visibility,retention_code,upload_retention_code,owner_kind,upload_expires_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours')
+                    expected_sha256,visibility,upload_visibility,retention_code,upload_retention_code,owner_kind,upload_expires_at,created_at,storage_path)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,now()+interval '24 hours',?,?)
                 """, id, context.projectId(), context.environmentId(), context.credentialId(), input.requestId(),
-                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, retention, context.ownerKind());
+                input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, retention, context.ownerKind(),
+                java.sql.Timestamp.from(created), FileStore.storagePath(id, context.projectId(), context.environmentId(), input.originalName(), created));
             audit(id, context, "upload.created");
             return upload(get(id, false));
         });

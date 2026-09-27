@@ -2,6 +2,14 @@
 
 ## 현재 단계
 
+### 파일 유형·날짜별 실제 저장 폴더 정리 (2026-09-27)
+
+- 새 업로드는 `/app/storage/유형/YYYY/MM/DD/프로젝트ID/환경ID/파일ID/`에 원본(`original.확장자`)·썸네일(`thumbnail.jpg`)·영상 스트리밍(`hls/변환ID/`)을 함께 저장한다. NAS 루트는 기존 `/volume2/homes/platform/files`다. 유형은 이미지·영상·오디오·문서·압축·기타이며 확장자 분류와 실제 콘텐츠 검증은 구분한다. 원래 이름은 DB와 다운로드 응답에 유지한다.
+- 한국 시간 업로드 접수일의 상대 경로를 V9 `files.storage_path`에 저장한다. 재개·재시작에도 경로가 유지된다. V9 이전 행은 NULL로 남겨 기존 평면 UUID 파일·썸네일·HLS와 진행 중 업로드를 그대로 사용하며 자동 이동하지 않는다. 접근 권한·URL·보존 정책 계약은 유지한다.
+- `code-review` 기준으로 원본 이름의 경로 미사용, 저장 루트 밖 경로 거부, 파일별 정리 범위, DB 롤백 후 재개와 기존 경로 호환을 검토했다. 기존 데이터의 대량 이동이나 새 의존성은 없다.
+- **검증:** `docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check` 통과. 프로젝트 57·알림 19·파일 60개, 총 136개 모두 통과(실패·건너뜀 0). 한국 자정 경계·유형/확장자·빈 파일·재시작·기존 업로드 재개·썸네일/HLS 경로·이웃 파일을 보존하는 삭제·경로 이탈 거부를 포함한다. `docker compose --env-file .env.build build file-service`로 배포 이미지 빌드 통과. 실제 NAS 미디어 생성·재생 재검수는 수행하지 않았다.
+- **운영 상태/다음 작업:** 사용자가 앞선 NAS 기동 성공을 확인했다. 이번 파일 서비스 이미지는 로컬 빌드까지만 완료했고 레지스트리 게시·NAS 재배포는 수행하지 않았다. 사용자가 기존 `.env.build`의 push, NAS `.env.prod`의 pull/up 명령으로 반영하면 V9가 적용된다. 이후 새 파일 업로드·썸네일·영상 재생과 volume2 폴더 확인이 다음 운영 검수다. 격리 테스트 컨테이너는 종료·정리하며 상주 프로세스는 추가하지 않는다.
+
 ### NAS CPU CFS 제한 미지원 대응 (2026-09-27)
 
 - 사용자의 최신 `up -d`는 네트워크/구성 해석을 통과하고 컨테이너 생성에서 `NanoCPUs can not be set`으로 중단됐다. NAS 커널의 CFS CPU quota 미지원에 맞춰 실제 `.env.prod`의 `*_CPUS` 8개만 0으로 수정했다. 비밀값·메모리·개발 CPU 설정은 유지한다.

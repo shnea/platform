@@ -34,7 +34,7 @@ class FilesDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema(schema).locations("classpath:db/migration").load().migrate();
         db = new JdbcTemplate(ds);
         tx = new TransactionTemplate(new DataSourceTransactionManager(ds));
-        store = new FileStore(directory.toString());
+        store = new FileStore(directory.toString(), db);
         service = new FilesService(db, tx, store, 10_000_000, 20);
     }
     @AfterEach void cleanup() { if (admin != null) admin.execute("DROP SCHEMA " + schema + " CASCADE"); }
@@ -122,6 +122,51 @@ class FilesDatabaseTest {
         UUID id=service.create(context,new FilesService.Create(UUID.randomUUID(),name,(long)content.length,hash(content),visibility,"default")).uploadId();
         if(content.length>0)service.append(id,context,0,content.length,hash(content),new ByteArrayInputStream(content));
         service.complete(id,context);return id;
+    }
+    @Test void datedStorageSurvivesRestartAndRemovesOnlyItsOwnOriginalAndDerivatives() throws Exception {
+        UUID id = duplicateFixture(owner, "사진.PNG", bytes, "PUBLIC");
+        UUID neighbor = duplicateFixture(owner, "다른 사진.PNG", bytes, "PUBLIC");
+        var created = db.queryForObject("SELECT created_at FROM files WHERE id=?", java.sql.Timestamp.class, id).toInstant();
+        String key = FileStore.storagePath(id, owner.projectId(), owner.environmentId(), "사진.PNG", created);
+        assertThat(db.queryForObject("SELECT storage_path FROM files WHERE id=?", String.class, id)).isEqualTo(key);
+        assertThat(store.path(id)).isEqualTo(directory.resolve(key));
+        Files.write(store.thumbnail(id), new byte[]{1, 2});
+        Path segments = store.video(id).resolve(UUID.randomUUID().toString());
+        Files.createDirectories(segments); Files.writeString(segments.resolve("q360-00000.ts"), "segment");
+        var restarted = new FileStore(directory.toString(), db);
+        try (var input = restarted.open(id)) { assertThat(input.readAllBytes()).isEqualTo(bytes); }
+        assertThat(restarted.thumbnail(id)).isEqualTo(store.path(id).resolveSibling("thumbnail.jpg"));
+        assertThat(restarted.video(id)).isEqualTo(store.path(id).resolveSibling("hls"));
+        service.delete(id, owner); service.cleanup();
+        assertThat(store.path(id).getParent()).doesNotExist();
+        assertThat(Files.readAllBytes(store.path(neighbor))).isEqualTo(bytes);
+        assertThat(db.queryForObject("SELECT purged_at IS NOT NULL FROM files WHERE id=?", Boolean.class, id)).isTrue();
+    }
+    @Test void legacyFlatUploadCanResumeAndKeepThumbnailAndHlsPathsAfterUpgrade() throws Exception {
+        UUID id = create().uploadId();
+        // V9 leaves all pre-upgrade rows NULL, including uploads with received bytes.
+        db.update("UPDATE files SET storage_path=NULL,received_bytes=5 WHERE id=?", id);
+        Files.write(directory.resolve(id + ".bin"), Arrays.copyOfRange(bytes, 0, 5));
+        store = new FileStore(directory.toString(), db);
+        service = new FilesService(db, tx, store, 10_000_000, 20);
+        append(id, 5, Arrays.copyOfRange(bytes, 5, bytes.length)); service.complete(id, owner);
+        assertThat(Files.readAllBytes(store.path(id))).isEqualTo(bytes);
+        assertThat(store.path(id)).isEqualTo(directory.resolve(id + ".bin"));
+        assertThat(store.thumbnail(id)).isEqualTo(directory.resolve(id + ".jpg"));
+        assertThat(store.video(id)).isEqualTo(directory.resolve(id + ".hls"));
+        Files.write(store.thumbnail(id), new byte[]{1});
+        Files.createDirectories(store.video(id)); Files.writeString(store.video(id).resolve("master.m3u8"), "playlist");
+        service.delete(id, owner); service.cleanup();
+        assertThat(store.path(id)).doesNotExist(); assertThat(store.thumbnail(id)).doesNotExist();
+        assertThat(store.video(id)).doesNotExist(); assertThat(directory).isDirectory();
+    }
+    @Test void emptyFileCreatesDatedDirectoryAndPersistedPathCannotEscapeStorageRoot() throws Exception {
+        UUID id = duplicateFixture(owner, "empty.txt", new byte[0], "PRIVATE");
+        assertThat(Files.size(store.path(id))).isZero();
+        for (String invalid : List.of("../" + id + "/original.txt", "/tmp/" + id + "/original.txt", "..\\" + id + "\\original.txt")) {
+            db.update("UPDATE files SET storage_path=? WHERE id=?", invalid, id);
+            assertThatThrownBy(() -> store.path(id)).isInstanceOf(IllegalStateException.class);
+        }
     }
     @Test void duplicatesUseVerifiedBytesExcludeSelfAndNeverMergeFilePolicies() {
         UUID source=duplicateFixture(owner,"original.txt",bytes,"PUBLIC");
@@ -355,7 +400,7 @@ class FilesDatabaseTest {
         UUID id = upload.uploadId();
         append(id, 0, Arrays.copyOfRange(bytes, 0, 9));
         assertThat(service.list(owner, 20, 0)).isEmpty();
-        service = new FilesService(db, tx, new FileStore(directory.toString()), 10_000_000, 20);
+        service = new FilesService(db, tx, new FileStore(directory.toString(), db), 10_000_000, 20);
         assertThat(service.status(id, owner).receivedBytes()).isEqualTo(9);
         append(id, 9, Arrays.copyOfRange(bytes, 9, bytes.length));
         var file = service.complete(id, owner);
