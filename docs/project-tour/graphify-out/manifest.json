@@ -1,0 +1,38 @@
+{
+  "compose.yml": {
+    "mtime": 1790466090.8958988,
+    "seen": 1790526133.42695,
+    "ast_hash": "31b1bb10c146a50a1eeda5701f192a3f",
+    "semantic_hash": "31b1bb10c146a50a1eeda5701f192a3f"
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1790466268.759401,
+    "seen": 1790526133.4269533,
+    "ast_hash": "1836a4b29cd67fc0d96b35be8cd3ffb3",
+    "semantic_hash": "1836a4b29cd67fc0d96b35be8cd3ffb3"
+  },
+  "docs/SERVICE_INTEGRATION.md": {
+    "mtime": 1790507451.8937714,
+    "seen": 1790526133.4269547,
+    "ast_hash": "e55656c2bbb1cb6d58bac26726e2f8f8",
+    "semantic_hash": "e55656c2bbb1cb6d58bac26726e2f8f8"
+  },
+  "docs/integration/JOBS.md": {
+    "mtime": 1790461866.2202837,
+    "seen": 1790526133.4269555,
+    "ast_hash": "491c1d278331391470a208d7e78152c7",
+    "semantic_hash": "491c1d278331391470a208d7e78152c7"
+  },
+  "docs/integration/LOGS.md": {
+    "mtime": 1790461866.4212852,
+    "seen": 1790526133.4269562,
+    "ast_hash": "f3083e2323743bda16596a1179258317",
+    "semantic_hash": "f3083e2323743bda16596a1179258317"
+  },
+  "packages/editor/README.md": {
+    "mtime": 1790507451.8927712,
+    "seen": 1790526133.4269571,
+    "ast_hash": "ee9c385db01409769c46c3abf8c18318",
+    "semantic_hash": "ee9c385db01409769c46c3abf8c18318"
+  }
+}

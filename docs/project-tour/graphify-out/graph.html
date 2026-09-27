@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<title>SHNEA 서비스 관계도 · Graphify</title>
+<script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
+        integrity="sha384-Ux6phic9PEHJ38YtrijhkzyJ8yQlH8i/+buBR8s3mAZOJrP1gwyvAcIYl3GWtpX1"
+        crossorigin="anonymous"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #graph { flex: 1; }
+  #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e; display: flex; flex-direction: column; overflow: hidden; }
+  #search-wrap { padding: 12px; border-bottom: 1px solid #2a2a4e; }
+  #search { width: 100%; background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0; padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none; }
+  #search:focus { border-color: #4E79A7; }
+  #search-results { max-height: 140px; overflow-y: auto; padding: 4px 12px; border-bottom: 1px solid #2a2a4e; display: none; }
+  .search-item { padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-item:hover { background: #2a2a4e; }
+  #info-panel { padding: 14px; border-bottom: 1px solid #2a2a4e; min-height: 140px; }
+  #info-panel h3 { font-size: 13px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #info-content { font-size: 13px; color: #ccc; line-height: 1.6; }
+  #info-content .field { margin-bottom: 5px; }
+  #info-content .field b { color: #e0e0e0; }
+  #info-content .empty { color: #555; font-style: italic; }
+  .neighbor-link { display: block; padding: 2px 6px; margin: 2px 0; border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid #333; }
+  .neighbor-link:hover { background: #2a2a4e; }
+  #neighbors-list { max-height: 160px; overflow-y: auto; margin-top: 4px; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 12px; }
+  #legend-wrap h3 { font-size: 13px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 4px; font-size: 12px; }
+  .legend-item:hover { background: #2a2a4e; padding-left: 4px; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { color: #666; font-size: 11px; }
+  #stats { padding: 10px 14px; border-top: 1px solid #2a2a4e; font-size: 11px; color: #555; }
+  #legend-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 4px 0; }
+  #legend-controls label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #aaa; user-select: none; }
+  #legend-controls label:hover { color: #e0e0e0; }
+  .legend-cb, #select-all-cb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; border: 1.5px solid #3a3a5e; border-radius: 3px; background: #0f0f1a; cursor: pointer; position: relative; flex-shrink: 0; }
+  .legend-cb:checked, #select-all-cb:checked { background: #4E79A7; border-color: #4E79A7; }
+  .legend-cb:checked::after, #select-all-cb:checked::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  #select-all-cb:indeterminate { background: #4E79A7; border-color: #4E79A7; }
+  #select-all-cb:indeterminate::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #fff; border: none; transform: none; }
+
+  #sidebar{width:340px;overflow-y:auto}#info-panel,#search-wrap{flex-shrink:0}#legend-wrap{overflow:visible}
+  a,button,select,input{font:inherit}a:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #e8b173;outline-offset:3px}
+  #info-content .empty,#stats,.legend-count{color:#b4b4c4}#search{min-height:44px}#info-content{overflow-wrap:anywhere}
+  @media(max-width:720px){body{display:block;overflow:auto;height:auto}#graph{height:58vh;min-height:350px}#sidebar{width:100%;height:auto;border-left:0}#legend-wrap{flex:none}}
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="sidebar">
+  <div id="search-wrap"><a href="../index.html" style="display:block;color:#cbe6ab;margin-bottom:12px">← 쉬운 그림 설명</a><label for="node-picker">서비스 선택</label><select id="node-picker" style="width:100%;min-height:44px;margin:6px 0 12px"><option value="">전체 지도</option></select>
+    <input id="search" aria-label="서비스 이름 검색" type="text" placeholder="서비스 이름 검색" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <div id="info-panel">
+    <h3>선택한 서비스</h3>
+    <div id="info-content"><span class="empty">원을 누르거나 아래 목록에서 서비스를 선택하세요.</span></div>
+  </div>
+  <div id="legend-wrap">
+    <h3>서비스 묶음</h3>
+    <div id="legend-controls">
+      <label><input type="checkbox" id="select-all-cb" checked onchange="toggleAllCommunities(!this.checked)">전체 선택</label>
+    </div>
+    <div id="legend"></div>
+  </div>
+  <div id="stats">31 nodes &middot; 46 edges &middot; 6 communities</div>
+</div>
+<script>
+const RAW_NODES = [{"id": "docs_service_integration_host", "label": "\uc678\ubd80 \ud638\uc2a4\ud2b8 \uc11c\ube44\uc2a4", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 31.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc678\ubd80 \ud638\uc2a4\ud2b8 \uc11c\ube44\uc2a4", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "docs/SERVICE_INTEGRATION.md", "file_type": "concept", "degree": 7}, {"id": "docs_service_integration_document_storage", "label": "\ud638\uc2a4\ud2b8\uc758 \ubcf8\ubb38 \uc800\uc7a5\uc18c", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud638\uc2a4\ud2b8\uc758 \ubcf8\ubb38 \uc800\uc7a5\uc18c", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "docs/SERVICE_INTEGRATION.md", "file_type": "concept", "degree": 2}, {"id": "docs_integration_jobs_host_worker", "label": "\uc678\ubd80 \ud504\ub85c\uc81d\ud2b8 \uc6cc\ucee4", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc678\ubd80 \ud504\ub85c\uc81d\ud2b8 \uc6cc\ucee4", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "docs/integration/JOBS.md", "file_type": "concept", "degree": 2}, {"id": "docs_integration_jobs_business_execution", "label": "\ud638\uc2a4\ud2b8\uc758 \uc5c5\ubb34 \uc2e4\ud589", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud638\uc2a4\ud2b8\uc758 \uc5c5\ubb34 \uc2e4\ud589", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "docs/integration/JOBS.md", "file_type": "concept", "degree": 2}, {"id": "packages_editor_readme_editor", "label": "\uc5d0\ub514\ud130 \ud328\ud0a4\uc9c0", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 19.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc5d0\ub514\ud130 \ud328\ud0a4\uc9c0", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "packages/editor/README.md", "file_type": "concept", "degree": 3}, {"id": "packages_editor_readme_viewer", "label": "\ubb38\uc11c \ubdf0\uc5b4", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\ubb38\uc11c \ubdf0\uc5b4", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "packages/editor/README.md", "file_type": "concept", "degree": 1}, {"id": "packages_editor_readme_document_json", "label": "\ubb38\uc11c JSON", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ubb38\uc11c JSON", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "packages/editor/README.md", "file_type": "concept", "degree": 4}, {"id": "packages_editor_readme_attachments", "label": "\ucca8\ubd80 \ud30c\uc77c \ucc38\uc870", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\ucca8\ubd80 \ud30c\uc77c \ucc38\uc870", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "packages/editor/README.md", "file_type": "concept", "degree": 1}, {"id": "docs_architecture_nginx", "label": "\uc678\ubd80 \uc9c4\uc785\uc810 Nginx", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc678\ubd80 \uc9c4\uc785\uc810 Nginx", "community": 3, "community_name": "\uc9c4\uc785\uc810\u00b7\uad00\ub9ac\uc790\u00b7\uc778\uc99d", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_admin_web", "label": "\uad00\ub9ac\uc790 \uc6f9", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 31.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uad00\ub9ac\uc790 \uc6f9", "community": 3, "community_name": "\uc9c4\uc785\uc810\u00b7\uad00\ub9ac\uc790\u00b7\uc778\uc99d", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 7}, {"id": "docs_architecture_project_service", "label": "\ud504\ub85c\uc81d\ud2b8 \uc11c\ube44\uc2a4", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 40.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud504\ub85c\uc81d\ud2b8 \uc11c\ube44\uc2a4", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 10}, {"id": "docs_architecture_file_service", "label": "\ud30c\uc77c \uc11c\ube44\uc2a4", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud30c\uc77c \uc11c\ube44\uc2a4", "community": 4, "community_name": "\ud30c\uc77c \uc11c\ube44\uc2a4\u00b7\ubcf4\uad00", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 4}, {"id": "docs_architecture_notification_service", "label": "\uc54c\ub9bc \uc11c\ube44\uc2a4", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc54c\ub9bc \uc11c\ube44\uc2a4", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_keycloak", "label": "\uc778\uc99d \uc5d4\uc9c4 Keycloak", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc778\uc99d \uc5d4\uc9c4 Keycloak", "community": 3, "community_name": "\uc9c4\uc785\uc810\u00b7\uad00\ub9ac\uc790\u00b7\uc778\uc99d", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 4}, {"id": "docs_architecture_postgresql", "label": "\uacf5\uc6a9 PostgreSQL \uc11c\ubc84", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uacf5\uc6a9 PostgreSQL \uc11c\ubc84", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 4}, {"id": "docs_architecture_platform_project", "label": "\ud504\ub85c\uc81d\ud2b8 \uc804\uc6a9 DB", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 19.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud504\ub85c\uc81d\ud2b8 \uc804\uc6a9 DB", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 3}, {"id": "docs_architecture_platform_file", "label": "\ud30c\uc77c \uc804\uc6a9 DB", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud30c\uc77c \uc804\uc6a9 DB", "community": 4, "community_name": "\ud30c\uc77c \uc11c\ube44\uc2a4\u00b7\ubcf4\uad00", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_platform_notification", "label": "\uc54c\ub9bc \uc804\uc6a9 DB", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc54c\ub9bc \uc804\uc6a9 DB", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_platform_identity", "label": "\uc778\uc99d \uc804\uc6a9 DB", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc778\uc99d \uc804\uc6a9 DB", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_projects", "label": "\ud504\ub85c\uc81d\ud2b8", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 19.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud504\ub85c\uc81d\ud2b8", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 3}, {"id": "docs_service_integration_environments", "label": "\uac1c\ubc1c\u00b7\uc6b4\uc601 \ud658\uacbd", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uac1c\ubc1c\u00b7\uc6b4\uc601 \ud658\uacbd", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/SERVICE_INTEGRATION.md", "file_type": "concept", "degree": 2}, {"id": "docs_architecture_server_keys", "label": "\ud658\uacbd\ubcc4 \uc11c\ubc84 \ud0a4", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ud658\uacbd\ubcc4 \uc11c\ubc84 \ud0a4", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 5}, {"id": "docs_architecture_project_realms", "label": "\ud504\ub85c\uc81d\ud2b8\ubcc4 \uc778\uc99d \uc601\uc5ed", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\ud504\ub85c\uc81d\ud2b8\ubcc4 \uc778\uc99d \uc601\uc5ed", "community": 3, "community_name": "\uc9c4\uc785\uc810\u00b7\uad00\ub9ac\uc790\u00b7\uc778\uc99d", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 1}, {"id": "docs_integration_jobs_external_job_queue", "label": "\uc678\ubd80 \uc791\uc5c5 \ub300\uae30\uc5f4", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uc678\ubd80 \uc791\uc5c5 \ub300\uae30\uc5f4", "community": 0, "community_name": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "source_file": "docs/integration/JOBS.md", "file_type": "concept", "degree": 5}, {"id": "docs_architecture_internal_jobs", "label": "\ud50c\ub7ab\ud3fc \ub0b4\ubd80 \uc791\uc5c5\u00b7Outbox", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\ud50c\ub7ab\ud3fc \ub0b4\ubd80 \uc791\uc5c5\u00b7Outbox", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 1}, {"id": "docs_integration_logs_log_api", "label": "\uacf5\ud1b5 \ub85c\uadf8 \uc218\uc9d1\u00b7\uc870\ud68c", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\uacf5\ud1b5 \ub85c\uadf8 \uc218\uc9d1\u00b7\uc870\ud68c", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/integration/LOGS.md", "file_type": "concept", "degree": 4}, {"id": "docs_integration_logs_loki", "label": "\ub0b4\ubd80 \ub85c\uadf8 \uc800\uc7a5\uc18c Loki", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 19.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ub0b4\ubd80 \ub85c\uadf8 \uc800\uc7a5\uc18c Loki", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "docs/integration/LOGS.md", "file_type": "concept", "degree": 3}, {"id": "compose_file_data", "label": "\ud30c\uc77c \uc601\uc18d \ubcfc\ub968", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\ud30c\uc77c \uc601\uc18d \ubcfc\ub968", "community": 4, "community_name": "\ud30c\uc77c \uc11c\ube44\uc2a4\u00b7\ubcf4\uad00", "source_file": "compose.yml", "file_type": "concept", "degree": 1}, {"id": "docs_architecture_authentication_mail", "label": "\uc778\uc99d \uba54\uc77c", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\uc778\uc99d \uba54\uc77c", "community": 2, "community_name": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "source_file": "docs/ARCHITECTURE.md", "file_type": "concept", "degree": 1}, {"id": "docs_service_integration_general_notifications_webhooks", "label": "\uc77c\ubc18 \uc54c\ub9bc\u00b7\uc678\ubd80 \uc6f9\ud6c5 API", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 10.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\uc77c\ubc18 \uc54c\ub9bc\u00b7\uc678\ubd80 \uc6f9\ud6c5 API", "community": 5, "community_name": "\uc544\uc9c1 \ubbf8\uc81c\uacf5\uc778 API", "source_file": "docs/SERVICE_INTEGRATION.md", "file_type": "concept", "degree": 0}, {"id": "compose_logs_network", "label": "\ub0b4\ubd80 \ub85c\uadf8 \ub124\ud2b8\uc6cc\ud06c", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\ub0b4\ubd80 \ub85c\uadf8 \ub124\ud2b8\uc6cc\ud06c", "community": 1, "community_name": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "source_file": "compose.yml", "file_type": "concept", "degree": 2}];
+const RAW_EDGES = [{"from": "docs_service_integration_host", "to": "docs_architecture_file_service", "label": "\uad8c\ud55c\uc744 \ud655\uc778\ud55c \ub4a4 \ucca8\ubd80\ub97c \uc804\uc1a1\ud55c\ub2e4", "title": "\uad8c\ud55c\uc744 \ud655\uc778\ud55c \ub4a4 \ucca8\ubd80\ub97c \uc804\uc1a1\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "docs_architecture_server_keys", "label": "\uc11c\ubc84\uc5d0\uc11c \uc0ac\uc6a9\ud55c\ub2e4", "title": "\uc11c\ubc84\uc5d0\uc11c \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "docs_integration_jobs_business_execution", "label": "\uc5c5\ubb34 \uc911\ubcf5 \ubc29\uc9c0\ub97c \ucc45\uc784\uc9c4\ub2e4", "title": "\uc5c5\ubb34 \uc911\ubcf5 \ubc29\uc9c0\ub97c \ucc45\uc784\uc9c4\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "docs_integration_jobs_external_job_queue", "label": "\uc791\uc5c5\uc744 \ub4f1\ub85d\ud55c\ub2e4", "title": "\uc791\uc5c5\uc744 \ub4f1\ub85d\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "docs_integration_logs_log_api", "label": "\uc11c\ubc84 \ud0a4\ub85c \ub85c\uadf8\ub97c \uc804\uc1a1\ud55c\ub2e4", "title": "\uc11c\ubc84 \ud0a4\ub85c \ub85c\uadf8\ub97c \uc804\uc1a1\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "docs_service_integration_document_storage", "label": "\ubcf8\ubb38 \uc800\uc7a5\uc744 \ucc45\uc784\uc9c4\ub2e4", "title": "\ubcf8\ubb38 \uc800\uc7a5\uc744 \ucc45\uc784\uc9c4\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_service_integration_host", "to": "packages_editor_readme_editor", "label": "\ud654\uba74\uc5d0 \uc5f0\uacb0\ud55c\ub2e4", "title": "\ud654\uba74\uc5d0 \uc5f0\uacb0\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_integration_jobs_host_worker", "to": "docs_integration_jobs_business_execution", "label": "\uc2e4\uc81c \uc5c5\ubb34 \ucf54\ub4dc\ub97c \uc2e4\ud589\ud55c\ub2e4", "title": "\uc2e4\uc81c \uc5c5\ubb34 \ucf54\ub4dc\ub97c \uc2e4\ud589\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_integration_jobs_host_worker", "to": "docs_integration_jobs_external_job_queue", "label": "\uc791\uc5c5\uc744 \uac00\uc838\uc640 \uacb0\uacfc\ub97c \ubcf4\uace0\ud55c\ub2e4", "title": "\uc791\uc5c5\uc744 \uac00\uc838\uc640 \uacb0\uacfc\ub97c \ubcf4\uace0\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "packages_editor_readme_editor", "to": "packages_editor_readme_document_json", "label": "\ud3b8\uc9d1 \uacb0\uacfc\ub97c \uc81c\uacf5\ud55c\ub2e4", "title": "\ud3b8\uc9d1 \uacb0\uacfc\ub97c \uc81c\uacf5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "packages_editor_readme_viewer", "to": "packages_editor_readme_document_json", "label": "\uc77d\uae30 \ud654\uba74\uc5d0 \ud45c\uc2dc\ud55c\ub2e4", "title": "\uc77d\uae30 \ud654\uba74\uc5d0 \ud45c\uc2dc\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "packages_editor_readme_document_json", "to": "docs_service_integration_document_storage", "label": "\ud638\uc2a4\ud2b8 \uc800\uc7a5 API\uc5d0 \uc804\ub2ec\ud55c\ub2e4", "title": "\ud638\uc2a4\ud2b8 \uc800\uc7a5 API\uc5d0 \uc804\ub2ec\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "packages_editor_readme_document_json", "to": "packages_editor_readme_attachments", "label": "\ucca8\ubd80 ID\uc640 \ud658\uacbd\uc744 \ub2f4\ub294\ub2e4", "title": "\ucca8\ubd80 ID\uc640 \ud658\uacbd\uc744 \ub2f4\ub294\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_nginx", "to": "docs_architecture_admin_web", "label": "\uad00\ub9ac \ud654\uba74\uc744 \uc804\ub2ec\ud55c\ub2e4", "title": "\uad00\ub9ac \ud654\uba74\uc744 \uc804\ub2ec\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_nginx", "to": "docs_architecture_keycloak", "label": "\uc778\uc99d \uc694\uccad\uc744 \uc804\ub2ec\ud55c\ub2e4", "title": "\uc778\uc99d \uc694\uccad\uc744 \uc804\ub2ec\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "docs_architecture_keycloak", "label": "\ube0c\ub77c\uc6b0\uc800 \ub85c\uadf8\uc778\uc5d0 \uc0ac\uc6a9\ud55c\ub2e4", "title": "\ube0c\ub77c\uc6b0\uc800 \ub85c\uadf8\uc778\uc5d0 \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "docs_architecture_projects", "label": "\uad00\ub9ac\ud55c\ub2e4", "title": "\uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "docs_architecture_server_keys", "label": "\uad00\ub9ac\ud55c\ub2e4", "title": "\uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "docs_integration_jobs_external_job_queue", "label": "\uc678\ubd80 \uc791\uc5c5 \uc774\ub825\uc744 \ubcf4\uc5ec \uc900\ub2e4", "title": "\uc678\ubd80 \uc791\uc5c5 \uc774\ub825\uc744 \ubcf4\uc5ec \uc900\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "docs_integration_logs_log_api", "label": "\uac80\uc0c9\uacfc \uc0c1\uc138\ub97c \uc81c\uacf5\ud55c\ub2e4", "title": "\uac80\uc0c9\uacfc \uc0c1\uc138\ub97c \uc81c\uacf5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_admin_web", "to": "packages_editor_readme_editor", "label": "\uccb4\ud5d8 \ud654\uba74\uc744 \uc81c\uacf5\ud55c\ub2e4", "title": "\uccb4\ud5d8 \ud654\uba74\uc744 \uc81c\uacf5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "compose_logs_network", "label": "\ub0b4\ubd80 \ub124\ud2b8\uc6cc\ud06c\uc5d0 \uc5f0\uacb0\ud55c\ub2e4", "title": "\ub0b4\ubd80 \ub124\ud2b8\uc6cc\ud06c\uc5d0 \uc5f0\uacb0\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_architecture_internal_jobs", "label": "\ub0b4\ubd80 \uc791\uc5c5\uc744 \ubcc4\ub3c4\ub85c \uad00\ub9ac\ud55c\ub2e4", "title": "\ub0b4\ubd80 \uc791\uc5c5\uc744 \ubcc4\ub3c4\ub85c \uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_architecture_platform_project", "label": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4", "title": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_architecture_projects", "label": "\uad00\ub9ac\ud55c\ub2e4", "title": "\uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_architecture_server_keys", "label": "\uad00\ub9ac\ud558\uace0 \uac80\uc99d\ud55c\ub2e4", "title": "\uad00\ub9ac\ud558\uace0 \uac80\uc99d\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_integration_jobs_external_job_queue", "label": "\ub300\uae30\uc5f4\uacfc \uc0c1\ud0dc\ub97c \uad00\ub9ac\ud55c\ub2e4", "title": "\ub300\uae30\uc5f4\uacfc \uc0c1\ud0dc\ub97c \uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_integration_logs_log_api", "label": "\uc778\uc99d\u00b7\ub9c8\uc2a4\ud0b9\u00b7\ud55c\ub3c4\u00b7\uc870\ud68c\ub97c \ub2f4\ub2f9\ud55c\ub2e4", "title": "\uc778\uc99d\u00b7\ub9c8\uc2a4\ud0b9\u00b7\ud55c\ub3c4\u00b7\uc870\ud68c\ub97c \ub2f4\ub2f9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_integration_logs_loki", "label": "\uc778\uc99d\ud55c \ud658\uacbd\uc744 \uc800\uc7a5 \ubc94\uc704\ub85c \uc9c0\uc815\ud55c\ub2e4", "title": "\uc778\uc99d\ud55c \ud658\uacbd\uc744 \uc800\uc7a5 \ubc94\uc704\ub85c \uc9c0\uc815\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_project_service", "to": "docs_service_integration_environments", "label": "\uad00\ub9ac\ud55c\ub2e4", "title": "\uad00\ub9ac\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_file_service", "to": "compose_file_data", "label": "\uc6d0\ubcf8\uacfc \ubcc0\ud658 \ud30c\uc77c\uc744 \uc800\uc7a5\ud55c\ub2e4", "title": "\uc6d0\ubcf8\uacfc \ubcc0\ud658 \ud30c\uc77c\uc744 \uc800\uc7a5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_file_service", "to": "docs_architecture_platform_file", "label": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4", "title": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_file_service", "to": "docs_architecture_project_service", "label": "\ud30c\uc77c \uad8c\ud55c\uc744 \ud655\uc778\ud55c\ub2e4", "title": "\ud30c\uc77c \uad8c\ud55c\uc744 \ud655\uc778\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_notification_service", "to": "docs_architecture_authentication_mail", "label": "\ubaa8\uc758 \uc218\uc2e0\uacfc NCP \uc804\ub2ec\uc744 \ub2f4\ub2f9\ud55c\ub2e4", "title": "\ubaa8\uc758 \uc218\uc2e0\uacfc NCP \uc804\ub2ec\uc744 \ub2f4\ub2f9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_notification_service", "to": "docs_architecture_platform_notification", "label": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4", "title": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_keycloak", "to": "docs_architecture_platform_identity", "label": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4", "title": "\uc790\uae30 DB\ub97c \uc0ac\uc6a9\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_keycloak", "to": "docs_architecture_project_realms", "label": "\ud504\ub85c\uc81d\ud2b8\ubcc4 \uc778\uc99d\uc744 \uc81c\uacf5\ud55c\ub2e4", "title": "\ud504\ub85c\uc81d\ud2b8\ubcc4 \uc778\uc99d\uc744 \uc81c\uacf5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_postgresql", "to": "docs_architecture_platform_file", "label": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4", "title": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_postgresql", "to": "docs_architecture_platform_identity", "label": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4", "title": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_postgresql", "to": "docs_architecture_platform_notification", "label": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4", "title": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_postgresql", "to": "docs_architecture_platform_project", "label": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4", "title": "\ubd84\ub9ac\ub41c DB\ub97c \ub454\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_server_keys", "to": "docs_architecture_projects", "label": "\ud638\ucd9c \ubc94\uc704\ub97c \uacb0\uc815\ud55c\ub2e4", "title": "\ud638\ucd9c \ubc94\uc704\ub97c \uacb0\uc815\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_architecture_server_keys", "to": "docs_service_integration_environments", "label": "\ud638\ucd9c \ubc94\uc704\ub97c \uacb0\uc815\ud55c\ub2e4", "title": "\ud638\ucd9c \ubc94\uc704\ub97c \uacb0\uc815\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_integration_jobs_external_job_queue", "to": "docs_architecture_platform_project", "label": "\uc791\uc5c5\uc744 \uc601\uc18d \uc800\uc7a5\ud55c\ub2e4", "title": "\uc791\uc5c5\uc744 \uc601\uc18d \uc800\uc7a5\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_integration_logs_log_api", "to": "docs_integration_logs_loki", "label": "\ub0b4\ubd80 \uc800\uc7a5\uc18c\uc5d0 \uae30\ub85d\ud55c\ub2e4", "title": "\ub0b4\ubd80 \uc800\uc7a5\uc18c\uc5d0 \uae30\ub85d\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "docs_integration_logs_loki", "to": "compose_logs_network", "label": "\ub0b4\ubd80 \ub124\ud2b8\uc6cc\ud06c\uc5d0 \uc5f0\uacb0\ud55c\ub2e4", "title": "\ub0b4\ubd80 \ub124\ud2b8\uc6cc\ud06c\uc5d0 \uc5f0\uacb0\ud55c\ub2e4 [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}];
+const LEGEND = [{"cid": 0, "color": "#4E79A7", "label": "\ud638\uc2a4\ud2b8\u00b7\uc5d0\ub514\ud130\u00b7\uc678\ubd80 \uc791\uc5c5", "count": 9}, {"cid": 1, "color": "#F28E2B", "label": "\ud504\ub85c\uc81d\ud2b8\u00b7\uad8c\ud55c\u00b7\ub85c\uadf8", "count": 8}, {"cid": 2, "color": "#E15759", "label": "\ub370\uc774\ud130 \uc800\uc7a5\u00b7\uc778\uc99d \uba54\uc77c", "count": 6}, {"cid": 3, "color": "#76B7B2", "label": "\uc9c4\uc785\uc810\u00b7\uad00\ub9ac\uc790\u00b7\uc778\uc99d", "count": 4}, {"cid": 4, "color": "#59A14F", "label": "\ud30c\uc77c \uc11c\ube44\uc2a4\u00b7\ubcf4\uad00", "count": 3}, {"cid": 5, "color": "#EDC948", "label": "\uc544\uc9c1 \ubbf8\uc81c\uacf5\uc778 API", "count": 1}];
+
+// HTML-escape helper — prevents XSS when injecting graph data into innerHTML
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Build vis datasets
+const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({
+  id: n.id, label: n.label, color: n.color, size: n.size,
+  font: n.font, title: n.title,
+  _community: n.community, _community_name: n.community_name,
+  _source_file: n.source_file, _file_type: n.file_type, _degree: n.degree,
+})));
+
+const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({
+  id: i, from: e.from, to: e.to,
+  label: '',
+  title: e.title,
+  dashes: e.dashes,
+  width: e.width,
+  color: e.color,
+  arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+})));
+
+const container = document.getElementById('graph');
+const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -60,
+      centralGravity: 0.005,
+      springLength: 120,
+      springConstant: 0.08,
+      damping: 0.4,
+      avoidOverlap: 0.8,
+    },
+    stabilization: { iterations: 200, fit: true },
+  },
+  interaction: {
+    hover: true,
+    tooltipDelay: 100,
+    hideEdgesOnDrag: true,
+    navigationButtons: false,
+    keyboard: false,
+  },
+  nodes: { shape: 'dot', borderWidth: 1.5 },
+  edges: { smooth: { type: 'continuous', roundness: 0.2 }, selectionWidth: 3 },
+});
+
+network.once('stabilizationIterationsDone', () => {
+  network.setOptions({ physics: { enabled: false } });
+});
+
+function showInfo(nodeId) {
+  const n = nodesDS.get(nodeId);
+  if (!n) return;
+  const neighborIds = network.getConnectedNodes(nodeId);
+  const neighborItems = neighborIds.map(nid => {
+    const nb = nodesDS.get(nid);
+    const color = nb ? nb.color.background : '#555';
+    return `<span class="neighbor-link" style="border-left-color:${esc(color)}" data-nid="${esc(nid)}">${esc(nb ? nb.label : nid)}</span>`;
+  }).join('');
+  document.getElementById('info-content').innerHTML = `
+    <div class="field"><b>${esc(n.label)}</b></div>
+    <div class="field">종류: ${esc(n._file_type || 'unknown')}</div>
+    <div class="field">묶음: ${esc(n._community_name)}</div>
+    <div class="field">근거: ${esc(n._source_file || '-')}</div>
+    <div class="field">연결 수: ${n._degree}</div>
+    ${neighborIds.length ? `<div class="field" style="margin-top:8px;color:#aaa;font-size:11px">연결된 요소 (${neighborIds.length})</div><div id="neighbors-list">${neighborItems}</div>` : ''}
+  `;
+}
+
+function focusNode(nodeId) {
+  network.focus(nodeId, { scale: 1.4, animation: true });
+  network.selectNodes([nodeId]);
+  showInfo(nodeId);
+}
+
+// Neighbor links use a data attribute + one delegated listener rather than an
+// inline onclick. A node id/label sourced from a document or a scraped URL
+// (graphify add) can contain a double-quote; dropping the stringified id
+// unescaped into a quoted onclick both broke every link and allowed a hostile
+// source to inject an event handler into the local report (stored XSS, #1838).
+// esc() on data-nid keeps the value inside the attribute; the listener reads it
+// back verbatim. Bound to document so it survives the innerHTML rebuild that
+// recreates #neighbors-list on each showInfo().
+document.addEventListener('click', e => {
+  const el = e.target.closest('.neighbor-link');
+  if (el && el.dataset.nid !== undefined) focusNode(el.dataset.nid);
+});
+
+// Track hovered node — hover detection is more reliable than click params
+let hoveredNodeId = null;
+network.on('hoverNode', params => {
+  hoveredNodeId = params.node;
+  container.style.cursor = 'pointer';
+});
+network.on('blurNode', () => {
+  hoveredNodeId = null;
+  container.style.cursor = 'default';
+});
+container.addEventListener('click', () => {
+  if (hoveredNodeId !== null) {
+    showInfo(hoveredNodeId);
+    network.selectNodes([hoveredNodeId]);
+  }
+});
+network.on('click', params => {
+  if (params.nodes.length > 0) {
+    showInfo(params.nodes[0]);
+  } else if (hoveredNodeId === null) {
+    document.getElementById('info-content').innerHTML = '<span class="empty">원을 누르거나 아래 목록에서 서비스를 선택하세요.</span>';
+  }
+});
+
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('search-results');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchResults.innerHTML = '';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = RAW_NODES.filter(n => n.label.toLowerCase().includes(q)).slice(0, 20);
+  if (!matches.length) { searchResults.style.display = 'none'; return; }
+  searchResults.style.display = 'block';
+  matches.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.textContent = n.label;
+    el.style.borderLeft = `3px solid ${n.color.background}`;
+    el.style.paddingLeft = '8px';
+    el.onclick = () => {
+      network.focus(n.id, { scale: 1.5, animation: true });
+      network.selectNodes([n.id]);
+      showInfo(n.id);
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+    };
+    searchResults.appendChild(el);
+  });
+});
+document.addEventListener('click', e => {
+  if (!searchResults.contains(e.target) && e.target !== searchInput)
+    searchResults.style.display = 'none';
+});
+
+const hiddenCommunities = new Set();
+
+const selectAllCb = document.getElementById('select-all-cb');
+
+function updateSelectAllState() {
+  const total = LEGEND.length;
+  const hidden = hiddenCommunities.size;
+  selectAllCb.checked = hidden === 0;
+  selectAllCb.indeterminate = hidden > 0 && hidden < total;
+}
+
+function toggleAllCommunities(hide) {
+  document.querySelectorAll('.legend-item').forEach(item => {
+    hide ? item.classList.add('dimmed') : item.classList.remove('dimmed');
+  });
+  document.querySelectorAll('.legend-cb').forEach(cb => {
+    cb.checked = !hide;
+  });
+  LEGEND.forEach(c => {
+    if (hide) hiddenCommunities.add(c.cid); else hiddenCommunities.delete(c.cid);
+  });
+  const updates = RAW_NODES.map(n => ({ id: n.id, hidden: hide }));
+  nodesDS.update(updates);
+  updateSelectAllState();
+}
+
+const legendEl = document.getElementById('legend');
+LEGEND.forEach(c => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'legend-cb';
+  cb.checked = true;
+  cb.addEventListener('change', (e) => {
+    e.stopPropagation();
+    if (cb.checked) {
+      hiddenCommunities.delete(c.cid);
+      item.classList.remove('dimmed');
+    } else {
+      hiddenCommunities.add(c.cid);
+      item.classList.add('dimmed');
+    }
+    const updates = RAW_NODES
+      .filter(n => n.community === c.cid)
+      .map(n => ({ id: n.id, hidden: !cb.checked }));
+    nodesDS.update(updates);
+    updateSelectAllState();
+  });
+  item.innerHTML = `<div class="legend-dot" style="background:${c.color}"></div>
+    <span class="legend-label">${c.label}</span>
+    <span class="legend-count">${c.count}</span>`;
+  item.prepend(cb);
+  item.onclick = (e) => {
+    if (e.target === cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  };
+  legendEl.appendChild(item);
+});
+</script>
+<script>
+// Render hyperedges as shaded regions
+const hyperedges = [];
+// afterDrawing passes ctx already transformed to network coordinate space.
+// Draw node positions raw — no manual pan/zoom/DPR math needed.
+
+// Andrew's monotone chain. Returns the hull in counter-clockwise order, which
+// is what the perimeter must be traced in. Collinear and duplicate points
+// collapse to the extremes, so degenerate member sets render as a segment
+// rather than a zero-area crossed path.
+function convexHull(pts) {
+    const p = pts.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
+    if (p.length < 3) return p;
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const build = seq => {
+        const out = [];
+        for (const q of seq) {
+            while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+            out.push(q);
+        }
+        out.pop();
+        return out;
+    };
+    const hull = build(p).concat(build(p.slice().reverse()));
+    return hull.length >= 3 ? hull : p;
+}
+network.on('afterDrawing', function(ctx) {
+    hyperedges.forEach(h => {
+        const positions = h.nodes
+            .map(nid => network.getPositions([nid])[nid])
+            .filter(p => p !== undefined);
+        if (positions.length < 2) return;
+        ctx.save();
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#6366f1';
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Centroid and expanded hull in network coordinates.
+        // The perimeter must follow hull order, not h.nodes order: tracing the
+        // raw member order self-intersects whenever the layout does not happen
+        // to place members in angular order, filling as crossed wedges.
+        const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+        const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+        const hull = convexHull(positions);
+        const expanded = hull.map(p => ({
+            x: cx + (p.x - cx) * 1.15,
+            y: cy + (p.y - cy) * 1.15
+        }));
+        ctx.moveTo(expanded[0].x, expanded[0].y);
+        expanded.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.4;
+        ctx.stroke();
+        // Label
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#4f46e5';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(h.label, cx, cy - 5);
+        ctx.restore();
+    });
+});
+</script>
+<script>
+const sourceDetails={"docs_service_integration_host": {"description": "본문 저장·사용자 권한·첨부 전송을 책임지는 실제 업무 서비스.", "source_file": "docs/SERVICE_INTEGRATION.md", "line": 43}, "docs_service_integration_document_storage": {"description": "본문 JSON은 호스트 책임이며 플랫폼 에디터가 저장하지 않는다.", "source_file": "docs/SERVICE_INTEGRATION.md", "line": 43}, "docs_integration_jobs_host_worker": {"description": "실행 코드는 호스트에 둔다. 플랫폼은 코드를 실행하거나 임의 URL을 호출하지 않는다.", "source_file": "docs/integration/JOBS.md", "line": 44}, "docs_integration_jobs_business_execution": {"description": "최소 한 번 실행되므로 호스트가 업무 중복 방지를 책임진다.", "source_file": "docs/integration/JOBS.md", "line": 45}, "packages_editor_readme_editor": {"description": "호스트 화면에 넣는 편집 도구. 본문 저장이나 플랫폼 인증을 수행하지 않는다.", "source_file": "packages/editor/README.md", "line": 3}, "packages_editor_readme_viewer": {"description": "", "source_file": "packages/editor/README.md", "line": 31}, "packages_editor_readme_document_json": {"description": "", "source_file": "packages/editor/README.md", "line": 29}, "packages_editor_readme_attachments": {"description": "문서에는 첨부 ID·환경을 저장하며 임시 URL은 제외한다.", "source_file": "packages/editor/README.md", "line": 42}, "docs_architecture_nginx": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 11}, "docs_architecture_admin_web": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 12}, "docs_architecture_project_service": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 13}, "docs_architecture_file_service": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 15}, "docs_architecture_notification_service": {"description": "현재 범위는 인증 메일 모의 수신함·NCP 전달·상태 및 보존 관리.", "source_file": "docs/ARCHITECTURE.md", "line": 16}, "docs_architecture_keycloak": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 17}, "docs_architecture_postgresql": {"description": "서버 하나에 서비스별 DB·계정을 분리한다. 물리적인 장애·관리자 격리는 아니다.", "source_file": "docs/ARCHITECTURE.md", "line": 18}, "docs_architecture_platform_project": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 13}, "docs_architecture_platform_file": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 15}, "docs_architecture_platform_notification": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 16}, "docs_architecture_platform_identity": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 17}, "docs_architecture_projects": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 13}, "docs_service_integration_environments": {"description": "", "source_file": "docs/SERVICE_INTEGRATION.md", "line": 8}, "docs_architecture_server_keys": {"description": "호스트 서버에서 사용한다. 브라우저에 넣지 않는다.", "source_file": "docs/ARCHITECTURE.md", "line": 27}, "docs_architecture_project_realms": {"description": "사용자 인증은 원래 프로젝트 realm에서 완료한다.", "source_file": "docs/ARCHITECTURE.md", "line": 17}, "docs_integration_jobs_external_job_queue": {"description": "플랫폼이 대기열·상태·만료 복구·제한된 재시도를 관리한다.", "source_file": "docs/integration/JOBS.md", "line": 44}, "docs_architecture_internal_jobs": {"description": "외부 프로젝트 작업과 분리한다.", "source_file": "docs/ARCHITECTURE.md", "line": 31}, "docs_integration_logs_log_api": {"description": "서버 키로 프로젝트·환경 범위를 결정하고 민감값 제외·마스킹과 한도를 적용한다.", "source_file": "docs/integration/LOGS.md", "line": 1}, "docs_integration_logs_loki": {"description": "외부에서 직접 연결하는 API가 아닌 내부 전용 저장소.", "source_file": "docs/integration/LOGS.md", "line": 45}, "compose_file_data": {"description": "", "source_file": "compose.yml", "line": 157}, "docs_architecture_authentication_mail": {"description": "", "source_file": "docs/ARCHITECTURE.md", "line": 16}, "docs_service_integration_general_notifications_webhooks": {"description": "현재 미제공.", "source_file": "docs/SERVICE_INTEGRATION.md", "line": 54}, "compose_logs_network": {"description": "project-service와 Loki가 연결하는 내부 네트워크.", "source_file": "compose.yml", "line": 214}};
+const picker=document.getElementById('node-picker');
+RAW_NODES.forEach(n=>{const option=document.createElement('option');option.value=n.id;option.textContent=n.label;picker.append(option)});
+const originalShowInfo=showInfo;
+showInfo=function(id){originalShowInfo(id);picker.value=id;const d=sourceDetails[id];if(!d)return;const p=document.createElement('p');p.style.cssText='margin:12px 0;color:#dceccf';p.textContent=d.description;const source=document.createElement('p');source.textContent='근거 위치: '+d.source_file+':'+d.line;document.getElementById('info-content').append(p,source)};
+picker.addEventListener('change',()=>{if(picker.value)focusNode(picker.value);else network.fit()});
+nodesDS.update(RAW_NODES.map(n=>({id:n.id,font:{size:16,color:'#ffffff',strokeWidth:3,strokeColor:'#0f0f1a'}})));
+network.setOptions({nodes:{scaling:{label:{drawThreshold:0}}},edges:{arrows:{to:{enabled:true,scaleFactor:.5}}}});
+</script></body>
+</html>

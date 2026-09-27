@@ -1,0 +1,11 @@
+{
+  "runs": [
+    {
+      "date": "2026-09-28",
+      "files": 6,
+      "input_tokens": null,
+      "output_tokens": null
+    }
+  ],
+  "note": "Not metered. No external LLM API was called."
+}
