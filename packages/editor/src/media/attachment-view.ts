@@ -1,9 +1,12 @@
 import {decorateAction} from '../icons/index.js';
 import {mountImageViewer} from '../viewer/image-viewer.js';
+import {platformImageViews} from './platform-image-views.js';
 export type AttachmentKind='file'|'image'|'video'|'audio';
 export type AttachmentRef={fileId:string;scope:string;kind:AttachmentKind;name:string;size:number};
 export type AttachmentViews={fileId:string;kind:string;state:string;originalUrl:string;downloadUrl:string;viewerUrl:string;previewUrl:string|null;thumbnailUrl:string|null;expiresAt:string|null;streamExpiresAt?:string|null;streamUrl?:string|null;video?:{state:string;progress:number}|null};
 export type AttachmentAdapter={
+ /** Image views are forwarded unchanged by the host; the editor resolves platform URLs. */
+ platformImageOrigin?:string;
  scope:()=>string|undefined;
  upload:(file:File,context:{scope:string;kind:AttachmentKind;requestId:string;signal:AbortSignal;progress:(percent:number,label:string)=>void})=>Promise<AttachmentRef>;
  resolve:(file:AttachmentRef,signal:AbortSignal)=>Promise<AttachmentViews>;
@@ -61,7 +64,9 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
   if(!adapter){status.textContent='파일 조회 연결이 필요합니다.';return;}
   if(!file.fileId){status.textContent='업로드할 원본 파일을 다시 선택해 주세요.';return;}
   try{
-   const next=await adapter.resolve(file,request.signal);if(disposed||request.signal.aborted)return;if(next.fileId!==file.fileId)throw Error('파일 조회 결과가 일치하지 않습니다.');data=next;retry.hidden=false;render();
+   const resolved=await adapter.resolve(file,request.signal);if(disposed||request.signal.aborted)return;if(resolved.fileId!==file.fileId)throw Error('파일 조회 결과가 일치하지 않습니다.');
+   const next=adapter.platformImageOrigin&&file.kind==='image'&&resolved.kind==='IMAGE'?platformImageViews(resolved,adapter.platformImageOrigin):resolved;
+   data=next;retry.hidden=false;render();
    const waiting=['QUEUED','PROCESSING'].includes(next.state)||next.video&&['QUEUED','PROCESSING'].includes(next.video.state);
    const expiry=[next.expiresAt,next.streamExpiresAt].filter((value):value is string=>!!value).map(value=>new Date(value).getTime()).filter(Number.isFinite);
    const delay=waiting?5000:expiry.length?Math.max(1000,Math.min(...expiry)-Date.now()-10000):0;if(delay)timer=setTimeout(()=>void load(),delay);

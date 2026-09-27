@@ -1,17 +1,17 @@
 # SHNEA 에디터 연동 지침
 
-`@shnea/editor@0.1.0-alpha.8` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
+`@shnea/editor@0.1.0-alpha.9` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
 
 ## 설치와 전달
 
-패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.8.tgz
+패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.9.tgz
 
 SHA-256: https://platform.shnea.kr/integrations/checksums.json
 
 패키지를 내려받아 체크섬을 확인한 뒤 호스트 프로젝트에서 설치한다. 플랫폼 저장소는 필요 없다.
 
 ```sh
-npm install ./shnea-editor-0.1.0-alpha.8.tgz
+npm install ./shnea-editor-0.1.0-alpha.9.tgz
 ```
 
 공개 npm 발행은 하지 않았다. `react` 또는 `vue`는 호스트가 설치한다. React 18~19, Vue 3.5를 대상으로 하며 이번 검증 버전은 React 19.3.0·Vue 3.5.43이다. 프레임워크별 실제 하위 버전과 모바일 기기는 호스트에서 추가 검수한다. 번들러가 있는 호스트는 `@shnea/editor/style.css`를 한 번 불러온다. SSR에서는 빈 컨테이너만 출력하고 클라이언트 마운트 후 편집기를 만든다.
@@ -102,6 +102,7 @@ JSP도 위 일반 JS 코드를 사용한다. 받은 패키지의 browser 폴더�
 
 ```js
 const attachments = {
+  platformImageOrigin: 'https://platform.shnea.kr',
   scope: () => 'host-project-dev',
   async upload(file, context) {
     const body = new FormData();
@@ -132,6 +133,17 @@ const attachments = {
 
 **설치·업데이트할 때 호스트의 `attachments.resolve` 응답과 파일 중계 경로를 함께 확인한다. 패키지만 교체해도 호스트 코드의 잘못된 URL 매핑은 그대로 남는다.**
 
+**기본 연결(권장):** 위 `platformImageOrigin`을 한 번 설정한다. 호스트 서버는 파일 접근 권한 확인 후 `POST /api/v1/files/{id}/view-ticket`을 서버 키(`files:read`)로 호출하고 응답 JSON을 수정 없이 반환한다. 에디터가 이미지의 상대 URL을 플랫폼 주소로 해석하고 용도별 경로·파일 ID·출처를 검증한다. 같은 원본 주소로 덮어쓰면 명시적 연결 오류가 표시된다. 호스트에서 이미지 URL 조립이나 PC/모바일 분기를 구현하지 않는다.
+
+```text
+호스트의 파일 보기 API:
+  1. 현재 사용자에게 해당 fileId를 보여줘도 되는지 확인
+  2. 플랫폼 POST /api/v1/files/{id}/view-ticket 호출 (X-Platform-Key: 서버 키)
+  3. 실패는 해당 오류로 처리, 성공 JSON은 변경 없이 반환 (Cache-Control: no-store)
+```
+
+이미지는 플랫폼에서 직접 읽으므로 호스트의 CSP `img-src`에 플랫폼 원점을 허용한다. 보호 파일의 임시 토큰은 원래 권한·만료를 유지한다. 플랫폼/호스트 API 키를 브라우저에 넣지 않는다. 이 옵션은 **이미지 블록에만** 적용하며 영상 HLS·문서 중계와 기존 사용자 정의 어댑터를 바꾸지 않는다. 파일 서비스의 임의 출처 API CORS를 여는 기능이 아니므로 보기 정보 조회는 계속 호스트 서버를 거친다.
+
 | 응답 필드 | 용도 | 플랫폼 경로 |
 | --- | --- | --- |
 | `thumbnailUrl` | 모바일 본문(600px 이하) | `/api/v1/files/{id}/content/thumbnail` |
@@ -141,8 +153,8 @@ const attachments = {
 | `downloadUrl` | 다운로드 | `/api/v1/files/{id}/content/download` |
 
 - 표는 경로 구분이다. 파일 ID로 URL을 임의 생성하지 말고 플랫폼 보기 API가 반환한 URL·상태·만료 정보를 사용한다. URL의 토큰 쿼리를 보존하고, 제공되지 않은 URL의 `null`도 유지한다. 임시 URL을 본문 JSON에 저장하지 않는다.
-- 플랫폼 상대 URL을 직접 전달하려면 `https://platform.shnea.kr`를 기준으로 절대 URL로 변환한다. 블로그 주소를 기준으로 해석하지 않는다. 보호 파일의 링크는 호스트에서 권한을 확인한 뒤 발급·전달하고 서버 API 키는 브라우저에 보내지 않는다.
-- 같은 출처 중계가 필요하면 호스트 주소를 써도 된다. 다만 **PC 본문 → preview, 모바일 본문 → thumbnail, 확대창 → preview, 원본 버튼 → original** 구분을 서버까지 전달한다. 예를 들어 호스트가 `/api/files/{id}/content?variant=thumbnail`을 구현했다면 해당 요청을 플랫폼의 `/content/thumbnail`로 중계한다. 주소에 variant만 붙이고 서버가 계속 원본을 내려주면 수정된 것이 아니다. 중계 서버는 허용한 variant와 사용자·파일 접근 권한을 검사한다.
+- 기본 연결은 에디터가 플랫폼 상대 URL을 절대 URL로 변환한다. 블로그 주소를 기준으로 해석하지 않는다. 보호 파일의 링크는 호스트에서 권한을 확인한 뒤 발급·전달하고 서버 API 키는 브라우저에 보내지 않는다.
+- 같은 출처 중계를 직접 구현해야 하는 경우에만 `platformImageOrigin`을 생략하고 호스트 주소를 전달한다. **PC 본문 → preview, 모바일 본문 → thumbnail, 확대창 → preview, 원본 버튼 → original** 구분을 서버까지 전달한다. 예를 들어 호스트가 `/api/files/{id}/content?variant=thumbnail`을 구현했다면 해당 요청을 플랫폼의 `/content/thumbnail`로 중계한다. 주소에 variant만 붙이고 서버가 계속 원본을 내려주면 수정된 것이 아니다. 중계 서버는 허용한 variant와 사용자·파일 접근 권한을 검사한다.
 - `thumbnailUrl`, `previewUrl`, `originalUrl`, `viewerUrl`을 전부 `/api/files/{id}/content` 하나로 채우지 않는다. 에디터는 `thumbnailUrl`을 사용해도 실제 주소가 원본이면 원본을 받는다.
 - 기존 이미지의 별도 미리보기가 없을 때 원본으로 대체하는 것은 **플랫폼의 preview 응답 내부 처리**다. 호스트가 `previewUrl`을 `originalUrl`로 덮어쓰거나 썸네일까지 원본으로 대체할 이유가 아니다.
 - 이미지 블록은 자체 확대창을 사용하므로 `viewerUrl`로 이미지를 대신 로드하지 않는다. 기본 뷰어는 독립 화면용이며 영상의 기본 iframe 사용에는 위 출처 제한이 적용된다.
