@@ -1,17 +1,17 @@
 # SHNEA 에디터 연동 지침
 
-`@shnea/editor@0.1.0-alpha.6` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
+`@shnea/editor@0.1.0-alpha.7` · 문서 version 3 · 내부 검증용. React/Vue 연결은 선택 사항이며 일반 JS 번들에는 두 프레임워크가 들어 있지 않다. 본문 저장·인증·사용자 권한·저장 실패 처리는 호스트 서비스가 담당한다.
 
 ## 설치와 전달
 
-패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.6.tgz
+패키지: https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.7.tgz
 
 SHA-256: https://platform.shnea.kr/integrations/checksums.json
 
 패키지를 내려받아 체크섬을 확인한 뒤 호스트 프로젝트에서 설치한다. 플랫폼 저장소는 필요 없다.
 
 ```sh
-npm install ./shnea-editor-0.1.0-alpha.6.tgz
+npm install ./shnea-editor-0.1.0-alpha.7.tgz
 ```
 
 공개 npm 발행은 하지 않았다. `react` 또는 `vue`는 호스트가 설치한다. React 18~19, Vue 3.5를 대상으로 하며 이번 검증 버전은 React 19.3.0·Vue 3.5.43이다. 프레임워크별 실제 하위 버전과 모바일 기기는 호스트에서 추가 검수한다. 번들러가 있는 호스트는 `@shnea/editor/style.css`를 한 번 불러온다. SSR에서는 빈 컨테이너만 출력하고 클라이언트 마운트 후 편집기를 만든다.
@@ -133,3 +133,5 @@ const attachments = {
 예제는 운영 API·인증·실제 파일 업로드를 호출하지 않는다. 사용 프로젝트에서는 Markdown 붙여넣기 → JSON 저장/조회 → 읽기와 재편집, 업로드 취소·만료 URL·권한 실패, 여러 인스턴스와 화면 해제, 실제 모바일 키보드·한글 IME·Safari를 검수한다.
 
 연결 수명 주기와 양방향 값 전달은 [React Effect](https://react.dev/reference/react/useEffect), [Vue 수명 주기](https://vuejs.org/api/composition-api-lifecycle.html), [Vue v-model](https://vuejs.org/guide/components/v-model.html)에 따른다. 정적 번들은 [esbuild 번들링](https://esbuild.github.io/api/#bundle)을 사용한다.
+
+이미지 조회 어댑터는 `thumbnailUrl`(본문), `previewUrl`(클릭 미리보기), `originalUrl`(미리보기 안의 원본 보기)을 각각 전달한다. 썸네일이 없으면 본문에서 원본을 자동 로드하지 않는다. 미리보기가 없는 기존 이미지의 원본 대체와 후속 생성은 파일 서비스가 처리한다. `@shnea/editor/image-viewer`의 `previewUrl` 생략 시 `src`를 확대하며, 명시적 null은 준비 중으로 클릭을 막는다.

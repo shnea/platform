@@ -1,13 +1,14 @@
 import {createIcon,decorateAction,type IconName} from '../icons/index.js';
-export type ImageViewOptions={src:string;originalUrl?:string;downloadUrl?:string;name:string;onError?:()=>void};
+export type ImageViewOptions={src:string;previewUrl?:string|null;originalUrl?:string;downloadUrl?:string;name:string;onError?:()=>void};
 
 /** Shared, framework-neutral image viewer. Zoom state never enters the document. */
 export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
  const doc=element.ownerDocument,win=doc.defaultView!;
  function url(value:string){const parsed=new URL(value,doc.baseURI);if(!['http:','https:'].includes(parsed.protocol))throw Error('이미지 주소가 올바르지 않습니다.');return parsed.href;}
- const source=url(options.src),original=url(options.originalUrl??options.src),download=options.downloadUrl?url(options.downloadUrl):null;
+ const source=url(options.src),preview=url(options.previewUrl??options.src),original=url(options.originalUrl??options.src),download=options.downloadUrl?url(options.downloadUrl):null;
  const root=doc.createElement('div');root.className='shnea-image-viewer';
  const trigger=doc.createElement('button');trigger.type='button';trigger.className='siv-thumbnail';trigger.setAttribute('aria-label',`${options.name} 확대 보기`);
+ if(options.previewUrl===null){trigger.disabled=true;trigger.setAttribute('aria-label',`${options.name} 미리보기 준비 중`);}
  const thumbnail=doc.createElement('img');thumbnail.src=source;thumbnail.alt=options.name;thumbnail.loading='lazy';thumbnail.referrerPolicy='no-referrer';trigger.append(thumbnail);
  const hint=doc.createElement('span');hint.append(createIcon(doc,'zoom-in'));hint.setAttribute('aria-hidden','true');hint.className='siv-open';trigger.append(hint);root.append(trigger);element.append(root);
  const dialog=doc.createElement('dialog');dialog.className='shnea-image-viewer siv-dialog';dialog.setAttribute('aria-label',`${options.name} 이미지 확대 보기`);
@@ -35,7 +36,7 @@ export function mountImageViewer(element:HTMLElement,options:ImageViewOptions){
  function zoom(next:number,atX=0,atY=0){if(!loaded)return;const value=Math.max(fitScale,Math.min(8,next));x=atX-(atX-x)*value/scale;y=atY-(atY-y)*value/scale;scale=value;fitted=false;paint();}
  function fail(){loaded=false;error.textContent='이미지를 불러오지 못했습니다. 파일이 삭제되었거나 보기 주소가 만료되었을 수 있습니다.';error.hidden=false;options.onError?.();for(const el of [minus,plus,fit,actual])el.disabled=true;}
  full.addEventListener('load',()=>{loaded=true;error.hidden=true;layout();});full.addEventListener('error',fail);thumbnail.addEventListener('error',()=>{hint.textContent='이미지를 표시하지 못했습니다. 다시 열어 확인하세요.';options.onError?.();});
- trigger.addEventListener('click',()=>{if(disposed)return;loaded=false;fitted=true;x=y=0;error.hidden=true;state.textContent='불러오는 중';for(const el of [minus,plus,fit,actual])el.disabled=true;dialog.showModal();full.src=original;if(full.complete&&full.naturalWidth){loaded=true;layout();}close.focus();});
+ trigger.addEventListener('click',()=>{if(disposed)return;loaded=false;fitted=true;x=y=0;error.hidden=true;state.textContent='불러오는 중';for(const el of [minus,plus,fit,actual])el.disabled=true;dialog.showModal();full.src=preview;if(full.complete&&full.naturalWidth){loaded=true;layout();}close.focus();});
  dialog.addEventListener('close',()=>{points.clear();full.removeAttribute('src');loaded=false;if(!disposed)trigger.focus();});
  stage.addEventListener('keydown',event=>{if(['+','=','-','0','1','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();if(event.key==='+'||event.key==='=')zoom(scale*1.25);else if(event.key==='-')zoom(scale/1.25);else if(event.key==='0')fit.click();else if(event.key==='1')actual.click();else{x+=event.key==='ArrowLeft'?40:event.key==='ArrowRight'?-40:0;y+=event.key==='ArrowUp'?40:event.key==='ArrowDown'?-40:0;paint();}}});
  stage.addEventListener('wheel',event=>{if(event.ctrlKey||event.metaKey)return;event.preventDefault();const r=stage.getBoundingClientRect();zoom(scale*(event.deltaY<0?1.15:1/1.15),event.clientX-r.left-r.width/2,event.clientY-r.top-r.height/2);},{passive:false});

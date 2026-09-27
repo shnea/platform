@@ -1,6 +1,6 @@
 # SHNEA Platform · AI 연결 지침
 
-기준: 2026-09-27 · API `/api/v1` · 에디터 `0.1.0-alpha.6` / 문서 version 3.
+기준: 2026-09-27 · API `/api/v1` · 에디터 `0.1.0-alpha.7` / 문서 version 3.
 이 파일은 AI용 진입점이다. 필요한 항목의 URL만 읽는다. 플랫폼 저장소·관리자 로그인 없이 자료를 조회할 수 있다. 실제 API 호출에는 아래 인증이 필요하다.
 
 ## 입력받을 값
@@ -23,11 +23,11 @@
 | 공통 로그 · 비동기 전송 | https://platform.shnea.kr/integrations/logs.md |
 | 로그 API · Python 전송기 | https://platform.shnea.kr/integrations/logs.openapi.json · https://platform.shnea.kr/examples/logs-client.py |
 | React·Vue·JS·JSP 에디터/뷰어·첨부 연결 | https://platform.shnea.kr/integrations/editor.md |
-| 에디터 설치 패키지 | https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.6.tgz |
+| 에디터 설치 패키지 | https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.7.tgz |
 | 패키지 SHA-256 | https://platform.shnea.kr/integrations/checksums.json |
 | 브라우저 실행 예제 | https://platform.shnea.kr/examples/editor/ |
 
-표의 자료는 **인증 없이 HTTP GET**으로 받는다. 링크를 열 수 없다면 그 사실과 필요한 URL을 알리고, 계약을 추측하지 않는다. 일반 JS/JSP는 받은 tgz를 풀어 `package/dist/browser` 전체를 정적 자산으로 사용한다. React/Vue는 내려받은 tgz를 `npm install ./shnea-editor-0.1.0-alpha.6.tgz`로 설치한다. 공개 npm 레지스트리 발행은 아니다.
+표의 자료는 **인증 없이 HTTP GET**으로 받는다. 링크를 열 수 없다면 그 사실과 필요한 URL을 알리고, 계약을 추측하지 않는다. 일반 JS/JSP는 받은 tgz를 풀어 `package/dist/browser` 전체를 정적 자산으로 사용한다. React/Vue는 내려받은 tgz를 `npm install ./shnea-editor-0.1.0-alpha.7.tgz`로 설치한다. 공개 npm 레지스트리 발행은 아니다.
 
 ## 호출 계약
 

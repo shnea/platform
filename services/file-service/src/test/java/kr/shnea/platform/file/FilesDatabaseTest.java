@@ -131,16 +131,34 @@ class FilesDatabaseTest {
         assertThat(db.queryForObject("SELECT storage_path FROM files WHERE id=?", String.class, id)).isEqualTo(key);
         assertThat(store.path(id)).isEqualTo(directory.resolve(key));
         Files.write(store.thumbnail(id), new byte[]{1, 2});
+        Files.write(store.preview(id), new byte[]{3, 4});
+        Files.write(store.previewTemporary(id), new byte[]{5}); // Simulate an interrupted conversion.
         Path segments = store.video(id).resolve(UUID.randomUUID().toString());
         Files.createDirectories(segments); Files.writeString(segments.resolve("q360-00000.ts"), "segment");
         var restarted = new FileStore(directory.toString(), db);
         try (var input = restarted.open(id)) { assertThat(input.readAllBytes()).isEqualTo(bytes); }
         assertThat(restarted.thumbnail(id)).isEqualTo(store.path(id).resolveSibling("thumbnail.jpg"));
+        assertThat(restarted.preview(id)).isEqualTo(store.path(id).resolveSibling("preview.webp"));
         assertThat(restarted.video(id)).isEqualTo(store.path(id).resolveSibling("hls"));
         service.delete(id, owner); service.cleanup();
         assertThat(store.path(id).getParent()).doesNotExist();
         assertThat(Files.readAllBytes(store.path(neighbor))).isEqualTo(bytes);
         assertThat(db.queryForObject("SELECT purged_at IS NOT NULL FROM files WHERE id=?", Boolean.class, id)).isTrue();
+    }
+    @Test void existingImagesAreQueuedForSeparatePreviewWithoutChangingOtherFiles() throws Exception {
+        UUID image=duplicateFixture(owner,"old.png",bytes,"PUBLIC"),text=duplicateFixture(owner,"note.txt",bytes,"PUBLIC");
+        var views=views();views.view(image);views.view(text);
+        db.update("UPDATE file_views SET state='READY',kind='IMAGE',media_type='image/png',thumbnail=true,attempts=2 WHERE file_id=?",image);
+        db.update("UPDATE file_views SET state='READY',kind='TEXT',media_type='text/plain' WHERE file_id=?",text);
+        try(var sql=getClass().getResourceAsStream("/db/migration/V10__image_previews.sql")) {
+            db.execute(new String(sql.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
+        }
+        assertThat(views.view(image).state()).isEqualTo("QUEUED");
+        assertThat(views.view(image).thumbnail()).isTrue();
+        assertThat(views.links(image,null,null).previewUrl()).endsWith("/content/preview");
+        assertThat(db.queryForObject("SELECT attempts FROM file_views WHERE file_id=?",Integer.class,image)).isZero();
+        assertThat(views.view(text).state()).isEqualTo("READY");
+        assertThat(Files.readAllBytes(store.path(image))).isEqualTo(bytes);
     }
     @Test void legacyFlatUploadCanResumeAndKeepThumbnailAndHlsPathsAfterUpgrade() throws Exception {
         UUID id = create().uploadId();
@@ -155,9 +173,13 @@ class FilesDatabaseTest {
         assertThat(store.thumbnail(id)).isEqualTo(directory.resolve(id + ".jpg"));
         assertThat(store.video(id)).isEqualTo(directory.resolve(id + ".hls"));
         Files.write(store.thumbnail(id), new byte[]{1});
+        assertThat(store.preview(id)).isEqualTo(directory.resolve(id + ".preview.webp"));
+        Files.write(store.preview(id), new byte[]{2});
+        Files.write(store.previewTemporary(id), new byte[]{3});
         Files.createDirectories(store.video(id)); Files.writeString(store.video(id).resolve("master.m3u8"), "playlist");
         service.delete(id, owner); service.cleanup();
         assertThat(store.path(id)).doesNotExist(); assertThat(store.thumbnail(id)).doesNotExist();
+        assertThat(store.preview(id)).doesNotExist(); assertThat(store.previewTemporary(id)).doesNotExist();
         assertThat(store.video(id)).doesNotExist(); assertThat(directory).isDirectory();
     }
     @Test void emptyFileCreatesDatedDirectoryAndPersistedPathCannotEscapeStorageRoot() throws Exception {

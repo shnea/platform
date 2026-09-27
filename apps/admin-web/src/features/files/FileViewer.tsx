@@ -22,7 +22,7 @@ function Viewer(){
  return <main className="file-public-viewer"><h1>{data?.kind==='IMAGE'?'이미지 보기':'파일 보기'}</h1>{error?<p role="alert" className="alert">{error}</p>:data?<>
   {data.video&&<p role="status">{videoState(data.video)}</p>}
   {data.video&&['FAILED','UNSUPPORTED'].includes(data.video.state)&&<p className="warning">{videoReason(data.video.errorCode)}</p>}
-  {data.kind==='IMAGE'?data.previewUrl?<ImageViewer src={data.previewUrl} originalUrl={data.originalUrl} downloadUrl={data.downloadUrl} name="이미지" onError={()=>setError('이미지를 열 수 없습니다. 파일 상태와 링크 만료를 확인해 주세요.')}/>:<p role="status">{['QUEUED','PROCESSING'].includes(data.state)?'이미지를 준비하고 있습니다.':'이미지 미리보기를 사용할 수 없습니다. 원본을 내려받아 주세요.'}</p>:<VideoPlayer data={data}/>}
+  {data.kind==='IMAGE'?data.previewUrl?<ImageViewer src={data.thumbnailUrl??data.previewUrl} previewUrl={data.previewUrl} originalUrl={data.originalUrl} downloadUrl={data.downloadUrl} name="이미지" onError={()=>setError('이미지를 열 수 없습니다. 파일 상태와 링크 만료를 확인해 주세요.')}/>:<p role="status">{['QUEUED','PROCESSING'].includes(data.state)?'이미지를 준비하고 있습니다.':'이미지 미리보기를 사용할 수 없습니다. 원본을 내려받아 주세요.'}</p>:<VideoPlayer data={data}/>}
   <p className="small muted">{data.streamExpiresAt?`스트리밍 링크 만료: ${new Date(data.streamExpiresAt).toLocaleString('ko-KR')}`:data.expiresAt?'보기 주소가 만료되면 새 링크를 요청해 주세요.':'공개 파일입니다. 공개 범위 변경·파일 삭제 시 이용이 중단됩니다.'}</p>
   <a href={data.downloadUrl} rel="noreferrer"><Icon name="download"/>원본 다운로드</a>{data.expiresAt&&<p className="small muted">원본 다운로드 링크 만료: {new Date(data.expiresAt).toLocaleTimeString('ko-KR')}</p>}
  </>:<p role="status">파일 정보를 불러오는 중…</p>}</main>;

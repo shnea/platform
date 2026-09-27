@@ -53,6 +53,8 @@ class FileStore {
         return target;
     }
     Path thumbnail(UUID id) { return derivative(path(id), id, "thumbnail.jpg", ".jpg"); }
+    Path preview(UUID id) { return derivative(path(id), id, "preview.webp", ".preview.webp"); }
+    Path previewTemporary(UUID id) { return derivative(path(id), id, "preview.webp.tmp", ".preview.webp.tmp"); }
     Path video(UUID id) { return derivative(path(id), id, "hls", ".hls"); }
     private Path derivative(Path original, UUID id, String name, String legacySuffix) {
         return original.getParent().equals(root) ? root.resolve(id + legacySuffix) : original.resolveSibling(name);
@@ -132,6 +134,8 @@ class FileStore {
         try {
             Files.deleteIfExists(original);
             Files.deleteIfExists(derivative(original, id, "thumbnail.jpg", ".jpg"));
+            Files.deleteIfExists(derivative(original, id, "preview.webp", ".preview.webp"));
+            Files.deleteIfExists(derivative(original, id, "preview.webp.tmp", ".preview.webp.tmp"));
             deleteVideo(derivative(original, id, "hls", ".hls"));
             // Remove only this file's empty directory, never a shared date/project directory.
             if (!original.getParent().equals(root)) Files.deleteIfExists(original.getParent());

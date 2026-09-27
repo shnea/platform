@@ -65,7 +65,7 @@ class FileViews {
         var video=FileVideos.candidate(files.downloadable(id).name())?videos.status(id):null;
         Instant streamEnd=token==null?null:db.query("SELECT playback_expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=? AND playback_expires_at IS NOT NULL",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
         return new Links(id,v.state(),video==null?v.kind():"VIDEO",v.mediaType(),v.errorCode(),base+"/content/original"+query,
-            v.state().equals("READY")?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
+            v.state().equals("READY")||imagePreviewable(v)?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
             base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd,
             files.downloadable(id).visibility().equals("PUBLIC")?base+"/share":null);
     }
@@ -75,6 +75,10 @@ class FileViews {
             db.update("UPDATE file_views SET state='QUEUED',attempts=0,error_code=NULL WHERE file_id=? AND state='FAILED'",id);
             return view(id);
         });
+    }
+    static boolean imagePreviewable(View view) {
+        // A previously inspected image stays viewable while its new derivative is queued.
+        return view.kind().equals("IMAGE")&&view.thumbnail()&&view.mediaType().startsWith("image/");
     }
     @Scheduled(fixedDelay=3000,initialDelay=15000)
     void work() {
@@ -89,20 +93,41 @@ class FileViews {
         if(id!=null)synchronized(store.mediaMonitor){process(id);}
     }
     void process(UUID id) {
-        Path temporary=null;
+        Path temporary=null,previewTemporary=null;
         try {
             var row=files.downloadable(id);access.requireActive(row.environment());
             temporary=Files.createTempFile("platform-preview-",".jpg");View result=inspect(row,temporary);Path output=temporary;
+            if(result.state().equals("READY")&&result.kind().equals("IMAGE")) {
+                // Fixed per-file staging path can be overwritten after a crash and purged on deletion.
+                previewTemporary=store.previewTemporary(id);
+                imagePreview(store.path(id),previewTemporary);
+            }
+            Path previewOutput=previewTemporary;
             tx.executeWithoutResult(s->{
                 db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.downloadable(id);
-                try {if(result.thumbnail())Files.move(output,store.thumbnail(id),StandardCopyOption.REPLACE_EXISTING);}
+                try {
+                    if(result.thumbnail())Files.move(output,store.thumbnail(id),StandardCopyOption.REPLACE_EXISTING);
+                    if(previewOutput!=null)Files.move(previewOutput,store.preview(id),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+                }
                 catch(IOException e){throw FileFailure.unavailable();}
                 db.update("UPDATE file_views SET state=?,kind=?,media_type=?,thumbnail=?,error_code=?,finished_at=now() WHERE file_id=?",result.state(),result.kind(),result.mediaType(),result.thumbnail(),result.errorCode(),id);
                 db.update("INSERT INTO file_audit(file_id,environment_id,actor,action) VALUES (?,?,'system:preview',?)",id,row.environment(),"file.preview."+result.state().toLowerCase(Locale.ROOT));
             });
         } catch(Exception e) {
             db.update("UPDATE file_views SET state='FAILED',error_code='FILE_PREVIEW_FAILED',finished_at=now() WHERE file_id=?",id);
-        } finally {if(temporary!=null)try{Files.deleteIfExists(temporary);}catch(IOException ignored){}}
+        } finally {
+            if(temporary!=null)try{Files.deleteIfExists(temporary);}catch(IOException ignored){}
+            if(previewTemporary!=null)try{Files.deleteIfExists(previewTemporary);}catch(IOException ignored){}
+        }
+    }
+    static void imagePreview(Path input,Path output) throws Exception {
+        run(List.of("ffmpeg","-v","error","-nostdin","-y","-max_alloc","67108864","-threads","1",
+            "-protocol_whitelist","file","-format_whitelist","png_pipe,jpeg_pipe,gif,webp_pipe",
+            "-i",input.toString(),"-map","0:v:0","-frames:v","1","-map_metadata","-1",
+            "-vf","scale=w='min(1600,iw)':h='min(1600,ih)':force_original_aspect_ratio=decrease",
+            "-c:v","libwebp","-quality","80","-compression_level","4","-threads","1","-filter_threads","1",
+            "-f","webp",output.toString()),30);
+        if(Files.size(output)==0||Files.size(output)>2_000_000)throw new IOException("Invalid image preview");
     }
     View inspect(FilesService.Row row,Path thumbnail) throws Exception {
         String ext=row.name().substring(row.name().lastIndexOf('.')+1).toLowerCase(Locale.ROOT);
