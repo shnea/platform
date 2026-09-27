@@ -23,6 +23,11 @@ public final class KakaoIdentityProviderFactory extends AbstractIdentityProvider
     }
     public static final class Provider extends OIDCIdentityProvider implements SocialIdentityProvider<OIDCIdentityProviderConfig> {
         Provider(KeycloakSession session, OIDCIdentityProviderConfig config) { super(session, config); }
+        @Override public void preprocessFederatedIdentity(KeycloakSession session, org.keycloak.models.RealmModel realm,
+                org.keycloak.broker.provider.BrokeredIdentityContext context) {
+            super.preprocessFederatedIdentity(session, realm, context);
+            SocialNickname.requireUserChoice(context);
+        }
         @Override public Response performLogin(AuthenticationRequest request) {
             return SharedSocialCallback.begin(session, getConfig(), "kakao", request, super.performLogin(request));
         }

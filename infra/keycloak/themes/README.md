@@ -14,6 +14,10 @@
 
 인증 URL·제공자 활성화·일회 클릭 처리는 Keycloak의 `p.loginUrl`과 `data-once-link`를 그대로 사용한다. 로고는 장식으로 숨기고 링크 이름은 보이는 문구로 제공한다. 세 버튼은 같은 너비·최소 높이 48px로 배치한다.
 
+소셜 첫 로그인 정보 확인 폼(`kc-idp-review-profile-form`)에서는 값이 있는 자동 생성 아이디 입력 그룹을 숨긴다. 폼의 값과 제출·서버 검증은 유지하고 닉네임·이메일을 확인받는다. 아이디가 비었거나 서버가 아이디 오류를 반환하면 해당 필드를 보여 복구할 수 있게 한다. 일반 로그인·일반 회원가입·계정 관리 화면에는 적용하지 않는다. Keycloak 버전 변경 시 폼 ID·PatternFly 그룹·오류 요소 구조를 대조한다.
+
+세 플랫폼 소셜 공급자는 프로필 전처리에서 외부 이름·성을 서비스 닉네임으로 넘기지 않는다. 신규 가입은 필수 닉네임을 빈칸에서 직접 입력한다. 이메일과 공급자 식별값은 유지하고 기존 IMPORT 동기화 방식으로 재로그인 회원의 닉네임을 보존한다. 기존 회원 데이터를 일괄 수정하지 않는다.
+
 자산은 외부 요청 없이 이미지에 포함한다. 출처 및 사용 규칙:
 
 - 네이버: [공식 가이드](https://developers.naver.com/docs/login/bi/bi.md), [공식 PNG 묶음](https://developers.naver.com/inc/devcenter/downloads/bi/NAVER_login_KR.zip)의 `NAVER_login_Light_KR_green_icon_H48.png`. 지정 녹색 `#03A94D`와 원형 아이콘 안의 원본 N을 사용한다.

@@ -38,6 +38,27 @@ class ExternalServicesDatabaseTest {
  ExternalJobs.Job enqueue(int max){return jobs.enqueue(env,request(UUID.randomUUID(),max),"test","0123456789abcdef0123456789abcdef");}
  void due(UUID id){db.update("UPDATE external_jobs SET next_run_at=now()-interval '1 second' WHERE id=?",id);}
  void fails(Runnable operation,ApiCode expected){assertThatThrownBy(operation::run).isInstanceOfSatisfying(ApiCode.Failure.class,error->assertThat(error.code).isEqualTo(expected));}
+ @Test void allAdvertisedScopesPassRequestValidationAndIssueWithoutWideningPermissions() {
+  db.update("UPDATE projects SET files_enabled=true");
+  try(var factory=jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+   var validator=factory.getValidator();
+   for(String mode:List.of("dev","prod")) {
+    db.update("UPDATE environments SET kind=? WHERE id=?",mode.equals("dev")?"DEV":"PROD",env);
+    var service=new ProjectService(db,new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())),mock(IdentityClient.class),mode);
+    var scopes=service.credentialScopes(env).stream().map(ProjectService.Scope::code).toList();
+    assertThat(scopes).hasSize(mode.equals("dev")?11:10);
+    assertThat(validator.validate(new ProjectController.NewCredential(null,scopes))).isEmpty();
+    var key=service.issueCredential(env,null,scopes,"test");
+    assertThat(key.scopes()).containsExactlyElementsOf(scopes);
+    for(String scope:scopes)assertThat(service.context(key.apiKey(),scope).environmentId()).isEqualTo(env);
+    fails(()->service.issueCredential(env,null,List.of("unknown:permission"),"test"),ApiCode.INVALID_CREDENTIAL_SCOPES);
+    fails(()->service.issueCredential(env,null,List.of("logs:read","logs:read"),"test"),ApiCode.INVALID_CREDENTIAL_SCOPES);
+    if(mode.equals("prod"))fails(()->service.issueCredential(env,null,List.of("auth:mock"),"test"),ApiCode.INVALID_CREDENTIAL_SCOPES);
+   }
+   assertThat(validator.validate(new ProjectController.NewCredential(null,List.of()))).isNotEmpty();
+   assertThat(validator.validate(new ProjectController.NewCredential(null,List.of("")))).isNotEmpty();
+  }
+ }
  @Test void scopedKeysNeverGainNewPermissionsAndRevocationBlocksAccess() {
   var old=projects.issueCredential(env,null,null,"test");fails(()->projects.context(old.apiKey(),"jobs:write"),ApiCode.INSUFFICIENT_SCOPE);
   for(String scope:List.of("jobs:read","jobs:write","jobs:work","logs:read","logs:write")) {

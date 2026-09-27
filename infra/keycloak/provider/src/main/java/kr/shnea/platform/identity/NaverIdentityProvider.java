@@ -29,6 +29,12 @@ public final class NaverIdentityProvider extends AbstractOAuth2IdentityProvider 
 
     @Override protected String getDefaultScopes() { return ""; }
 
+    @Override public void preprocessFederatedIdentity(KeycloakSession session, org.keycloak.models.RealmModel realm,
+            BrokeredIdentityContext context) {
+        super.preprocessFederatedIdentity(session, realm, context);
+        SocialNickname.requireUserChoice(context);
+    }
+
     @Override public Response performLogin(AuthenticationRequest request) {
         return SharedSocialCallback.begin(session, getConfig(), "naver", request, super.performLogin(request));
     }

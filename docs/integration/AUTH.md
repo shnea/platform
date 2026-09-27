@@ -11,6 +11,7 @@
 - 호스트 API용 access token audience는 자동 등록되지 않는다. 별도 Bearer API를 만들면 운영자와 audience 계약을 확정한다. ID token을 업무 API 토큰으로 쓰지 않는다.
 - 사용자 키는 검증한 `iss` + `sub`. 다른 환경 계정을 이메일만으로 합치지 않는다.
 - 회원가입·프로필의 닉네임은 `firstName`/OIDC `given_name`이다. `profile` scope로 받아 표시하며 사용자 식별에는 쓰지 않는다. 성은 일반 사용자 입력에서 제외하고 기존 저장 값은 보존한다. 별도 `nickname` 클레임이나 닉네임 유일성은 제공하지 않는다.
+- 소셜 신규 가입은 제공자와 관계없이 빈 닉네임을 직접 입력받는다. 자동 생성 아이디는 첫 로그인 확인 화면에서 숨기며, 전달받은 이메일과 기존 회원 닉네임은 유지한다.
 - Password grant는 비활성화돼 있다. `/api/v1/config`는 플랫폼 관리자 로그인 설정이므로 사용하지 않는다.
 - 호스트 세션·업무 권한·CSRF·로그아웃·미저장 내용 보호는 호스트 책임이다. 브라우저에 서버 API 키를 넣지 않는다.
 - 등록 콜백 origin만 Keycloak 출처 설정에 반영한다. 로그아웃 복귀는 등록 콜백 또는 그 origin의 홈(`/`)을 사용한다. 예: 콜백 `https://blog.shnea.kr/auth/callback` → 로그아웃 `https://blog.shnea.kr/`. 기존 환경은 수정 이미지 배포 후 **인증 설정 → 로그인 주소 → 설정 변경 → 저장**으로 재반영한다. 임의 경로·다른 origin은 허용하지 않으며 confidential client는 별도 계약이다.

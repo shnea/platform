@@ -24,6 +24,11 @@ public final class GoogleIdentityProviderFactory extends AbstractIdentityProvide
     }
     public static final class Provider extends GoogleIdentityProvider {
         Provider(KeycloakSession session, GoogleIdentityProviderConfig config) { super(session, config); }
+        @Override public void preprocessFederatedIdentity(KeycloakSession session, org.keycloak.models.RealmModel realm,
+                org.keycloak.broker.provider.BrokeredIdentityContext context) {
+            super.preprocessFederatedIdentity(session, realm, context);
+            SocialNickname.requireUserChoice(context);
+        }
         @Override public Response performLogin(AuthenticationRequest request) {
             return SharedSocialCallback.begin(session, getConfig(), "google", request, super.performLogin(request));
         }

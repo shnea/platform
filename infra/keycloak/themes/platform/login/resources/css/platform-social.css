@@ -91,3 +91,9 @@
 @media (forced-colors: active) {
   .platform-social-button { border-color: ButtonText; }
 }
+
+/* Keep the broker-generated username in the submitted form, without presenting it
+   as a user choice. Empty/invalid values stay visible so validation is recoverable. */
+#kc-idp-review-profile-form .pf-v5-c-form__group:has(input#username[value]:not([value=""])):not(:has(#input-error-username)) {
+  display: none;
+}
