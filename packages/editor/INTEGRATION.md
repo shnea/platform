@@ -128,6 +128,27 @@ const attachments = {
 
 현재 플랫폼 기본 뷰어는 `frame-ancestors 'self'`이므로 다른 도메인에서 iframe으로 바로 표시할 수 없으며 파일 API의 임의 출처 CORS도 제공하지 않는다. 새 탭의 기본 뷰어로 먼저 확인하고, 본문 내 재생은 호스트 플레이어와 인증된 같은 출처 중계 또는 별도로 합의한 허용 출처/임베드 정책이 필요하다. 위 기본 iframe 동작은 이 제한을 우회하지 않는다. 다른 서비스의 연결 계약은 https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md 에서 찾는다.
 
+## 파일 보기 URL 연결 규칙
+
+**설치·업데이트할 때 호스트의 `attachments.resolve` 응답과 파일 중계 경로를 함께 확인한다. 패키지만 교체해도 호스트 코드의 잘못된 URL 매핑은 그대로 남는다.**
+
+| 응답 필드 | 용도 | 플랫폼 경로 |
+| --- | --- | --- |
+| `thumbnailUrl` | 이미지 본문 | `/api/v1/files/{id}/content/thumbnail` |
+| `previewUrl` | 이미지 클릭 후 확대창 | `/api/v1/files/{id}/content/preview` |
+| `originalUrl` | 확대창 안의 원본 보기 | `/api/v1/files/{id}/content/original` |
+| `viewerUrl` | 독립 파일 보기 화면 | `/api/v1/files/{id}/view` |
+| `downloadUrl` | 다운로드 | `/api/v1/files/{id}/content/download` |
+
+- 표는 경로 구분이다. 파일 ID로 URL을 임의 생성하지 말고 플랫폼 보기 API가 반환한 URL·상태·만료 정보를 사용한다. URL의 토큰 쿼리를 보존하고, 제공되지 않은 URL의 `null`도 유지한다. 임시 URL을 본문 JSON에 저장하지 않는다.
+- 플랫폼 상대 URL을 직접 전달하려면 `https://platform.shnea.kr`를 기준으로 절대 URL로 변환한다. 블로그 주소를 기준으로 해석하지 않는다. 보호 파일의 링크는 호스트에서 권한을 확인한 뒤 발급·전달하고 서버 API 키는 브라우저에 보내지 않는다.
+- 같은 출처 중계가 필요하면 호스트 주소를 써도 된다. 다만 **본문 → thumbnail, 확대창 → preview, 원본 버튼 → original** 구분을 서버까지 전달한다. 예를 들어 호스트가 `/api/files/{id}/content?variant=thumbnail`을 구현했다면 해당 요청을 플랫폼의 `/content/thumbnail`로 중계한다. 주소에 variant만 붙이고 서버가 계속 원본을 내려주면 수정된 것이 아니다. 중계 서버는 허용한 variant와 사용자·파일 접근 권한을 검사한다.
+- `thumbnailUrl`, `previewUrl`, `originalUrl`, `viewerUrl`을 전부 `/api/files/{id}/content` 하나로 채우지 않는다. 에디터는 `thumbnailUrl`을 사용해도 실제 주소가 원본이면 원본을 받는다.
+- 기존 이미지의 별도 미리보기가 없을 때 원본으로 대체하는 것은 **플랫폼의 preview 응답 내부 처리**다. 호스트가 `previewUrl`을 `originalUrl`로 덮어쓰거나 썸네일까지 원본으로 대체할 이유가 아니다.
+- 이미지 블록은 자체 확대창을 사용하므로 `viewerUrl`로 이미지를 대신 로드하지 않는다. 기본 뷰어는 독립 화면용이며 영상의 기본 iframe 사용에는 위 출처 제한이 적용된다.
+
+**완료 기준:** 실제 호스트의 편집/읽기 화면에서 캐시를 끄고 Network 요청을 확인한다. 처음에는 thumbnail, 이미지를 클릭하면 preview, 원본 버튼을 누르면 original이어야 한다. 호스트 중계라면 실제 플랫폼 요청 대상도 확인하고 응답의 형식·크기가 해당 파일과 일치하는지 검사한다. 기존 파일의 preview는 생성 전 원본일 수 있다. 합성 URL·패키지 테스트만으로 호스트 연결까지 완료됐다고 보고하지 않는다.
+
 ## 검수와 공식 참고
 
 예제는 운영 API·인증·실제 파일 업로드를 호출하지 않는다. 사용 프로젝트에서는 Markdown 붙여넣기 → JSON 저장/조회 → 읽기와 재편집, 업로드 취소·만료 URL·권한 실패, 여러 인스턴스와 화면 해제, 실제 모바일 키보드·한글 IME·Safari를 검수한다.
