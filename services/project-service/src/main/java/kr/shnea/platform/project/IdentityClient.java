@@ -493,7 +493,8 @@ class IdentityClient {
             var client = Map.of("clientId", "app", "protocol", "openid-connect", "publicClient", true,
                 "standardFlowEnabled", true, "directAccessGrantsEnabled", false,
                 "redirectUris", env.redirectUris(), "webOrigins", List.of(),
-                "attributes", Map.of("pkce.code.challenge.method", "S256"));
+                "attributes", Map.of("pkce.code.challenge.method", "S256",
+                    "post.logout.redirect.uris", logoutRedirects(env)));
             var realm = Map.of("realm", env.realm(), "enabled", false,
                 "registrationAllowed", env.registrationAllowed(), "bruteForceProtected", true,
                 "passwordPolicy", AuthenticationPolicy.DEFAULT_PASSWORD_POLICY,
@@ -532,13 +533,47 @@ class IdentityClient {
         client.put("standardFlowEnabled", true);
         var attributes = new java.util.HashMap<>((Map<String, Object>) client.getOrDefault("attributes", Map.of()));
         attributes.put("pkce.code.challenge.method", "S256");
+        attributes.put("post.logout.redirect.uris", logoutRedirects(env));
         client.put("attributes", attributes);
         http.put().uri(path + "/clients/" + client.get("id")).headers(h -> h.setBearerAuth(admin))
             .body(client).retrieve().toBodilessEntity();
+        configureNickname(path, admin);
         http.put().uri(path).headers(h -> h.setBearerAuth(admin))
             .body(Map.of("enabled", enabled, "registrationAllowed", env.registrationAllowed(),
                 "internationalizationEnabled", true, "supportedLocales", List.of("ko"), "defaultLocale", "ko"))
             .retrieve().toBodilessEntity();
+    }
+
+    private String logoutRedirects(ProjectService.Environment env) {
+        // '+' retains exact login callbacks; only their origin roots are additionally allowed.
+        // Recompute on every reconcile so removed callback origins lose logout access too.
+        return java.util.stream.Stream.concat(java.util.stream.Stream.of("+"), env.redirectUris().stream()
+            .map(java.net.URI::create).map(uri -> uri.getScheme() + "://" + uri.getRawAuthority() + "/"))
+            .distinct().collect(java.util.stream.Collectors.joining("##"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void configureNickname(String realmPath, String token) {
+        String path = realmPath + "/users/profile";
+        Map<String, Object> profile = http.get().uri(path).headers(h -> h.setBearerAuth(token))
+            .retrieve().body(Map.class);
+        if (profile == null || !(profile.get("attributes") instanceof List<?> attributes))
+            throw new IllegalStateException("User profile configuration missing");
+        boolean first = false, last = false;
+        for (Object entry : attributes) {
+            Map<String, Object> attribute = (Map<String, Object>) entry;
+            if ("firstName".equals(attribute.get("name"))) {
+                attribute.put("displayName", "닉네임");
+                first = true;
+            } else if ("lastName".equals(attribute.get("name"))) {
+                // Hide from registration/account/broker forms without deleting existing surnames.
+                attribute.remove("required");
+                attribute.put("permissions", Map.of("view", List.of("admin"), "edit", List.of("admin")));
+                last = true;
+            }
+        }
+        if (!first || !last) throw new IllegalStateException("User profile name attributes missing");
+        http.put().uri(path).headers(h -> h.setBearerAuth(token)).body(profile).retrieve().toBodilessEntity();
     }
 
     @SuppressWarnings("unchecked")

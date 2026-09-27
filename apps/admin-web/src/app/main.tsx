@@ -22,12 +22,13 @@ import { Dialog } from "../shared/Dialog";
 import { SectionTabs } from "../shared/SectionTabs";
 import { ProjectOverview } from "../features/projects/ProjectOverview";
 import { ProjectFilesSettings } from "../features/projects/ProjectFilesSettings";
+import { ProjectIntegration } from "../features/projects/ProjectIntegration";
 import { DeveloperCenter } from "../features/developer/DeveloperCenter";
 import { EditorEntry } from "../features/editor/EditorEntry";
 import { FileWorkspace } from "../features/files/FileWorkspace";
 
 type View = "projects" | "files" | "jobs" | "logs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
-type ProjectSection = "overview" | "auth" | "members" | "keys" | "test" | "settings";
+type ProjectSection = "overview" | "integration" | "auth" | "members" | "keys" | "test" | "settings";
 const viewIcons = {projects:'folder',files:'file',editor:'pencil',jobs:'list-checks',logs:'search',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
@@ -41,7 +42,7 @@ const views: { value: View; label: string; description: string }[] = [
   { value: "audit", label: "감사 이력", description: "관리 작업과 인증 활동을 확인하세요. 최근 100건을 표시합니다." },
 ];
 const projectSections: { value: ProjectSection; label: string }[] = [
-  { value: "overview", label: "개요" }, { value: "auth", label: "인증 설정" },
+  { value: "overview", label: "개요" }, { value: "integration", label: "서비스 연결" }, { value: "auth", label: "인증 설정" },
   { value: "members", label: "회원" }, { value: "keys", label: "API 키" },
   { value: "test", label: "개발 테스트" }, { value: "settings", label: "프로젝트 설정" },
 ];
@@ -90,7 +91,7 @@ type Modal =
   | { type: "project" }
   | { type: "edit" | "status"; project: Project }
   | { type: "environment"; env?: Environment }
-  | { type: "issue"; environmentId: string }
+  | { type: "issue"; environmentId: string; onIssued?: (key: string) => void }
   | { type: "revoke"; key: Key }
   | { type: "secret"; secret: string };
 const date = (value: string) =>
@@ -324,7 +325,7 @@ function Workspace() {
     let live = true;
     setKeys([]);
     setScopeOptions([]);
-    if (!envId || tab !== "projects" || activeSection !== "keys") {
+    if (!envId || tab !== "projects" || !["keys", "integration"].includes(activeSection)) {
       setKeysLoading(false);
       return;
     }
@@ -397,6 +398,11 @@ function Workspace() {
             scopes,
           },
         );
+        if (modal.onIssued) {
+          modal.onIssued(result.apiKey);
+          setModal(null);
+          return;
+        }
         open({ type: "secret", secret: result.apiKey });
         setKeys(
           await api<Key[]>(`/environments/${modal.environmentId}/credentials`),
@@ -710,6 +716,10 @@ function Workspace() {
                 </div>
                 {env && (
                   <>
+                    {tab === "projects" && activeSection === "integration" && <ProjectIntegration key={env.id}
+                      project={project} environment={env} disabled={busy}
+                      issueDisabled={keysLoading || !scopeOptions.length || env.state !== "READY" || project.status !== "ACTIVE"}
+                      onIssue={onIssued => open({type: "issue", environmentId: env.id, onIssued})} />}
                     {tab === "projects" && activeSection === "overview" && <ProjectOverview key={`overview:${env.id}:${refresh}`} environmentId={env.id}
                       ready={env.state === "READY"} disabled={busy} open={moveTo} />}
                     {tab === "files" && !project.filesEnabled && <p className="warning">파일 서비스 사용이 꺼져 있습니다. <button className="secondary" onClick={()=>{moveTo("projects");setSection("settings");}}><Icon name="settings"/>프로젝트 설정으로</button></p>}

@@ -1,0 +1,13 @@
+.project-integration{max-width:100%;min-width:0}
+.connection-values>div{grid-template-columns:minmax(190px,250px) minmax(0,1fr);gap:16px}
+.connection-values dt{font-family:ui-monospace,monospace;overflow-wrap:anywhere}
+.connection-values dd{display:flex;align-items:flex-start;gap:12px;min-width:0}
+.connection-values code{flex:1;min-width:0;overflow-wrap:anywhere;user-select:all;font-size:13px}
+.connection-values button{flex:none;min-width:44px;min-height:44px;padding:10px}
+.project-integration fieldset{min-width:0;margin:24px 0;padding:0;border:0}
+.project-integration legend{font-weight:700;margin-bottom:16px}
+.project-integration label{margin-bottom:14px}
+.connection-admin{margin:28px 0;padding:24px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.connection-admin h4{margin-top:0}
+.connection-preview textarea{font-family:ui-monospace,monospace;font-size:13px;line-height:1.8;overflow-wrap:anywhere;white-space:pre-wrap;min-height:270px}
+@media(max-width:700px){.connection-values>div{grid-template-columns:1fr;gap:8px}.project-integration .section-line{align-items:flex-start;flex-wrap:wrap}.connection-preview textarea{min-height:390px}.connection-admin .member-search{flex-wrap:wrap}}

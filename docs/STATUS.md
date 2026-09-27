@@ -2,6 +2,14 @@
 
 ## 현재 단계
 
+### 서비스 연결 값 복사·로그아웃 복귀·닉네임 가입 (2026-09-27)
+
+- **완료:** 프로젝트 → 서비스 연결 탭에 사용자가 요청한 환경변수 9개를 모았다. 실제 프로젝트/환경 UUID와 issuer, client `app`, 복귀 주소, 직접 입력하거나 기존 권한 선택 절차로 발급한 API 키, 해당 환경에서 선택한 관리자 회원의 issuer/sub를 `.env`로 복사한다. 키는 기본 마스킹하며 브라우저 저장소에 보관하지 않고 탭·환경 변경 시 지운다. 관리자 선택은 호스트 설정 내보내기이며 권한을 변경하지 않는다.
+- **인증 수정:** `OIDC_POST_LOGOUT_REDIRECT_URI='https://blog.shnea.kr/'`는 정상 값이다. 기존 프로비저닝에 로그아웃 홈 허용 설정이 없던 것을 수정했다. Keycloak app 클라이언트에 정확한 로그인 콜백과 해당 origin의 홈(`/`)만 로그아웃 주소로 설정하고, 콜백 삭제 후 재반영하면 해당 origin 허용도 제거한다. 로그인 콜백에 와일드카드나 홈을 추가하지 않는다.
+- **닉네임:** 프로젝트 realm의 사용자 프로필을 읽어 `firstName` 표시를 닉네임으로 바꾸고 `lastName`은 admin만 조회·편집하도록 제한하며 필수 요구를 제거한다. 기존 회원 데이터·다른 프로필 속성·검증·프로필 정책은 보존한다. 회원가입·계정 수정에 적용하며 플랫폼 관리자 realm은 변경하지 않는다. 외부 서비스는 `profile` scope의 `given_name`을 닉네임으로 사용하고 식별은 `iss`+`sub`를 유지한다.
+- **검증:** 관리자 `npm.cmd test` 5개, `docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check` 140개 통과(실패·건너뜀 0). `docker compose --env-file .env.build build admin-web project-service` 최종 0.1.3 이미지 빌드 통과. 합성 API를 연결한 실제 관리자 화면에서 9개 값 복사·발급 결과 전달·마스킹·환경/탭 전환·빈 결과/오류·클립보드 거부·1440/390px 양 테마를 확인했다. 격리 Keycloak 26.7.4에서 성 없이 실제 회원가입, 닉네임 변경 후 재조회, 기존 성 보존, 로그아웃 홈 허용과 외부 origin/미등록 경로 거부를 확인했다. 검증 스크립트의 콤보박스 선택자·기본 테마 Save 명칭·실행 환경 URL 인코딩 가정을 바로잡았다. 운영 블로그와 실제 소셜 가입은 아직 재검수하지 않았다.
+- **배포/다음:** 레지스트리 게시·NAS 배포는 실행하지 않았다. 사용자가 admin-web/project-service 이미지를 게시·배포한 뒤 기존 환경에서 **인증 설정 → 로그인 주소 → 설정 변경 → 저장**을 한 번 실행해야 로그아웃·닉네임이 적용된다. 현재 최종 빌드 태그는 0.1.3이며 로컬 `.env.prod`는 0.1.0이므로 NAS가 동일 태그를 가져오는지 배포 시 확인한다. 실제 환경 파일·사용자 변경은 수정하지 않았다. 전용 검증 브라우저·HTTP 서버·Keycloak·DB 컨테이너는 종료/정리한다.
+
 ### NAS Loki 설정 파일 읽기 권한 오류 수정 (2026-09-27)
 
 - 사용자가 운영 파일 업로드 후 유형/날짜 폴더와 `original.png`·`thumbnail.jpg` 생성을 확인했다. 이어 로그 메뉴의 `LOG_BACKEND_UNAVAILABLE`(요청 ID `17b27bcb13b4c1d0b05a6ba8bb480cc4`)을 보고했다. NAS 출력에서 Loki `Restarting (1)`과 `open /etc/loki/platform.yml: permission denied`를 확인했다.

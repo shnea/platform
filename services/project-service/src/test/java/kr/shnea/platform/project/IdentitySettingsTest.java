@@ -24,11 +24,23 @@ class IdentitySettingsTest {
     private boolean credentialsReady = true;
     private boolean owned = true;
     private final Map<String, Object> realmSettings = new HashMap<>();
+    private final Map<String, Object> appClient = new HashMap<>();
+    private boolean realmExists = true;
+    private Map<?, ?> createdClient;
+    private Map<String, Object> userProfile;
 
     @BeforeEach void setup() throws Exception {
         realmSettings.put("attributes", Map.of("platform.environmentId", environmentId.toString()));
         realmSettings.put("enabled", false);
         realmSettings.put("registrationAllowed", true);
+        appClient.put("id", "app-id");
+        appClient.put("attributes", Map.of("custom.setting", "preserved"));
+        userProfile = new HashMap<>(Map.of("attributes", List.of(
+            Map.of("name", "username", "validations", Map.of("length", Map.of("min", 3))),
+            Map.of("name", "firstName", "displayName", "${firstName}", "required", Map.of("roles", List.of("user")),
+                "validations", Map.of("length", Map.of("max", 255))),
+            Map.of("name", "lastName", "required", Map.of("roles", List.of("user"))),
+            Map.of("name", "custom", "displayName", "Custom")), "unmanagedAttributePolicy", "DISABLED"));
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
@@ -36,6 +48,26 @@ class IdentitySettingsTest {
             int status = 200;
             if (path.endsWith("/token")) result = Map.of("access_token", "test-admin");
             else if (path.equals("/realms/master/platform-social/configuration")) result = Map.of("naver", credentialsReady, "kakao", credentialsReady, "google", credentialsReady);
+            else if (path.equals("/admin/realms") && exchange.getRequestMethod().equals("POST")) {
+                Map<?, ?> representation = json.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
+                createdClient = (Map<?, ?>) ((List<?>) representation.get("clients")).getFirst();
+                realmExists = true;
+                status = 204;
+            }
+            else if (path.equals("/admin/realms/test/users/profile")) {
+                if (exchange.getRequestMethod().equals("PUT")) {
+                    userProfile = json.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
+                    status = 204;
+                } else result = userProfile;
+            }
+            else if (path.equals("/admin/realms/test/clients")) result = List.of(appClient);
+            else if (path.equals("/admin/realms/test/clients/app-id") && exchange.getRequestMethod().equals("PUT")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> update = json.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
+                appClient.putAll(update);
+                status = 204;
+            }
+            else if (path.equals("/admin/realms/test/logout-all")) status = 204;
             else if (path.equals("/admin/realms/test")) {
                 if (exchange.getRequestMethod().equals("PUT")) {
                     @SuppressWarnings("unchecked")
@@ -44,6 +76,7 @@ class IdentitySettingsTest {
                     status = 204;
                 } else {
                     result = owned ? realmSettings : Map.of("attributes", Map.of("platform.environmentId", "other-environment"));
+                    if (!realmExists) status = 404;
                 }
             }
             else if (path.contains("/identity-provider/instances")) {
@@ -81,6 +114,51 @@ class IdentitySettingsTest {
         return new IdentityClient("http://127.0.0.1:" + server.getAddress().getPort(), "https://platform.example/auth", "test-secret", mode, emails);
     }
     @AfterEach void stop() { server.stop(0); }
+
+    @Test void existingRealmGetsExactLogoutHomeWithoutWideningLoginCallbacks() {
+        client.ensureRealm(env, true);
+        assertEquals(env.redirectUris(), appClient.get("redirectUris"));
+        assertEquals(List.of("https://example.invalid"), appClient.get("webOrigins"));
+        Map<?, ?> attributes = (Map<?, ?>) appClient.get("attributes");
+        assertEquals("+##https://example.invalid/", attributes.get("post.logout.redirect.uris"));
+        assertEquals("S256", attributes.get("pkce.code.challenge.method"));
+        assertEquals("preserved", attributes.get("custom.setting"));
+        assertEquals(false, appClient.get("directAccessGrantsEnabled"));
+    }
+
+    @Test void newRealmIncludesLogoutHomeAtCreation() {
+        realmExists = false;
+        client.ensureRealm(env, true);
+        assertEquals(env.redirectUris(), createdClient.get("redirectUris"));
+        assertEquals("+##https://example.invalid/", ((Map<?, ?>) createdClient.get("attributes")).get("post.logout.redirect.uris"));
+    }
+
+    @Test void nicknameProfilePreservesValidationAndCustomFieldsAndHidesSurname() {
+        client.ensureRealm(env, true);
+        List<?> fields = (List<?>) userProfile.get("attributes");
+        Map<?, ?> first = (Map<?, ?>) fields.get(1), last = (Map<?, ?>) fields.get(2);
+        assertEquals("닉네임", first.get("displayName"));
+        assertEquals(Map.of("roles", List.of("user")), first.get("required"));
+        assertEquals(Map.of("length", Map.of("max", 255)), first.get("validations"));
+        assertFalse(last.containsKey("required"));
+        assertEquals(Map.of("view", List.of("admin"), "edit", List.of("admin")), last.get("permissions"));
+        assertEquals(Map.of("name", "custom", "displayName", "Custom"), fields.get(3));
+        assertEquals("DISABLED", userProfile.get("unmanagedAttributePolicy"));
+        var once = json.writeValueAsString(userProfile);
+        client.ensureRealm(env, true);
+        assertEquals(once, json.writeValueAsString(userProfile));
+    }
+
+    @Test void reconcileRemovesOldLogoutOriginsAndKeepsPortsAndSuspension() {
+        client.ensureRealm(env, true);
+        var changed = new ProjectService.Environment(environmentId, env.projectId(), "dev", "DEV", "test", false,
+            List.of("http://localhost:3000/auth/callback", "http://localhost:3000/other", "http://[::1]:3001/callback"),
+            "READY", env.issuer(), 1);
+        client.ensureRealm(changed, false);
+        assertEquals("+##http://localhost:3000/##http://[::1]:3001/", ((Map<?, ?>) appClient.get("attributes")).get("post.logout.redirect.uris"));
+        assertEquals(changed.redirectUris(), appClient.get("redirectUris"));
+        assertEquals(false, realmSettings.get("enabled"));
+    }
 
     @Test void commonCredentialsStayOutOfRealmSettingsAndApiResponses() {
         for (SocialProvider provider : SocialProvider.ALL) {
