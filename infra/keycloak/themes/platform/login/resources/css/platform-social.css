@@ -1,19 +1,12 @@
-/* Preserve the realm name below the shared SHNEA brand on every login form. */
+/* Display the shared brand without exposing the internal realm identifier. */
 #kc-header-wrapper { padding-bottom: 24px; }
 .platform-brand-name {
   display: block;
   width: 180px;
   height: 53px;
-  margin: 0 auto 16px;
+  margin: 0 auto;
   background: url("../img/shnea-logo.svg") center / contain no-repeat;
   font-size: 0;
-}
-.platform-realm-name {
-  display: block;
-  font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: 0;
-  text-transform: none;
 }
 /* Brand colors are prescribed by the providers, independent of the surrounding theme. */
 .platform-social-list {

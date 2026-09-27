@@ -7,6 +7,7 @@ java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 dependencies {
     compileOnly("org.keycloak:keycloak-services:26.7.4")
     testImplementation("org.keycloak:keycloak-services:26.7.4")
+    testImplementation("org.freemarker:freemarker:2.3.32")
     testImplementation(platform("org.junit:junit-bom:5.13.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.mockito:mockito-core:5.18.0")

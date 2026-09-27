@@ -2,6 +2,7 @@
 FROM gradle:9.7.1-jdk21 AS provider
 WORKDIR /workspace
 COPY provider/ ./
+COPY themes/ /themes/
 RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked gradle --no-daemon build
 
 FROM quay.io/keycloak/keycloak:26.7.4 AS build

@@ -26,6 +26,8 @@
 
 로고의 권리는 각 제공자에게 있다. Keycloak 버전 갱신 시 상속 테마·소셜 매크로·일회 클릭 동작을 함께 확인한다.
 
-SHNEA 심볼과 조합형 SVG는 `apps/admin-web/src/assets/brand/`의 원본과 동일하게 유지한다. `favIcon` 속성과 메시지의 `loginTitleHtml`을 사용해 기본 로그인 템플릿을 복사하지 않는다. 프로젝트 realm 이름과 로그인 폼은 유지한다.
+SHNEA 심볼과 조합형 SVG는 `apps/admin-web/src/assets/brand/`의 원본과 동일하게 유지한다. `favIcon` 속성과 메시지의 `loginTitleHtml`을 사용해 기본 로그인 템플릿을 복사하지 않는다. 브랜드 아래의 내부 realm 이름과 브라우저 제목의 realm 이름은 표시하지 않으며 로그인 폼은 유지한다.
+
+인증·복구·계정 설정·이메일 변경·소셜 연결 메일은 한국어와 영어 모두 내부 realm 이름·자동 생성 username을 문구에 넣지 않는다. 링크·공급자 이름·변경 이메일·요청 작업은 유지한다. `linkExpirationFormatter`가 숫자를 붙이므로 한국어 시간 단위에는 `분`처럼 단위만 적는다. 테마 회귀 검사는 실제 Keycloak 포맷터로 시간 중복과 메일의 필수 정보 보존을 확인한다.
 
 Keycloak의 정적 자산은 브라우저에 캐시된다. CSS 수정 시 `theme.properties`의 버전 쿼리를 올리고, 이미지 내용 변경 시 파일명도 갱신해 기존 브라우저에 이전 디자인이 남지 않게 한다.
