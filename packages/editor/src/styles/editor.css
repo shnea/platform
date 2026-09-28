@@ -132,7 +132,8 @@
 .shnea-editor .se-mobile-actions{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-top:1px solid var(--se-line);background:var(--se-bg);border-radius:0 0 var(--se-radius,8px) var(--se-radius,8px)}
 .shnea-editor .se-mobile-insert{display:none}
 @media(max-width:600px){
- .shnea-editor .se-mobile-actions{gap:8px;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+ .shnea-editor .se-mobile-actions{position:static;gap:8px;padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+ .shnea-editor .se-block-grip{display:none}
  .shnea-editor .se-mobile-insert{display:inline-flex;font-size:13px;padding:8px}
  .shnea-editor .se-mobile-actions span{font-size:12px;color:var(--se-muted)}
  .shnea-editor .se-hint{display:none}
@@ -143,6 +144,7 @@
  .shnea-editor .se-insert-menu [role=tabpanel]{overscroll-behavior:contain}
 }
 .shnea-editor .se-block-controls{display:flex;align-items:center;gap:4px}
+.shnea-editor .se-block-controls [data-tooltip]::after{inset-inline-start:0;inset-inline-end:auto}
 .shnea-editor .se-block-label{margin-left:8px;color:var(--se-muted);font-size:13px}
 .shnea-editor .se-block-grip{cursor:grab}.shnea-editor .se-block-grip:active{cursor:grabbing}
 .shnea-editor:focus-within .se-active-block{outline:1px dashed var(--se-accent);outline-offset:5px}

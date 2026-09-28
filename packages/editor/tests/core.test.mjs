@@ -223,12 +223,17 @@ test('모바일 삽입 메뉴는 첨부·표를 먼저 보여주고 검색·취�
  }finally{editor.destroy();node.remove();Object.defineProperty(window,'innerWidth',{configurable:true,value:previous});}
 });
 
-test('모바일 키보드로 보이는 화면이 줄면 삽입 버튼을 위로 이동하고 해제한다',()=>{
+test('모바일 키보드는 하단 줄을 끌어올리지 않고 열린 삽입 메뉴만 보이는 화면에 맞춘다',()=>{
  const previous=window.innerWidth,viewport=Object.getOwnPropertyDescriptor(window,'visualViewport');
  Object.defineProperty(window,'innerWidth',{configurable:true,value:390});
  const visible=new window.EventTarget();Object.assign(visible,{width:390,height:400,offsetLeft:0,offsetTop:20});Object.defineProperty(window,'visualViewport',{configurable:true,value:visible});
  const node=target(),editor=mountEditor({element:node});
- try{assert.equal(node.querySelector('.se-mobile-actions').style.bottom,`${window.innerHeight-420}px`);visible.height=window.innerHeight;visible.offsetTop=0;visible.dispatchEvent(new window.Event('resize'));assert.equal(node.querySelector('.se-mobile-actions').style.bottom,'0px');}
+ try{
+  const actions=node.querySelector('.se-mobile-actions'),menu=node.querySelector('.se-insert-menu');
+  assert.equal(actions.style.bottom,'');node.querySelector('.se-mobile-insert').click();assert.equal(menu.style.maxHeight,'384px');
+  visible.height=300;visible.dispatchEvent(new window.Event('resize'));assert.equal(menu.style.maxHeight,'284px');assert.equal(actions.style.bottom,'');
+  visible.height=window.innerHeight;visible.offsetTop=0;visible.dispatchEvent(new window.Event('resize'));assert.equal(actions.style.bottom,'');assert.equal(menu.style.maxHeight,`${Math.min(560,window.innerHeight-16)}px`);
+ }
  finally{editor.destroy();node.remove();Object.defineProperty(window,'innerWidth',{configurable:true,value:previous});if(viewport)Object.defineProperty(window,'visualViewport',viewport);else delete window.visualViewport;}
 });
 

@@ -80,7 +80,6 @@ export function mountEditor(options:UIOptions){
  const allowed=(item:Item)=>isAttachment(item.id)||item.id==='link'||!!core?.can(item.id);
  function position(){
   const viewport=win.visualViewport;
-  mobileActions.style.bottom=mobile()?`${Math.max(0,win.innerHeight-(viewport?.offsetTop??0)-(viewport?.height??win.innerHeight))}px`:'';
   if(menu.hidden||!core)return;
   let rect:{left:number;bottom:number;top:number};try{rect=core.getMenuAnchor();}catch{rect=body.getBoundingClientRect();}
   const left=viewport?.offsetLeft??0,top=viewport?.offsetTop??0,width=viewport?.width??win.innerWidth,height=viewport?.height??win.innerHeight;
