@@ -36,8 +36,9 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
   status.textContent=file.kind==='video'&&videoWaiting?`영상 변환 중 · ${data.video!.progress}%`:waiting?'미리보기를 준비하고 있습니다.':data.state==='FAILED'?'미리보기를 만들지 못했습니다. 원본을 내려받을 수 있습니다.':data.state==='UNSUPPORTED'?'미리보기를 지원하지 않는 형식입니다. 원본을 내려받아 주세요.':'';
   if(file.kind==='video'&&data.video&&['FAILED','UNSUPPORTED'].includes(data.video.state))status.textContent='스트리밍을 준비하지 못했습니다. 원본 다운로드를 이용해 주세요.';
   download.href=safeURL(data.downloadUrl,doc);original.href=safeURL(data.originalUrl,doc);download.hidden=original.hidden=false;
-  const readyImage=file.kind==='image'&&data.kind==='IMAGE'&&!!data.thumbnailUrl,readyVideo=file.kind==='video'&&!!data.streamUrl;
-  if(file.kind==='image'&&!readyImage&&!status.textContent)status.textContent='썸네일을 사용할 수 없습니다. 보기 정보를 다시 조회하거나 원본을 내려받아 주세요.';
+  const imageSrc=data.previewUrl??data.thumbnailUrl;
+  const readyImage=file.kind==='image'&&data.kind==='IMAGE'&&!!imageSrc,readyVideo=file.kind==='video'&&!!data.streamUrl;
+  if(file.kind==='image'&&!readyImage&&!status.textContent)status.textContent='이미지를 사용할 수 없습니다. 보기 정보를 다시 조회하거나 원본을 내려받아 주세요.';
   actions.hidden=media&&(readyImage||readyVideo||!!videoWaiting||waiting);retry.hidden=media&&!(file.kind==='image'&&!readyImage&&!waiting);
   open.hidden=media||file.kind==='audio';open.disabled=file.kind==='video'?!data.streamUrl:!data.previewUrl||data.state!=='READY';
   const next=[data.kind,data.state,data.previewUrl,data.thumbnailUrl,data.originalUrl,data.streamUrl,expanded].join('|');
@@ -46,7 +47,7 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
   if(audio&&file.kind==='audio'&&data.kind==='AUDIO'&&data.previewUrl){const source=safeURL(data.previewUrl,doc);if(audio.src!==source){const time=audio.currentTime,playing=!audio.paused;audio.addEventListener('loadedmetadata',()=>{audio.currentTime=Math.min(time,Number.isFinite(audio.duration)?audio.duration:time);if(playing)void audio.play().catch(()=>{});},{once:true});audio.src=source;}key=next;return;}
   if(next===key)return;key=next;clear();
   if(readyImage){
-   cleanup=mountImageViewer(content,{src:data.thumbnailUrl!,desktopSrc:data.previewUrl??undefined,previewUrl:data.previewUrl,originalUrl:data.originalUrl,downloadUrl:data.downloadUrl,name:file.name,onError:()=>{actions.hidden=false;retry.hidden=false;status.textContent='이미지를 표시하지 못했습니다. 보기 정보를 다시 조회해 주세요.';}});
+   cleanup=mountImageViewer(content,{src:imageSrc!,previewUrl:data.previewUrl,originalUrl:data.originalUrl,downloadUrl:data.downloadUrl,name:file.name,onError:()=>{actions.hidden=false;retry.hidden=false;status.textContent='이미지를 표시하지 못했습니다. 보기 정보를 다시 조회해 주세요.';}});
   }else if(file.kind==='video'){
    if(expanded&&data.streamUrl){if(adapter?.video)video=adapter.video(content,data);else {const iframe=doc.createElement('iframe');iframe.src=safeURL(data.viewerUrl,doc);iframe.title=`${file.name} 영상 재생`;iframe.allowFullscreen=true;iframe.referrerPolicy='no-referrer';content.append(iframe);}}
    else {
