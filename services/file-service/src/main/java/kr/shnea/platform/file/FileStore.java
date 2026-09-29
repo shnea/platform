@@ -33,7 +33,7 @@ class FileStore {
         String extension = dot > 0 ? name.substring(dot + 1).toLowerCase(Locale.ROOT) : "bin";
         if (!extension.matches("[a-z0-9]{1,16}")) extension = "bin";
         String type = switch (extension) {
-            case "jpg", "jpeg", "png", "gif", "webp", "avif", "heic", "heif", "bmp", "tif", "tiff", "svg", "ico" -> "images";
+            case "jpg", "jpeg", "jfif", "png", "gif", "webp", "avif", "heic", "heif", "bmp", "tif", "tiff", "svg", "ico" -> "images";
             case "mp4", "webm", "mov", "mkv", "avi", "m4v", "mpeg", "mpg", "ts", "mts", "m2ts", "wmv", "flv", "3gp", "ogv" -> "videos";
             case "mp3", "wav", "ogg", "oga", "m4a", "aac", "flac", "opus", "aiff", "wma" -> "audio";
             case "pdf", "txt", "md", "csv", "json", "xml", "html", "rtf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "hwp", "hwpx", "odt", "ods", "odp" -> "documents";

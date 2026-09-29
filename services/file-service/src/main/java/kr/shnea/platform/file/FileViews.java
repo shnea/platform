@@ -141,19 +141,22 @@ class FileViews {
             if(!new String(head,StandardCharsets.ISO_8859_1).startsWith("%PDF-"))throw new IOException("Invalid PDF");
             return new View("READY","PDF","application/pdf",false,null);
         }
-        if(!Set.of("png","jpg","jpeg","gif","webp","mp4","webm","mp3","wav").contains(ext))return unsupported("FILE_PREVIEW_UNSUPPORTED");
-        boolean image=Set.of("png","jpg","jpeg","gif","webp").contains(ext);
+        Set<String> imageExtensions=Set.of("png","jpg","jpeg","jfif","gif","webp","bmp","ico","tif","tiff","heic","heif","avif");
+        if(!imageExtensions.contains(ext)&&!Set.of("mp4","webm","mp3","wav").contains(ext))return unsupported("FILE_PREVIEW_UNSUPPORTED");
+        boolean image=imageExtensions.contains(ext);
         if(row.size()>(image?32_000_000:1_000_000_000))return unsupported("FILE_PREVIEW_INPUT_LIMIT");
-        String formats="png_pipe,jpeg_pipe,gif,webp_pipe,mov,matroska,mp3,wav";
+        String formats="png_pipe,jpeg_pipe,gif,webp_pipe,bmp_pipe,ico,tiff_pipe,heif,avif,mov,matroska,mp3,wav";
         byte[] probe=run(List.of("ffprobe","-v","error","-max_alloc","67108864","-protocol_whitelist","file","-format_whitelist",formats,
             "-show_entries","stream=codec_type,codec_name,width,height:format=format_name","-of","json",store.path(row.id()).toString()),15);
         var metadata=new JsonMapper().readTree(probe);var streams=metadata.path("streams");if(streams.isEmpty())throw new IOException("No media stream");
         String format=metadata.path("format").path("format_name").asString();String mime=null,kind=null;boolean visual=false;
         if(image) {
             var first=streams.get(0);String codec=first.path("codec_name").asString();
-            String expected=ext.equals("jpg")||ext.equals("jpeg")?"mjpeg":ext;
-            if(!codec.equals(expected)||!format.equals(Map.of("png","png_pipe","mjpeg","jpeg_pipe","gif","gif","webp","webp_pipe").get(expected)))throw new IOException("Format mismatch");
-            mime="image/"+(codec.equals("mjpeg")?"jpeg":codec);kind="IMAGE";visual=true;
+            String expected=switch(ext){case "jpg","jpeg","jfif"->"mjpeg";case "png"->"png";case "gif"->"gif";case "webp"->"webp";case "bmp","ico"->"bmp";case "tif","tiff"->"tiff";case "heic","heif"->"hevc";case "avif"->"av1";default->throw new IOException("Unsupported image extension");};
+            String expectedFormat=switch(ext){case "jpg","jpeg","jfif"->"jpeg_pipe";case "png"->"png_pipe";case "gif"->"gif";case "webp"->"webp_pipe";case "bmp"->"bmp_pipe";case "ico"->"ico";case "tif","tiff"->"tiff_pipe";case "heic","heif"->"heif";case "avif"->"avif";default->throw new IOException("Unsupported image extension");};
+            boolean codecMatches=ext.equals("ico")?Set.of("bmp","png").contains(codec):codec.equals(expected);
+            if(!codecMatches||!format.equals(expectedFormat))throw new IOException("Format mismatch");
+            mime=switch(ext){case "jpg","jpeg","jfif"->"image/jpeg";case "png"->"image/png";case "gif"->"image/gif";case "webp"->"image/webp";case "bmp"->"image/bmp";case "ico"->"image/vnd.microsoft.icon";case "tif","tiff"->"image/tiff";case "heic"->"image/heic";case "heif"->"image/heif";case "avif"->"image/avif";default->throw new IOException("Unsupported image extension");};kind="IMAGE";visual=true;
         } else if(ext.equals("mp4")&&format.contains("mp4")) {mime="video/mp4";kind="VIDEO";}
         else if(ext.equals("webm")&&format.contains("webm")){mime="video/webm";kind="VIDEO";}
         else if(ext.equals("mp3")&&format.equals("mp3")){mime="audio/mpeg";kind="AUDIO";}
