@@ -16,6 +16,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class FileViews {
+    static final String IMAGE_FORMATS="image2,png_pipe,jpeg_pipe,gif,webp_pipe,bmp_pipe,ico,tiff_pipe,heif,avif";
+    static final String MEDIA_FORMATS=IMAGE_FORMATS+",mov,matroska,mp3,wav";
     record View(String state,String kind,String mediaType,boolean thumbnail,String errorCode) {}
     record Links(UUID fileId,String state,String kind,String mediaType,String errorCode,String originalUrl,String previewUrl,
                  String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt,
@@ -80,6 +82,10 @@ class FileViews {
         // A previously inspected image stays viewable while its new derivative is queued.
         return view.kind().equals("IMAGE")&&view.thumbnail()&&view.mediaType().startsWith("image/");
     }
+    static boolean imageFormatMatches(String actual,String expected) {
+        // FFmpeg selects image2 for ordinary still-image paths such as original.jpg.
+        return actual.equals(expected)||actual.equals("image2");
+    }
     @Scheduled(fixedDelay=3000,initialDelay=15000)
     void work() {
         db.update("DELETE FROM file_view_tokens WHERE greatest(expires_at,playback_expires_at)<=now()");
@@ -122,7 +128,7 @@ class FileViews {
     }
     static void imagePreview(Path input,Path output) throws Exception {
         run(List.of("ffmpeg","-v","error","-nostdin","-y","-max_alloc","67108864","-threads","1",
-            "-protocol_whitelist","file","-format_whitelist","png_pipe,jpeg_pipe,gif,webp_pipe",
+            "-protocol_whitelist","file","-format_whitelist",IMAGE_FORMATS,
             "-i",input.toString(),"-map","0:v:0","-frames:v","1","-map_metadata","-1",
             "-vf","scale=w='min(1600,iw)':h='min(1600,ih)':force_original_aspect_ratio=decrease",
             "-c:v","libwebp","-quality","80","-compression_level","4","-threads","1","-filter_threads","1",
@@ -145,8 +151,7 @@ class FileViews {
         if(!imageExtensions.contains(ext)&&!Set.of("mp4","webm","mp3","wav").contains(ext))return unsupported("FILE_PREVIEW_UNSUPPORTED");
         boolean image=imageExtensions.contains(ext);
         if(row.size()>(image?32_000_000:1_000_000_000))return unsupported("FILE_PREVIEW_INPUT_LIMIT");
-        String formats="png_pipe,jpeg_pipe,gif,webp_pipe,bmp_pipe,ico,tiff_pipe,heif,avif,mov,matroska,mp3,wav";
-        byte[] probe=run(List.of("ffprobe","-v","error","-max_alloc","67108864","-protocol_whitelist","file","-format_whitelist",formats,
+        byte[] probe=run(List.of("ffprobe","-v","error","-max_alloc","67108864","-protocol_whitelist","file","-format_whitelist",MEDIA_FORMATS,
             "-show_entries","stream=codec_type,codec_name,width,height:format=format_name","-of","json",store.path(row.id()).toString()),15);
         var metadata=new JsonMapper().readTree(probe);var streams=metadata.path("streams");if(streams.isEmpty())throw new IOException("No media stream");
         String format=metadata.path("format").path("format_name").asString();String mime=null,kind=null;boolean visual=false;
@@ -155,7 +160,7 @@ class FileViews {
             String expected=switch(ext){case "jpg","jpeg","jfif"->"mjpeg";case "png"->"png";case "gif"->"gif";case "webp"->"webp";case "bmp","ico"->"bmp";case "tif","tiff"->"tiff";case "heic","heif"->"hevc";case "avif"->"av1";default->throw new IOException("Unsupported image extension");};
             String expectedFormat=switch(ext){case "jpg","jpeg","jfif"->"jpeg_pipe";case "png"->"png_pipe";case "gif"->"gif";case "webp"->"webp_pipe";case "bmp"->"bmp_pipe";case "ico"->"ico";case "tif","tiff"->"tiff_pipe";case "heic","heif"->"heif";case "avif"->"avif";default->throw new IOException("Unsupported image extension");};
             boolean codecMatches=ext.equals("ico")?Set.of("bmp","png").contains(codec):codec.equals(expected);
-            if(!codecMatches||!format.equals(expectedFormat))throw new IOException("Format mismatch");
+            if(!codecMatches||!imageFormatMatches(format,expectedFormat))throw new IOException("Format mismatch");
             mime=switch(ext){case "jpg","jpeg","jfif"->"image/jpeg";case "png"->"image/png";case "gif"->"image/gif";case "webp"->"image/webp";case "bmp"->"image/bmp";case "ico"->"image/vnd.microsoft.icon";case "tif","tiff"->"image/tiff";case "heic"->"image/heic";case "heif"->"image/heif";case "avif"->"image/avif";default->throw new IOException("Unsupported image extension");};kind="IMAGE";visual=true;
         } else if(ext.equals("mp4")&&format.contains("mp4")) {mime="video/mp4";kind="VIDEO";}
         else if(ext.equals("webm")&&format.contains("webm")){mime="video/webm";kind="VIDEO";}
@@ -173,7 +178,7 @@ class FileViews {
         if(kind.equals("VIDEO")&&!visual)throw new IOException("No video");
         if(visual) {
             if(store.usableSpace()<4*1024*1024)throw new IOException("Insufficient disk");
-            run(List.of("ffmpeg","-v","error","-nostdin","-y","-max_alloc","67108864","-threads","1","-protocol_whitelist","file","-format_whitelist",formats,
+            run(List.of("ffmpeg","-v","error","-nostdin","-y","-max_alloc","67108864","-threads","1","-protocol_whitelist","file","-format_whitelist",MEDIA_FORMATS,
                 "-i",store.path(row.id()).toString(),"-map","0:v:0","-frames:v","1","-vf","scale=480:320:force_original_aspect_ratio=decrease","-threads","1","-filter_threads","1","-f","image2",thumbnail.toString()),30);
             if(Files.size(thumbnail)==0||Files.size(thumbnail)>2_000_000)throw new IOException("Invalid thumbnail");
         }

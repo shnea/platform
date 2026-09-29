@@ -24,6 +24,7 @@ class ImagePreviewCheck {
             for(String format:List.of("jpg","gif")) {
                 Path source=dir.resolve("small."+format);
                 ImageIO.write(new BufferedImage(80,40,BufferedImage.TYPE_INT_RGB),format,source.toFile());
+                if(format.equals("jpg"))checkJpegDemuxer(source);
                 check(source,dir.resolve(format+"-preview.webp"),80,40,false,false);
             }
             Path bad=Files.writeString(dir.resolve("broken.png"),"not an image");
@@ -31,6 +32,15 @@ class ImagePreviewCheck {
             if(!rejected)throw new AssertionError("Corrupt image accepted");
             System.out.println("PASS: PNG/JPEG/GIF/WebP, resize, compression, alpha, no upscale, original preservation, corrupt input");
         } finally {try(var paths=Files.walk(dir)){for(Path path:paths.sorted(Comparator.reverseOrder()).toList())Files.deleteIfExists(path);}}
+    }
+    static void checkJpegDemuxer(Path input) throws Exception {
+        var result=new JsonMapper().readTree(FileViews.run(List.of("ffprobe","-v","error","-max_alloc","67108864",
+            "-protocol_whitelist","file","-format_whitelist",FileViews.MEDIA_FORMATS,
+            "-show_entries","stream=codec_name:format=format_name","-of","json",input.toString()),15));
+        String codec=result.path("streams").get(0).path("codec_name").asString();
+        String format=result.path("format").path("format_name").asString();
+        if(!codec.equals("mjpeg")||!FileViews.imageFormatMatches(format,"jpeg_pipe"))
+            throw new AssertionError("JPEG demuxer not accepted: codec="+codec+", format="+format);
     }
     static void check(Path input,Path output,int width,int height,boolean smaller,boolean alpha) throws Exception {
         byte[] before=Files.readAllBytes(input);FileViews.imagePreview(input,output);

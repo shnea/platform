@@ -160,7 +160,7 @@ DB 행 잠금으로 같은 세션의 동시 요청을 직렬화한다. 파일을
 
 형식은 확장자만 믿지 않고 제한된 FFprobe 결과와 이미지 코덱을 함께 확인한다. PDF는 헤더 확인 후 브라우저가 파싱한다. 텍스트는 UTF-8 검증한다. [CommonMark 렌더러의 HTML·URL 보호 옵션](https://github.com/commonmark/commonmark-java)과 CSP sandbox를 함께 사용한다. 기본 뷰어는 스크립트 없이 서버가 만든 HTML이며 임의 업로드 HTML을 실행하지 않는다.
 
-`file_views` 영속 큐의 QUEUED→PROCESSING→READY/UNSUPPORTED/FAILED를 사용한다. 3초 간격으로 한 파일씩 처리하고 완료된 기존 파일도 발견한다. 2분 이상 중단된 PROCESSING은 최대 3회까지 재점유한 뒤 실패하며 관리자가 재시도할 수 있다. FFprobe 15초·FFmpeg 30초, 각각 가상 메모리 384MiB·출력 파일 2MiB, 한 스레드와 로컬 파일/제한된 demuxer만 허용한다. 요청 처리와 변환을 분리하며 명령 인자는 셸 코드로 보간하지 않는다. [FFmpeg 옵션](https://www.ffmpeg.org/ffmpeg.html)의 `max_alloc`은 단일 할당 제한이라 프로세스 제한도 함께 둔다. 공통 Job 화면 통합은 후속 작업이다.
+`file_views` 영속 큐의 QUEUED→PROCESSING→READY/UNSUPPORTED/FAILED를 사용한다. 3초 간격으로 한 파일씩 처리하고 완료된 기존 파일도 발견한다. 2분 이상 중단된 PROCESSING은 최대 3회까지 재점유한 뒤 실패하며 관리자가 재시도할 수 있다. FFprobe 15초·FFmpeg 30초, 각각 가상 메모리 384MiB·출력 파일 2MiB, 한 스레드와 로컬 파일/제한된 demuxer만 허용한다. 정지 이미지 경로를 읽는 FFmpeg `image2` demuxer도 허용하며, 변환 입력은 서버가 만든 파일 경로만 사용한다. 요청 처리와 변환을 분리하며 명령 인자는 셸 코드로 보간하지 않는다. [FFmpeg 옵션](https://www.ffmpeg.org/ffmpeg.html)의 `max_alloc`은 단일 할당 제한이라 프로세스 제한도 함께 둔다. 공통 Job 화면 통합은 후속 작업이다.
 
 ## 보존 정책과 자동 정리
 

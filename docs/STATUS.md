@@ -2,6 +2,12 @@
 
 ## 현재 단계
 
+### JPG 미리보기 입력 형식 허용 (2026-09-30)
+
+- **원인/수정:** 운영 FFprobe가 `.jpg` 입력을 `image2` demuxer로 선택했지만, 입력 허용 목록에 `image2`가 없어 즉시 거부했다. 미리보기·썸네일·형식 검사 목록에 `image2`를 추가하고, 코덱 검증을 유지하면서 FFprobe가 반환하는 `image2` 형식 이름도 인정한다. 원본 입력 프로토콜은 계속 로컬 `file`만 허용한다.
+- **검증:** `docker compose --env-file .env.build build file-service` 성공(Gradle `:services:file-service:build` 포함). 빌드 이미지의 FFmpeg에서 리소스 제한을 적용해 JPG FFprobe 판별, JPG 썸네일 생성, JPG→WebP 변환을 확인했다. 실제 NAS 재배포와 업로드 재시도는 아직 하지 않았다.
+- **다음:** 커밋·푸시 후 사용자가 file-service 이미지를 게시하고 NAS를 재배포해 실패한 JPG의 미리보기 재시도를 확인한다.
+
 ### 일반 이미지 미리보기 형식 확장 (2026-09-29)
 
 - **변경:** 미리보기 지원을 JPEG/JFIF·PNG·GIF·WebP에서 BMP·ICO·TIFF·HEIC/HEIF·AVIF까지 넓혔다. 실제 코덱과 컨테이너도 확장자에 맞춰 확인하고, 원본 보관은 유지한다. RAW·SVG와 기존 파일 크기/해상도 한도 초과는 원본 보관·다운로드 범위다. 최신 사용자 요구에 맞춰 핵심·상세 요구사항과 파일 지원표를 갱신했다.
