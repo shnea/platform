@@ -26,6 +26,7 @@ jobs:
       - name: Check encrypted configuration and deployment scripts
         run: |
           python3 scripts/check-ci.py
+          python3 scripts/check-admin-security.py
           python3 scripts/check-deploy.py
           python3 scripts/check-ssh-gateway.py
           pwsh -NoProfile -File scripts/check-release.ps1

@@ -13,6 +13,7 @@ import { MockLoginPanel } from "../features/testing/MockLoginPanel";
 import { SocialProviderPanel } from "../features/accounts/SocialProviderPanel";
 import { AuthenticationPolicyPanel } from "../features/accounts/AuthenticationPolicyPanel";
 import { MemberPanel } from "../features/accounts/MemberPanel";
+import { AccountSecurity, resumeAccountSecurity } from "../features/accounts/AccountSecurity";
 import { JobWorkspace } from "../features/jobs/JobWorkspace";
 import { LogPanel } from "../features/logs/LogPanel";
 import { MonitoringWorkspace } from "../features/monitoring/MonitoringWorkspace";
@@ -115,6 +116,7 @@ function State({ value }: { value: string }) {
   );
 }
 function App() {
+  const [accountSecurity, setAccountSecurity] = useState(resumeAccountSecurity);
   const [ready, setReady] = useState(false),
     [bootError, setBootError] = useState("");
   const [theme, setTheme] = useState(() => {
@@ -163,7 +165,7 @@ function App() {
           ><Icon name={theme === 'dark' ? 'sun' : 'moon'}/>
           </button>
           {ready && auth.authenticated && (
-            <button className="quiet" onClick={() => void auth.accountManagement()} aria-label="내 계정" title="내 계정" data-tooltip="내 계정" data-icon-only="true"><Icon name="user-round"/></button>
+            <button className="quiet" onClick={() => setAccountSecurity(true)} aria-label="내 계정" title="내 계정" data-tooltip="내 계정" data-icon-only="true"><Icon name="user-round"/></button>
           )}
           {ready && auth.authenticated && (
             <button
@@ -175,6 +177,7 @@ function App() {
           )}
         </div>
       </header>
+      {ready && auth.authenticated && accountSecurity && <AccountSecurity close={() => setAccountSecurity(false)} />}
       {bootError ? (
         <main id="main" className="welcome">
           <h1>연결을 확인해 주세요</h1>

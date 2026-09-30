@@ -9,39 +9,36 @@ from urllib.parse import quote, urlencode
 
 from identity_admin import connect
 
-FLOW = 'platform-admin-mfa-v2'
+LEGACY_FLOWS = ('platform-admin-mfa-v1', 'platform-admin-mfa-v2')
+FLOW = 'platform-admin-mfa-v3-optional'
+DESCRIPTION = 'Platform managed administrator optional MFA v3'
 FORMS = FLOW+'-forms'
 FACTOR = FLOW+'-factor'
-ENROLL = FLOW+'-enroll'
 ACTIONS = ('CONFIGURE_TOTP', 'CONFIGURE_RECOVERY_AUTHN_CODES')
 
 
-def configure(api, realm, enforce):
+def configure(api, realm, production):
     """Build an independent native flow before binding it. Existing credentials survive."""
     if realm not in ('platform-admin-dev', 'platform-admin-prod'):
         raise SystemExit('플랫폼 관리자 인증 영역에서만 MFA를 설정할 수 있습니다.')
-    if not enforce:
-        print('PASS 개발 관리자 인증은 기존 설정 유지; 필수 MFA는 운영 관리자에 적용')
-        return
     root = '/'+realm
     current = api('GET', root)
-    if current.get('browserFlow') not in ('browser', 'platform-admin-mfa-v1', FLOW):
+    if current.get('browserFlow') not in ('browser', *LEGACY_FLOWS, FLOW):
         raise SystemExit('별도 관리자 인증 흐름이 있습니다. 기존 설정을 검토해 주세요.')
     flows = {f['alias']: f for f in api('GET', root+'/authentication/flows')}
     if FLOW in flows and (flows[FLOW].get('builtIn')
-            or flows[FLOW].get('description') != 'Platform managed administrator MFA v1'):
+            or flows[FLOW].get('description') != DESCRIPTION):
         raise SystemExit('같은 이름의 별도 인증 흐름이 있습니다. 기존 설정을 검토해 주세요.')
     if FLOW not in flows:
         api('POST', root+'/authentication/flows', dict(alias=FLOW, providerId='basic-flow',
-            topLevel=True, builtIn=False, description='Platform managed administrator MFA v1'))
-    # Native alternatives provide "another method"; the required enrollment fallback
-    # prevents a credential-less administrator from passing without registering OTP.
+            topLevel=True, builtIn=False, description=DESCRIPTION))
+    # The server requires a second factor whenever OTP OR recovery codes exist.
+    # A request parameter / unchecked browser control can never bypass it.
     definitions = {
         FLOW: [('auth-cookie', False, 'ALTERNATIVE'), (FORMS, True, 'ALTERNATIVE')],
-        FORMS: [('auth-username-password-form', False, 'REQUIRED'), (FACTOR, True, 'REQUIRED')],
-        FACTOR: [('auth-otp-form', False, 'ALTERNATIVE'), ('auth-recovery-authn-code-form', False, 'ALTERNATIVE'),
-                 (ENROLL, True, 'ALTERNATIVE')],
-        ENROLL: [('auth-otp-form', False, 'REQUIRED')],
+        FORMS: [('auth-username-password-form', False, 'REQUIRED'), (FACTOR, True, 'CONDITIONAL')],
+        FACTOR: [('conditional-user-configured', False, 'REQUIRED'),
+                 ('auth-otp-form', False, 'ALTERNATIVE'), ('auth-recovery-authn-code-form', False, 'ALTERNATIVE')],
     }
     for alias, steps in definitions.items():
         endpoint = root+'/authentication/flows/'+alias+'/executions'
@@ -57,7 +54,7 @@ def configure(api, realm, enforce):
                 raise SystemExit('중복된 관리자 인증 단계가 있습니다. 설정을 검토해 주세요.')
             if not matching:
                 api('POST', endpoint+('/flow' if subflow else '/execution'),
-                    dict(alias=provider, type='basic-flow', provider='basic-flow', description='Platform managed administrator MFA v1')
+                    dict(alias=provider, type='basic-flow', provider='basic-flow', description=DESCRIPTION)
                     if subflow else dict(provider=provider))
                 matching = [e for e in api('GET', endpoint) if e['level'] == 0 and matches(e, provider, subflow)]
             execution = matching[0]
@@ -67,44 +64,50 @@ def configure(api, realm, enforce):
         if len(existing) > len(steps):
             raise SystemExit('예상하지 못한 관리자 인증 단계가 있습니다. 설정을 검토해 주세요.')
     actions = api('GET', root+'/authentication/required-actions')
-    if not set(ACTIONS).issubset(a['alias'] for a in actions):
+    if not {*ACTIONS, 'delete_credential'}.issubset(a['alias'] for a in actions):
         raise SystemExit('필요한 Keycloak 인증 앱·복구 코드 기능을 찾을 수 없습니다.')
     for action in actions:
         if action['alias'] in ACTIONS:
-            action.update(enabled=True, defaultAction=enforce)
+            action.update(enabled=True, defaultAction=False)
             if action['alias'] == 'CONFIGURE_TOTP':
                 action['config'] = {**action.get('config', {}), 'add-recovery-codes': 'true'}
             api('PUT', root+'/authentication/required-actions/'+action['alias'], action)
         elif action['alias'] == 'UPDATE_PASSWORD':
             action.update(enabled=True, priority=53)
             api('PUT', root+'/authentication/required-actions/'+action['alias'], action)
+        elif action['alias'] == 'delete_credential':
+            action.update(enabled=True, defaultAction=False)
+            action['config'] = {**action.get('config', {}), 'max_auth_age': '0'}
+            api('PUT', root+'/authentication/required-actions/'+action['alias'], action)
     event_config = api('GET', root+'/events/config')
     event_config.update(adminEventsEnabled=True, adminEventsDetailsEnabled=False)
     api('PUT', root+'/events/config', event_config)
-    if enforce:
+    if production:
         # No password-only CLI path in the production administrator realm.
         for client in api('GET', root+'/clients'):
             if client.get('directAccessGrantsEnabled'):
                 api('PUT', root+'/clients/'+client['id'], dict(directAccessGrantsEnabled=False))
-        api('PUT', root, dict(browserFlow=FLOW))
-        if current.get('browserFlow') != FLOW:
-            api('POST', root+'/logout-all')
+    if current.get('browserFlow') != FLOW:
+        # Retire old forced enrollment only for users who never registered a factor.
+        # An operator recovery requiring a new password must still finish enrollment.
         offset = 0
         while True:
             users = api('GET', root+'/users?first='+str(offset)+'&max=100')
             for user in users:
                 user_path = root+'/users/'+quote(user['id'], safe='')
                 credentials = {c['type'] for c in api('GET', user_path+'/credentials')}
-                needs_backup = ('otp' in credentials and 'recovery-authn-codes' not in credentials
-                                and ACTIONS[1] not in user.get('requiredActions', []))
-                if needs_backup:
-                    api('PUT', user_path, dict(requiredActions=[*user.get('requiredActions', []), ACTIONS[1]]))
-                if needs_backup or current.get('browserFlow') != FLOW:
-                    end_sessions(api, root, user_path)
+                required = user.get('requiredActions', [])
+                if not credentials.intersection(('otp', 'recovery-authn-codes')) and 'UPDATE_PASSWORD' not in required:
+                    remaining = [action for action in required if action not in ACTIONS]
+                    if remaining != required:
+                        api('PUT', user_path, dict(requiredActions=remaining))
+                end_sessions(api, root, user_path)
             if len(users) < 100:
                 break
             offset += 100
-    print('PASS 관리자 MFA 설정:', realm, '필수' if enforce else '개발 모드 선택 설정')
+        api('POST', root+'/logout-all')
+    api('PUT', root, dict(browserFlow=FLOW))
+    print('PASS 관리자 MFA 설정:', realm, '계정별 선택; 등록된 인증 수단은 로그인 시 필수')
 
 
 def end_sessions(api, root, user_path):
@@ -129,8 +132,8 @@ def recover(api, realm, username, reason, password_file):
     roles = api('GET', user_path+'/role-mappings/realm/composite')
     if not any(role['name'] == 'platform-admin' for role in roles):
         raise SystemExit('플랫폼 관리자 역할이 없는 계정은 이 명령으로 복구할 수 없습니다.')
-    if api('GET', root).get('browserFlow') != FLOW:
-        raise SystemExit('필수 MFA 흐름을 적용한 관리자 영역에서만 긴급 복구할 수 있습니다.')
+    if api('GET', root).get('browserFlow') not in (*LEGACY_FLOWS, FLOW):
+        raise SystemExit('관리 대상 MFA 흐름을 적용한 관리자 영역에서만 긴급 복구할 수 있습니다.')
     # Write a new private file before touching the account. Never print the password.
     password = secrets.token_urlsafe(32)
     descriptor = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

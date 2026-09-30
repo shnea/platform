@@ -2,6 +2,13 @@
 
 ## 현재 단계
 
+### 관리자 OTP 계정별 선택·자동 배포 검증 (2026-10-01)
+
+- **변경:** 내 계정의 계정 보안 대화상자에 `OTP 사용` 체크를 추가했다. 미등록 계정은 비밀번호로 로그인하고 등록된 인증 앱·복구 코드가 있으면 서버가 2단계 인증을 강제한다. 등록·제거는 Keycloak 기본 인증 화면을 사용하며 제거는 매번 재인증한다. 기존 인증 수단과 운영자 복구 요구는 보존하고, 첫 정책 전환 때 세션을 종료한다. 재배포는 계정 선택과 세션을 초기화하지 않는다.
+- **검증:** `python -X utf8 scripts/check-admin-security.py`의 조건부 흐름·이관·재실행·직접 토큰 발급 차단·제거 재인증·복구 실패 검사 통과. 해당 검사를 GitHub verify에도 추가했다. 개발 Docker의 admin-web·identity-setup 빌드(타입 검사 포함), Node 24 컨테이너의 관리자 UI 5개 테스트, `scripts/check-ci.py`, `git diff --check` 통과. 호스트 npm 빌드는 로컬 TypeScript 미설치로 실행하지 못해 Docker 빌드로 검증했다.
+- **브라우저 실측:** 별도 임시 개발 계정에서 비밀번호 단독 로그인, OTP 체크→인증 앱·복구 코드 등록, 다음 로그인 OTP 필수, 잘못된 OTP 거부·정상 OTP 성공, 제거 취소 시 상태 보존, 비밀번호·OTP 재인증 후 수단별 제거, 모든 수단 제거 후 비밀번호 단독 로그인까지 확인했다. PC·390px 모바일 화면과 가로 넘침도 확인했고 디자인 자동 검사 결과는 0건이다. 검증 브라우저의 공개 플랫폼 도메인 요청은 로컬 개발 서버로 연결해 운영 계정 설정을 변경하지 않았다. 자료는 Git 제외 `output/playwright/otp-*`에 있다.
+- **진행:** 기능 커밋을 main에 push한 뒤 같은 SHA의 GitHub verify·release·deploy 결과와 운영 태그·상태를 확인한다. 실제 자동 배포 결과는 아래에 추가한다.
+
 ### 국가 제한을 유지하는 GitHub 자동 배포 완료 (2026-10-01)
 
 - **최종 결과:** [GitHub 실행 36762459356](https://github.com/shnea/platform/actions/runs/36762459356)의 verify·release·deploy 모두 성공했다. NAS 진입점 수정 후 실패한 deploy만 재실행해 기존 이미지·Artifact를 그대로 사용했다. 운영 현재 태그는 `89db5091e6cb`, 이전 정상 태그는 `0.1.3`이며 전체 SHA·CI 출처가 일치한다. 자체 이미지 8개와 외부 Loki의 digest 9개, 정상 배포·SSH 종료 0 기록, 배포 잠금 해제를 확인했다. Compose 기동·이미지 revision/digest·Loki readiness·프로젝트/파일/알림 health 검사를 통과했고 외부 `/healthz`도 HTTP 200이다. Runner는 Online/Idle로 복귀했다.
