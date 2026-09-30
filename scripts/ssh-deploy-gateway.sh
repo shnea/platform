@@ -43,7 +43,6 @@ FILES='compose.yml
 .env.prod
 infra/loki/loki.yml
 scripts/deploy.sh
-scripts/recovery-drill.sh
 docs/NAS_DEPLOYMENT.md
 docs/REVERSE_PROXY.md
 docs/CICD.md

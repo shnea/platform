@@ -101,20 +101,3 @@ sudo sh scripts/deploy.sh status
 ## Registry 이미지 정리
 
 Registry 운영 폴더에서 모든 이미지 저장소에 공통 적용한다. 이미지 저장소별 최근 5개 또는 최근 30일과 NAS에서 사용 중인 이미지를 보존한다. platform에는 별도 정리 스크립트·GitHub 정리 작업을 두지 않는다. Registry의 실제 설치·일정·실행 결과는 Registry 쪽 운영 안내를 따른다.
-
-## DB 복원·이미지 롤백 훈련
-
-NAS 셸에서 `BACKUP_ROOT`를 운영 데이터와 분리한 접근 제한 백업 위치로 지정한다. 백업에는 사용자 데이터와 DB 역할의 비밀번호 해시가 포함되므로 Git·CI Artifact에 올리지 않는다.
-
-```sh
-cd "$NAS_DEPLOY_PATH"
-sudo sh scripts/recovery-drill.sh "$BACKUP_ROOT"
-# DB·인증 흐름·Compose·환경설정의 호환성을 검토한 경우에만:
-sudo sh scripts/recovery-drill.sh "$BACKUP_ROOT" <호환되는_이전_SHA_12자리>
-sudo cat .deploy/last-restore-result.jsonl
-sudo cat .deploy/last-rollback-drill
-```
-
-훈련은 DB 4개와 역할을 백업하고, 네트워크와 운영 볼륨이 없는 임시 PostgreSQL에 복원한다. 테이블별 행 수·내용 해시와 시퀀스를 백업과 비교한다. 임시 DB·볼륨은 종료 시 제거하고 백업·검증 결과는 접근 제한 위치에 보관한다. 운영 DB에 덮어쓰지 않으며 여러 DB 사이의 동일 시점 스냅샷이나 파일 볼륨 복원까지 검증하는 절차는 아니다.
-
-이전 SHA를 전달하면 현재 → 이전 → 현재 순서로 **같은 deploy**를 실행하고 각 단계의 상태 검사를 확인한다. 이때 앱 컨테이너가 갱신되어 잠깐 접속이 끊길 수 있다. 중간 실패 시 시작 버전으로 복귀를 시도하지만 실패하면 즉시 실제 운영 상태를 확인해야 한다. 호환성 검토는 자동화하지 않는다. 특히 인증 정책이나 DB 스키마가 다른 오래된 버전을 태그만 보고 선택하지 않는다.
