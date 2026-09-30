@@ -52,7 +52,7 @@ for scenario in ('success', 'command', 'sha', 'extra', 'link', 'duplicate', 'con
                     entry.size = 0
                 archive.addfile(entry, io.BytesIO(raw))
         env = dict(os.environ, PATH=str(root / 'bin') + ':' + os.environ['PATH'], FAIL_AT=scenario,
-                   NAS_DEPLOY_PATH=directory)
+                   NAS_DEPLOY_PATH=directory, LC_ALL='C')
         command = 'sh -c bad' if scenario == 'command' else 'deploy ' + sha
         result = subprocess.run(['sh', str(gateway), command], input=buffer.getvalue(), env=env, capture_output=True)
         assert (result.returncode == 0) == (scenario == 'success'), (scenario, result.stderr.decode())

@@ -7,6 +7,7 @@
 - **결정:** 외부 GitHub 서버의 NAS SSH 시간 초과 후 사용자가 국가 제한을 유지하고 배포 전용 Runner를 설치하는 방식을 선택했다. 테스트·빌드는 GitHub 서버에서 유지하고 deploy만 NAS Runner로 배정한다.
 - **구성:** 공식 Runner 이미지의 SSH 도구·실행 사용자·경로를 확인하고 digest를 고정했다. 별도 컨테이너·자동 생성 볼륨으로 등록정보를 보관하며 호스트 네트워크의 내부 SSH로 기존 제한 명령을 호출한다. Docker 소켓·앱 데이터·운영 복호화 키는 Runner에 제공하지 않는다. 단기 등록 토큰은 최초 설치 후 제거한다. 내부 주소·호스트 확인 값은 GitHub Secrets에 반영했다.
 - **진행:** 설치 스크립트·워크플로·요구사항·운영 설명서를 수정했다. 최초 설치는 NAS 관리자 입력 창에서 진행하며 Online 확인과 새 커밋의 실제 자동 배포는 아직 남았다. 외부 SSH 방식으로 게시한 이전 SHA 이미지는 덮어쓰지 않는다.
+- **실행 검증:** Runner Online과 임시 등록 토큰 제거를 확인했다. [Runner 실행 36762459356](https://github.com/shnea/platform/actions/runs/36762459356)의 verify·release·Artifact 전달·NAS 내부 SSH 인증이 성공했다. NAS GNU tar가 C 로케일에서 한글 파일명을 이스케이프해 허용 목록 검사가 중단됐다. 실제 expected/actual·tar 내용을 비교해 원인을 확인하고 GNU tar에 literal 출력 옵션을 적용했다. `LC_ALL=C`에서 GNU tar와 BusyBox tar 모두의 정상·추가 파일·중복·심볼릭 링크·잘못된 SHA·실패 처리 검증을 통과했다. 수정 대상은 별도로 설치하는 NAS 진입점과 그 검사이며 이미지·배포 Artifact에는 포함되지 않는다. 해당 도구 수정은 중복 이미지 빌드 없이 커밋하고 게시된 동일 릴리스의 실패한 deploy만 재실행한다.
 
 ### GitHub Actions 구성·SSH 외부 연결 확인 (2026-10-01)
 

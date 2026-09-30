@@ -48,7 +48,12 @@ docs/REVERSE_PROXY.md
 docs/CICD.md
 운영안내.html'
 printf '%s\nSOURCE_COMMIT\nIMAGE_DIGESTS\n' "$FILES" | LC_ALL=C sort > "$STAGE/expected"
-tar -tzf "$STAGE/package.tar.gz" > "$STAGE/entries"
+# GNU tar escapes non-ASCII names under the NAS C locale; BusyBox lists literal names.
+if tar --help 2>/dev/null | grep -q -- '--quoting-style'; then
+    tar --quoting-style=literal -tzf "$STAGE/package.tar.gz" > "$STAGE/entries"
+else
+    tar -tzf "$STAGE/package.tar.gz" > "$STAGE/entries"
+fi
 LC_ALL=C sort "$STAGE/entries" > "$STAGE/actual"
 cmp "$STAGE/expected" "$STAGE/actual" >/dev/null || fail 'Unexpected or duplicate configuration archive members.'
 tar -tvzf "$STAGE/package.tar.gz" > "$STAGE/details"
