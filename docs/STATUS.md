@@ -2,11 +2,16 @@
 
 ## 현재 단계
 
-### 국가 제한을 유지하는 배포 전용 Runner (2026-10-01, 전환 중)
+### 국가 제한을 유지하는 GitHub 자동 배포 완료 (2026-10-01)
+
+- **최종 결과:** [GitHub 실행 36762459356](https://github.com/shnea/platform/actions/runs/36762459356)의 verify·release·deploy 모두 성공했다. NAS 진입점 수정 후 실패한 deploy만 재실행해 기존 이미지·Artifact를 그대로 사용했다. 운영 현재 태그는 `89db5091e6cb`, 이전 정상 태그는 `0.1.3`이며 전체 SHA·CI 출처가 일치한다. 자체 이미지 8개와 외부 Loki의 digest 9개, 정상 배포·SSH 종료 0 기록, 배포 잠금 해제를 확인했다. Compose 기동·이미지 revision/digest·Loki readiness·프로젝트/파일/알림 health 검사를 통과했고 외부 `/healthz`도 HTTP 200이다. Runner는 Online/Idle로 복귀했다.
+- **최종 파일/키:** 운영 루트에는 `.deploy`, `.tools`, `docs`, `infra`, `scripts`, `.env.keys`, 암호화 `.env.prod`, `compose.yml`, `운영안내.html`만 남는다. 이전 백업·이관 자료는 사용자 지정 보관 폴더로 분리했다. 운영·개발 모두 환경 키 파일은 `.env.keys` 하나이며 실제 SSH 인증은 GitHub Secrets에서 관리한다. 등록에 사용한 로컬 임시 키 복사본과 NAS의 단기 Runner 토큰은 검증 후 제거했다. PC·모바일 설명서 검증과 다운로드의 공통 스킬 갱신·형식 검증도 완료했다.
+- **평소 운영:** main push 후 Actions의 세 단계를 확인한다. 키를 바꾸지 않는 한 환경파일을 따로 옮기지 않는다. 배포 Runner는 별도 컨테이너·자동 등록 볼륨을 유지하며 중지는 NAS에서 `sudo docker stop platform-deploy-runner`, 재개는 `sudo docker start platform-deploy-runner`다. 실행 중인 배포가 없을 때 조작한다. 입력용 SSH 콘솔은 Enter로 닫을 수 있고 브라우저 검증 세션·임시 HTTP 서버는 종료했다. Git 작업 트리에 평문 NAS 접속 정보·내부 경로가 없음을 확인했다.
+- **남은 범위:** 자동 CI/CD는 실측 완료했다. Registry 이미지 자동 삭제, 실제 DB 백업 복원·이전 이미지로의 운영 롤백은 실행하지 않았다. 스킬과 운영 문서의 보호·보존 기준을 유지한다. 과거 Git 이력은 재작성하지 않았다.
 
 - **결정:** 외부 GitHub 서버의 NAS SSH 시간 초과 후 사용자가 국가 제한을 유지하고 배포 전용 Runner를 설치하는 방식을 선택했다. 테스트·빌드는 GitHub 서버에서 유지하고 deploy만 NAS Runner로 배정한다.
 - **구성:** 공식 Runner 이미지의 SSH 도구·실행 사용자·경로를 확인하고 digest를 고정했다. 별도 컨테이너·자동 생성 볼륨으로 등록정보를 보관하며 호스트 네트워크의 내부 SSH로 기존 제한 명령을 호출한다. Docker 소켓·앱 데이터·운영 복호화 키는 Runner에 제공하지 않는다. 단기 등록 토큰은 최초 설치 후 제거한다. 내부 주소·호스트 확인 값은 GitHub Secrets에 반영했다.
-- **진행:** 설치 스크립트·워크플로·요구사항·운영 설명서를 수정했다. 최초 설치는 NAS 관리자 입력 창에서 진행하며 Online 확인과 새 커밋의 실제 자동 배포는 아직 남았다. 외부 SSH 방식으로 게시한 이전 SHA 이미지는 덮어쓰지 않는다.
+- **구성 반영:** 설치 스크립트·워크플로·요구사항·운영 설명서를 수정하고 NAS 관리자 입력으로 설치했다. Online 확인과 새 커밋의 실제 자동 배포를 마쳤다. 외부 SSH 방식으로 게시한 이전 SHA 이미지는 덮어쓰지 않았다.
 - **실행 검증:** Runner Online과 임시 등록 토큰 제거를 확인했다. [Runner 실행 36762459356](https://github.com/shnea/platform/actions/runs/36762459356)의 verify·release·Artifact 전달·NAS 내부 SSH 인증이 성공했다. NAS GNU tar가 C 로케일에서 한글 파일명을 이스케이프해 허용 목록 검사가 중단됐다. 실제 expected/actual·tar 내용을 비교해 원인을 확인하고 GNU tar에 literal 출력 옵션을 적용했다. `LC_ALL=C`에서 GNU tar와 BusyBox tar 모두의 정상·추가 파일·중복·심볼릭 링크·잘못된 SHA·실패 처리 검증을 통과했다. 수정 대상은 별도로 설치하는 NAS 진입점과 그 검사이며 이미지·배포 Artifact에는 포함되지 않는다. 해당 도구 수정은 중복 이미지 빌드 없이 커밋하고 게시된 동일 릴리스의 실패한 deploy만 재실행한다.
 
 ### GitHub Actions 구성·SSH 외부 연결 확인 (2026-10-01)
