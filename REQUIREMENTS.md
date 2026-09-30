@@ -47,11 +47,11 @@
 - 기존 서비스 코드 재사용 및 기존 서비스 이전 안 함.
 - MSA, Docker Compose, 다른 서비스가 소유한 DB 직접 접근 금지.
 - 백엔드 빌드는 Gradle 사용.
-- 운영 배포는 사용자가 직접 수행하며 개발 데이터는 이전하지 않는다. NAS 설정 루트는 `/volume1/docker/prod/platform`, DB·파일·로그 영속 데이터는 각각 `/volume2/homes/platform/postgres`, `/volume2/homes/platform/files`, `/volume2/homes/platform/loki`에 둔다.
+- 운영 배포는 사용자 승인 범위에서 수행하며 개발 데이터는 이전하지 않는다. NAS 설정 루트는 `/volume1/docker/prod/platform`, DB·파일·로그 영속 데이터는 각각 `/volume2/homes/platform/postgres`, `/volume2/homes/platform/files`, `/volume2/homes/platform/loki`에 둔다.
 - 외부 진입은 Nginx 30140. DB 외부 접근 시 30141, 추가 포트는 30142부터 순차 배정.
 - 운영 도메인은 `platform.shnea.kr`. 관리자 웹·API·인증은 HTTPS로 제공.
 - 자체 이미지: `registry.shnea.kr/platform-이미지명:태그`.
-- 환경 파일은 `.env.dev`·`.env.build`·`.env.prod`로 고정한다. `--env-file`로 선택해 개발·빌드/업로드·운영하며 NAS에는 `.env.prod`를 이름 변경 없이 복사한다. 레지스트리·태그는 환경 파일에서 관리하고 데이터 폴더 준비·인증 초기화는 시작 순서에 포함한다.
+- 환경은 Dotenvx로 암호화한 `.env.dev`·`.env.prod`이며 Git에서 관리한다. 키·평문 비밀값은 Git과 이미지에서 제외한다. `dev`는 개발 빌드·실행, `release`는 운영 비밀값 없이 이미지 8개 빌드·게시, `deploy <SHA 12자리>`는 NAS Pull·실행이다. Registry 기본값은 `registry.shnea.kr`이며 `REGISTRY_HOST`로 변경한다. 새 배포 태그는 전체 Git SHA 앞 12자리로 외부 전달하고 덮어쓰지 않는다. 운영 Compose 하나에 데이터 준비·인증 초기화·네트워크를 통합하고 개발 override와 격리 테스트 Compose 하나를 둔다. 기존 데이터·키·프로젝트 이름을 보존한다.
 - 파일 최대 5GB, 멀티·드래그·분할·일시정지·재개 업로드(resumable upload).
 - 파일 기본 공개, 비공개·비밀번호 공유 별도 지원. 비밀번호 공유는 비공개 파일에 보기·다운로드 범위로 생성하며 기본 7일(1~30일), 즉시 철회, 비밀번호 확인 횟수 제한을 적용한다. 원본·파생 콘텐츠까지 동일하게 보호하고 OG에는 공통 안내만 노출한다.
 - 파일 기반 API는 서버 키의 `files:read`·`files:write`·`files:delete`·`files:share`를 구분한다. 기존 키에 자동 부여하지 않으며 업로드 세션·원본 저장을 프로젝트·환경별로 격리한다. 관리자 파일 메뉴는 관리자 JWT로 업로드·재개와 파일 관리를 제공하고, 저장 목록에서 썸네일·문서·영상·원본·기본 뷰어와 용도별 URL을 확인한다. 공개 고정 URL과 비공개 임시 URL, 준비 중·미지원·실패를 구분한다. 프로젝트별 파일 서비스 사용을 선택하며 새 프로젝트는 기본 꺼짐, 기존 프로젝트는 유지한다. 사용자별 업로드 허용 판단은 호스트 서버가 담당하고 플랫폼의 이용자 JWT·위임 업로드는 현재 범위에서 제외한다. 브라우저는 호스트 서버를 통해 업로드한다.

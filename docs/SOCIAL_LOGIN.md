@@ -1,6 +1,6 @@
 # 공통 소셜 로그인 설정
 
-네이버·구글·카카오별 공통 앱 키 한 세트를 `.env`에 등록한다. 프로젝트·환경에서는 제공자 사용 여부만 설정한다. 회원·가입 정책·로그인 세션·토큰은 기존 프로젝트별 Keycloak realm에 남으며 통합 계정이나 플랫폼 SSO를 만들지 않는다.
+네이버·구글·카카오별 공통 앱 키 한 세트를 `.env.dev` / `.env.prod`에 등록한다. 프로젝트·환경에서는 제공자 사용 여부만 설정한다. 회원·가입 정책·로그인 세션·토큰은 기존 프로젝트별 Keycloak realm에 남으며 통합 계정이나 플랫폼 SSO를 만들지 않는다.
 
 ## 환경변수
 
@@ -13,21 +13,17 @@ SOCIAL_KAKAO_CLIENT_ID=
 SOCIAL_KAKAO_CLIENT_SECRET=
 ```
 
-카카오 Client ID에는 REST API 키를 넣고 카카오 로그인·OpenID Connect·Client Secret을 활성화한다. 구글은 웹 애플리케이션 OAuth 클라이언트를 사용한다. 네이버는 네이버 로그인 애플리케이션의 키를 사용한다. 실제 값은 로컬/운영 `.env`에만 두며 Git·화면·문서·채팅에 넣지 않는다. Compose가 값을 해석하므로 `$` 등 특수문자가 있다면 dotenv의 작은따옴표 값 표기를 사용한다.
+카카오 Client ID에는 REST API 키를 넣고 카카오 로그인·OpenID Connect·Client Secret을 활성화한다. 구글은 웹 애플리케이션 OAuth 클라이언트를 사용한다. 네이버는 네이버 로그인 애플리케이션의 키를 사용한다. 실제 값은 `.env.dev`·`.env.prod`에서 Dotenvx로 암호화한다. 평문·복호화 키를 Git·화면·문서·채팅에 넣지 않는다.
 
-기존 개발 환경에 빈 항목만 추가할 때는 아래 명령을 쓸 수 있다. 이미 있는 값은 바꾸지 않는다.
-
-```sh
-docker run --rm --mount "type=bind,source=${PWD},target=/workspace" -w /workspace python:3.13-alpine python scripts/init-env.py --upgrade
-```
+설정 추가·수정은 [암호화 환경 관리](NAS_DEPLOYMENT.md#설정-변경)를 따른다. 기존 비밀번호·내부 키를 재생성하지 않는다.
 
 키 수정 후에는 `restart`만 하지 말고 컨테이너를 재생성한다. 운영의 이미지 갱신은 별도 배포 절차를 따른다.
 
 ```sh
-docker compose up -d --no-deps --force-recreate keycloak
+./scripts/dev.ps1 up -d --no-deps --no-build --force-recreate keycloak
 ```
 
-개발에서는 `-f compose.yml -f compose.dev.yml`을 추가한다. 공통 키는 Keycloak 컨테이너만 읽으며 프로젝트 서비스는 내부 API에서 등록 여부만 확인한다. 관리자 화면에서 설정을 새로고침하면 준비 여부가 갱신된다. 등록됨은 두 값의 존재 여부이며 제공자 검수·정확성·실제 로그인 성공까지 검증한 것은 아니다.
+위 명령은 개발용이다. 운영에서는 같은 태그를 deploy 스크립트에 전달한다. 공통 키는 Keycloak 컨테이너만 읽으며 프로젝트 서비스는 내부 API에서 등록 여부만 확인한다. 관리자 화면에서 설정을 새로고침하면 준비 여부가 갱신된다. 등록됨은 두 값의 존재 여부이며 제공자 검수·정확성·실제 로그인 성공까지 검증한 것은 아니다.
 
 ## 외부 콘솔에 등록할 주소
 
@@ -61,10 +57,10 @@ docker compose up -d --no-deps --force-recreate keycloak
 관련 이미지를 빌드한 후, 실제 DB·계정·네트워크와 분리된 검사 환경을 실행한다. 테스트 전용 가짜 키이며 외부 네트워크와 호스트 포트가 없다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml build keycloak project-service admin-web nginx
-docker compose -p platform-callback-check -f compose.callback-test.yml up --abort-on-container-exit --exit-code-from callback-check
-docker compose -p platform-callback-check -f compose.callback-test.yml down
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-social-settings.py
+./scripts/dev.ps1 build keycloak project-service admin-web nginx
+docker compose --env-file .env.example -p platform-callback-check -f compose.test.yml --profile callbacks up --abort-on-container-exit --exit-code-from callback-check
+docker compose --env-file .env.example -p platform-callback-check -f compose.test.yml --profile callbacks down
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-social-settings.py
 ```
 
 단위 검사는 만료·브라우저/제공자 불일치·코드 교체·중지 realm·설정 변경·재사용 및 코드 교환 주소를 확인한다. 격리 통합 검사는 실제 Keycloak에서 공통 환경변수·세 제공자의 로그인 시작·두 realm의 콜백 분리·취소·직접 콜백 우회 차단을 확인한다. 실제 네이버·구글·카카오 로그인·외부 토큰 교환·운영 TLS는 별도 실제 연동 검수로 확인하며 최신 결과는 STATUS.md에 기록한다. Keycloak SPI 버전을 바꾸면 이 검사를 다시 수행한다.

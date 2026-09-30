@@ -4,8 +4,14 @@
 Thumbs.db
 .env
 .env.*
+!.env.dev
+!.env.prod
 !.env.example
 !.env.*.example
+.env.keys
+.secrets/
+.tools/
+.deploy/
 node_modules/
 output/
 dist/

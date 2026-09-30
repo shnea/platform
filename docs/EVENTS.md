@@ -49,7 +49,7 @@ Job 최종 상태와 `project_outbox`는 같은 트랜잭션에 저장한다. �
 
 ## 설정·검증
 
-`.env.example`과 `python scripts/init-env.py --upgrade`가 `PLATFORM_EVENTS_SECRET`을 생성한다. 기존 값은 바꾸지 않는다. 키는 프로젝트·알림 서비스에만 전달하며 이메일 키와 분리한다. 이미 설정된 빈 값은 자동 교체하지 않으므로 운영자가 채운다.
+`PLATFORM_EVENTS_SECRET`은 암호화 환경파일에 설정한다. 신규 환경 생성기는 무작위 값을 만들고 기존 환경은 [설정 변경](NAS_DEPLOYMENT.md#설정-변경) 절차를 따른다. 키는 프로젝트·알림 서비스에만 전달하며 이메일 키와 분리한다. 이미 설정된 빈 값은 운영자가 채운다.
 
 신규 환경 예시는 `PLATFORM_EVENTS_ENABLED=true`다. 키를 준비하지 않은 기존 배포는 Compose 기본값 `false`로 전달 워커를 멈춘 채 기존 API를 유지한다. 활성화 시 32자 이상 키가 없으면 프로젝트 서비스 시작을 거부한다. 알림 서비스도 미설정 키로 들어오는 이벤트를 거부한다. 최초 활성화 시 기존 PENDING 이력도 순차 전달한다. 알림 서비스를 먼저 갱신한 뒤 프로젝트 서비스를 적용한다.
 
@@ -57,11 +57,11 @@ Job 최종 상태와 `project_outbox`는 같은 트랜잭션에 저장한다. �
 
 ```powershell
 # 기존 개발 DB와 분리된 임시 DB. 프로젝트 이름을 반드시 지정한다.
-docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check
-docker compose -p platform-job-checks -f compose.jobs-test.yml down
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs down
 
 # 갱신한 개발 스택에서 실제 관리자 인증·Job→Outbox→알림 수신 확인
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py
+./scripts/dev.ps1 --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py
 ```
 
 첫 검사는 서비스별 독립 스키마와 실제 PostgreSQL을 사용한다. 발행 측은 로컬 HTTP 서버로 응답 유실·실패·점유 경합을 주입하고, 수신 측은 실제 트랜잭션으로 동시 중복·충돌·알림 저장 실패 롤백·순서 역전·인증 경계를 검증한다. 두 번째 검사는 실제 두 서비스와 스케줄러를 거쳐 전달 완료를 확인한 뒤 자체 프로젝트를 중지하고 로그인 세션을 종료한다. 외부 발송은 없다.

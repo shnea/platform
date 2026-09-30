@@ -51,11 +51,11 @@ HTTP 오류 `JOB_STATE_CHANGED`, `JOB_NOT_CANCELLABLE`, `JOB_NOT_RETRYABLE`은 �
 
 ```powershell
 # 프로젝트 이름을 명시한다. 로컬 .env의 COMPOSE_PROJECT_NAME보다 -p가 우선한다.
-docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check
-docker compose -p platform-job-checks -f compose.jobs-test.yml down
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs down
 
 # 개발 스택에 새 이미지를 반영한 뒤 실행한다.
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py
+./scripts/dev.ps1 --profile test run --rm --no-deps api-check python /checks/check-jobs-api.py
 ```
 
 첫 검사는 별도 PostgreSQL의 테스트별 스키마에 V1~V8을 적용하고 실제 JDBC·트랜잭션·워커 코드를 검증한다. 인증 서버만 모의 처리한다. 중복 접수·동시 점유·지연된 실행·재시도 간격/한도·수동 재시도·만료 점유 복구·이전 점유 차단·revision 취소·Outbox 실패 롤백·중지 상태 유지·MDC 복원을 포함한다. 복구는 커밋된 점유를 남기고 새 워커 객체로 실행하는 방식이며 실제 OS 프로세스 강제 종료 검사는 아니다. 전체 단위 검사와 실제 보안 필터의 일반 사용자 403 검사도 함께 수행한다.

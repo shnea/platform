@@ -62,8 +62,8 @@
 기존 알림은 V3 마이그레이션 후 모두 미확인 상태로 조회된다. V4는 기존 성공 이벤트로 과거 실패의 복구 연결만 계산하며, 과거 이메일·복구 알림을 일괄 생성하지 않는다. 기존 확인 기록은 보존한다. 이메일 본문은 DB에 저장하지 않으며 환경·Job·알림 UUID와 상태 안내만 생성한다. 수신 주소는 설정·변경 감사·발송 이력에 저장하므로 관리자 전용으로 조회한다. 별도 보존 기간·자동 삭제는 아직 없다. 알림 서비스 → 프로젝트 서비스 → 관리자 웹 순서로 갱신한다.
 
 ```powershell
-docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check
-docker compose -p platform-job-checks -f compose.jobs-test.yml down
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs down
 ```
 
 격리 검증은 실제 PostgreSQL에서 프로젝트/환경 격리, 필터·페이지 제한, 동시/반복 확인, 최초 기록 보존, 확인 저장 실패, 동시 실패·중복 억제 만료·복구 후 재실패·순서 역전·설정 동시 변경·발송 독점 점유·중단 후 UNKNOWN·모의 외부 발송 차단·큐/감사 실패 롤백을 검사한다. 내부 HTTP·보안 필터는 전용 키, 관리자 JWT 경계, 입력 검증, 서버에서 결정한 범위·관리자 전달을 검사한다. NCP는 모의 클라이언트를 사용하며 실제 수신함 전달·실제 OS 프로세스 종료 검수는 별도다.
@@ -71,7 +71,7 @@ docker compose -p platform-job-checks -f compose.jobs-test.yml down
 실제 DEV API는 아래 명령으로 확인한다. `job-check-`로 시작하는 중지된 검수 프로젝트에서 **이미 확인한 알림**의 UUID를 사용한다. 새 알림을 확인하거나 Job을 실행하지 않으며, 반복 확인이 최초 기록을 바꾸지 않는지 검사한다. 자체 관리자 로그인 세션은 검사 후 종료한다.
 
 ```powershell
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps api-check python /checks/check-alerts-api.py --environment <검수-환경-UUID> --alert <확인된-알림-UUID>
+./scripts/dev.ps1 --profile test run --rm --no-deps api-check python /checks/check-alerts-api.py --environment <검수-환경-UUID> --alert <확인된-알림-UUID>
 ```
 
 실제 응답 스키마, 확인 상태 필터, 최초 확인 기록 보존, 잘못된 입력·비로그인·없는 대상의 400/401/404를 검사한다. 동시성·다른 프로젝트/환경 격리·403은 위 격리 서버 검사 범위다.

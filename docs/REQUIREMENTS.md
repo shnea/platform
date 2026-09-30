@@ -735,7 +735,9 @@ Keycloak·MSA·Docker Compose·Gradle·에디터 배포 방식은 확정이다. 
 - 개발과 운영은 Docker를 기본으로 한다.
 - 운영 서버에는 원칙적으로 `compose.yml`과 환경변수 파일을 배포하고 이미지를 받아 실행한다.
 - 자체 이미지 이름은 `registry.shnea.kr/platform-이미지명:태그` 형식을 따른다.
-- `.env.dev`·`.env.build`·`.env.prod`를 각각 로컬 개발·이미지 빌드/업로드·NAS 운영에 사용한다. 레지스트리·태그는 `IMAGE_REGISTRY`·`IMAGE_TAG`, 구성은 `COMPOSE_FILE`·`COMPOSE_PATH_SEPARATOR`로 지정한다. 각 명령은 `--env-file`로 해당 파일을 선택하며 NAS 복사 시 `.env.prod` 이름을 유지한다. 빌드 구성은 자체 이미지 8개만 포함하고 비밀값·포트·데이터 볼륨을 포함하지 않는다. NAS 저장 디렉터리 준비와 Keycloak 준비 후 인증 초기화를 의존 순서에 포함하며 기존 데이터·관리자 비밀번호·MFA를 초기화하지 않는다.
+- 환경은 Dotenvx 암호화 `.env.dev`·`.env.prod` 두 개이며 Git에서 관리한다. 복호화 키는 별도로 보관하고 NAS에는 운영 키만 제공한다. 평문 비밀값·키를 Git, Docker 컨텍스트·ARG, 로그·배포 ZIP에 넣지 않는다. `dev`는 개발 빌드·실행, `release`는 운영 키 없이 자체 이미지 8개를 빌드·게시, `deploy <SHA 12자리>`는 NAS Pull·실행이다. Registry는 `REGISTRY_HOST`로 변경하며 기본 `registry.shnea.kr`을 사용한다. `IMAGE_TAG`는 전체 Git SHA 앞 정확히 12자리로 작업 시 전달하고 게시된 태그를 덮어쓰지 않는다. 전체 SHA·digest·배포 결과를 기록한다.
+- 운영 `compose.yml`에 데이터 경로·권한 준비·네트워크·인증 초기화 의존 순서를 포함한다. 개발 `compose.dev.yml`은 운영 데이터 경로와 고정 네트워크를 제거하고 기존 개발 볼륨을 유지한다. 격리 테스트는 `compose.test.yml` 하나로 통합한다. 스크립트에서 구성 파일을 명시해 자동 `.env`·`COMPOSE_FILE` 의존을 없앤다. 기존 데이터·프로젝트 이름·관리자 비밀번호·MFA를 초기화하지 않는다.
+- deploy는 전체 Pull과 소스 revision 검증에 성공한 뒤 `--no-build --wait`로 갱신하고 정상 확인 후에만 현재·직전 정상 상태를 기록한다. 실패 시 자동 데이터 롤백하지 않는다. 이전 이미지·DB·설정 호환성을 확인한 뒤 같은 deploy로 롤백한다. 전환 전 `0.1.3` 이미지는 보호하며 새 릴리스부터 SHA 정책을 적용한다. Registry 자동 삭제·CI/CD 도입은 별도 작업이며, 정리 도입 시 최근 5개 또는 최근 30일, 현재·직전 정상·진행 중·보호 이미지를 모두 보존한다.
 - macOS와 Windows를 번갈아 사용해 개발할 수 있어야 한다.
 - 운영 서버는 Linux다.
 - 운영 도메인은 `platform.shnea.kr`이며 공개 기준 주소는 `https://platform.shnea.kr`이다. 관리자 웹은 `/`, 플랫폼 API는 `/api/v1`, Keycloak은 `/auth` 경로를 사용한다. 로컬 개발 주소와 운영 주소는 환경변수로 분리한다.
@@ -758,7 +760,7 @@ Keycloak·MSA·Docker Compose·Gradle·에디터 배포 방식은 확정이다. 
 
 - 운영 서버에서 소스를 빌드하지 않는다. 실행에 필요한 정적 설정은 이미지에 포함하거나 환경변수에서 안전하게 생성한다.
 - 이미지와 환경변수 파일에 사용자 데이터·업로드 파일을 저장하지 않는다. DB와 파일의 영속 볼륨 또는 외부 저장소, 백업 공간을 별도로 확보한다.
-- `.env`는 비밀정보를 포함할 수 있으므로 저장소에 커밋하지 않고 접근을 제한한다. 비밀값 없는 예시 파일을 제공한다.
+- 평문 `.env`와 복호화 키는 커밋하지 않고 접근을 제한한다. Dotenvx 암호화가 확인된 `.env.dev`·`.env.prod`만 Git에서 관리하고 비밀값 없는 예시 파일을 제공한다.
 - 설치·인프라 설정은 환경변수로, 관리자 화면에서 바꾸는 프로젝트 정책·일반 운영 설정은 DB로 관리하는 방안을 제안한다. 외부 발송 비밀키 등은 저장·암호화·교체 방식을 별도로 정의한다.
 - 호스트의 개인 절대 경로, 특정 셸, OS 전용 스크립트에 의존하지 않는다. 줄바꿈·파일명 대소문자·볼륨 권한·파일 감시 차이를 검증한다.
 - macOS/Windows 개발에서도 Linux 컨테이너 사용을 제안한다. 실제 CPU가 다르면 `linux/amd64`·`linux/arm64` 지원 또는 에뮬레이션 방식을 정한다. Docker 이미지는 대상 OS/CPU와의 호환이 필요하다. [Docker 다중 플랫폼 빌드 문서](https://docs.docker.com/build/building/multi-platform/)

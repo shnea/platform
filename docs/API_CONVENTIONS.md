@@ -69,10 +69,10 @@ Nginx API 경로는 쿼리가 포함될 수 있는 일반 프록시 오류 로�
 ## 검증
 
 ```powershell
-docker compose -f compose.yml -f compose.dev.yml build project-service
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm admin-check npm test
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-api-contract.py
-docker compose -f compose.yml -f compose.dev.yml --profile test run --build --rm api-check
+./scripts/dev.ps1 build project-service
+./scripts/dev.ps1 --profile test run --rm admin-check npm test
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-api-contract.py
+./scripts/dev.ps1 --profile test run --build --rm api-check
 docker run --rm --network none --volume "${PWD}/scripts:/checks:ro" --entrypoint sh registry.shnea.kr/platform-nginx:0.1.0-dev /checks/check-gateway-errors.sh
 ```
 

@@ -1,10 +1,19 @@
 services:
+  # Production storage preparation is disabled; dev retains its original named volumes.
+  storage-init:
+    profiles: [production-only]
+    volumes: !reset []
+  loki:
+    volumes:
+      - ./infra/loki/loki.yml:/etc/loki/platform.yml:ro
+      - log-data:/loki
+    depends_on: !reset {}
   external-check:
     profiles: [test]
-    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${REGISTRY_HOST:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     networks: [app]
     environment:
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Load encrypted environment with the scripts}
     volumes:
       - ./scripts:/checks:ro
       - ./apps/admin-web/public/examples:/examples:ro
@@ -36,6 +45,9 @@ services:
     volumes: ["./apps/admin-web:/workspace/apps/admin-web", "./packages/editor:/workspace/packages/editor"]
     command: [sh, -c, "cd /workspace/packages/editor && npm ci && npm run build && cd /workspace/apps/admin-web && npm ci && npm run build"]
   db:
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    depends_on: !reset {}
     build: ./infra/postgres
     pull_policy: build
     networks: [database, db-access]
@@ -54,6 +66,10 @@ services:
       args: {SERVICE: project-service}
     pull_policy: build
   file-service:
+    volumes:
+      - file-data:/app/storage
+    depends_on: !override
+      db: {condition: service_healthy}
     build:
       context: .
       dockerfile: infra/java/Dockerfile
@@ -86,32 +102,32 @@ services:
     image: python:3.13-alpine
     networks: [app]
     environment:
-      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
-      KEYCLOAK_PROVISIONER_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:?Upgrade .env first}
+      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Load encrypted environment with the scripts}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Load encrypted environment with the scripts}
+      KEYCLOAK_PROVISIONER_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:?Load encrypted environment with the scripts}
     volumes: ["./scripts:/checks:ro"]
     command: [python, /checks/check-projects.py]
 
   api-check:
     profiles: [test]
-    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${REGISTRY_HOST:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     build: ./infra/contract-check
     networks: [app]
     environment:
       PLATFORM_MONITORING_SECRET: ${PLATFORM_MONITORING_SECRET:-}
       PLATFORM_EVENTS_SECRET: ${PLATFORM_EVENTS_SECRET:-}
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
-      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Upgrade .env first}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Load encrypted environment with the scripts}
+      PLATFORM_MAIL_SECRET: ${PLATFORM_MAIL_SECRET:?Load encrypted environment with the scripts}
     volumes:
       - ./scripts:/checks:ro
       - ./services/project-service/src/main/resources/openapi.json:/contracts/project.json:ro
 
   file-check:
     profiles: [test]
-    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${REGISTRY_HOST:-registry.shnea.kr}/platform-contract-check:${IMAGE_TAG:?Set IMAGE_TAG}
     networks: [app]
     environment:
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Upgrade .env first}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?Load encrypted environment with the scripts}
       FILE_CHECK_BASE: ${FILE_CHECK_BASE:-http://nginx:8080}
     volumes:
       - ./scripts:/checks:ro
@@ -120,17 +136,28 @@ services:
 
   db-check:
     profiles: [test]
-    image: ${IMAGE_REGISTRY:-registry.shnea.kr}/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
+    image: ${REGISTRY_HOST:-registry.shnea.kr}/platform-postgres:${IMAGE_TAG:?Set IMAGE_TAG}
     pull_policy: never
     networks: [database]
     environment:
-      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Generate .env first}
-      FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Generate .env first}
-      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Generate .env first}
-      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Generate .env first}
+      PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:?Load encrypted environment with the scripts}
+      FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Load encrypted environment with the scripts}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Load encrypted environment with the scripts}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Load encrypted environment with the scripts}
     volumes: ["./scripts:/checks:ro"]
     entrypoint: [sh, /checks/check-db.sh]
 
 networks:
+  app:
+    ipam: !reset {}
+  database:
+    ipam: !reset {}
+  logs:
+    ipam: !reset {}
   # A separate bridge enables localhost publishing while runtime DB stays internal.
   db-access:
+
+volumes:
+  log-data:
+  postgres-data:
+  file-data:

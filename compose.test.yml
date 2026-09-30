@@ -1,0 +1,133 @@
+# Standalone disposable tests. Never combine with runtime Compose or production data.
+name: platform-checks
+services:
+  callback-keycloak:
+    image: ${REGISTRY_HOST:-registry.shnea.kr}/platform-keycloak:${IMAGE_TAG:-dev}
+    command:
+    - start-dev
+    - --db=dev-mem
+    mem_limit: 1024m
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: callback-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: callback-test-only
+      KC_HOSTNAME: http://callback-keycloak:8080/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      KC_HEALTH_ENABLED: 'true'
+      PLATFORM_MODE: prod
+      SOCIAL_NAVER_CLIENT_ID: callback-test-client
+      SOCIAL_NAVER_CLIENT_SECRET: callback-test-secret
+      SOCIAL_KAKAO_CLIENT_ID: callback-test-client
+      SOCIAL_KAKAO_CLIENT_SECRET: callback-test-secret
+      SOCIAL_GOOGLE_CLIENT_ID: callback-test-client
+      SOCIAL_GOOGLE_CLIENT_SECRET: callback-test-secret
+    healthcheck:
+      test:
+      - CMD
+      - bash
+      - -ec
+      - "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200';\
+        \ } 0<>/dev/tcp/localhost/9000"
+      interval: 5s
+      retries: 30
+      start_period: 90s
+    profiles:
+    - callbacks
+    networks:
+    - callback-test
+  callback-check:
+    image: python:3.13-alpine
+    depends_on:
+      callback-keycloak:
+        condition: service_healthy
+    volumes:
+    - ./scripts:/checks:ro
+    command:
+    - python
+    - /checks/check-shared-callback.py
+    profiles:
+    - callbacks
+    networks:
+    - callback-test
+  job-test-db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: job_checks
+      POSTGRES_USER: job_checks
+      POSTGRES_PASSWORD: isolated-test-only
+    tmpfs:
+    - /var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U job_checks -d job_checks
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    profiles:
+    - jobs
+  job-check:
+    image: gradle:9.7.1-jdk21
+    depends_on:
+      job-test-db:
+        condition: service_healthy
+    environment:
+      JOB_TEST_DB_URL: jdbc:postgresql://job-test-db:5432/job_checks
+    volumes:
+    - ./services:/source/services:ro
+    - ./libraries:/source/libraries:ro
+    - ./settings.gradle.kts:/source/settings.gradle.kts:ro
+    - ./build.gradle.kts:/source/build.gradle.kts:ro
+    - ./gradle.properties:/source/gradle.properties:ro
+    - ./scripts/check-jobs-db.sh:/check.sh:ro
+    - ./output/job-checks:/reports
+    - gradle-cache:/home/gradle/.gradle
+    entrypoint:
+    - sh
+    - /check.sh
+    profiles:
+    - jobs
+  loki:
+    image: grafana/loki:3.7.0
+    command:
+    - -config.file=/etc/loki/platform.yml
+    - -compactor.compaction-interval=1s
+    - -compactor.apply-retention-interval=1s
+    - -compactor.retention-delete-delay=1s
+    - -store.retention=24h
+    - -validation.reject-old-samples.max-age=168h
+    - -querier.max-query-lookback=0s
+    - -querier.query-ingesters-within=0s
+    - -query-engine.enforce-retention-period=false
+    volumes:
+    - ./infra/loki/loki.yml:/etc/loki/platform.yml:ro
+    - log-test-data:/loki
+    mem_limit: 512m
+    profiles:
+    - logs
+    networks:
+    - log-test
+  log-check:
+    image: python:3.13-alpine
+    depends_on:
+    - loki
+    volumes:
+    - ./scripts/check-log-retention.py:/check.py:ro
+    - log-test-data:/data:ro
+    environment:
+      LOG_CHECK_PHASE: ${LOG_CHECK_PHASE:-write}
+    command:
+    - python
+    - /check.py
+    profiles:
+    - logs
+    networks:
+    - log-test
+volumes:
+  gradle-cache: null
+  log-test-data: null
+networks:
+  callback-test:
+    internal: true
+  log-test:
+    internal: true

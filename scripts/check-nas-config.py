@@ -1,72 +1,72 @@
-"""Validate NAS bootstrap/config without touching a running stack or printing secrets."""
+"""Check encrypted dev/prod Compose and optional pre-migration snapshots without logging secrets."""
+import argparse
 import json
-import shutil
-import subprocess
-import sys
-import uuid
-from ipaddress import ip_network
+import os
 from pathlib import Path
+import re
+import subprocess
 
-root=Path(__file__).resolve().parents[1]
-folder=root/'output/job-checks'/('nas-'+uuid.uuid4().hex)
-folder.mkdir(parents=True)
-shutil.copyfile(root/'.env.example',folder/'.env.example')
-command=[sys.executable,str(root/'scripts/init-env.py'),'--nas','--image-tag','configuration-check-only']
-result=subprocess.run(command,cwd=folder,capture_output=True,text=True);assert result.returncode==0
-envfile=folder/'.env';before=envfile.read_bytes()
-assert subprocess.run(command,cwd=folder,capture_output=True).returncode!=0
-assert envfile.read_bytes()==before,'Existing environment must never be replaced'
-values=dict(line.split('=',1) for line in before.decode().splitlines() if '=' in line and not line.startswith('#'))
-assert values['PLATFORM_MODE']=='prod' and values['COMPOSE_PROJECT_NAME']=='shnea-platform-prod'
-assert values['PLATFORM_WEB_URL']=='https://platform.shnea.kr' and values['BIND_ADDRESS']=='192.168.0.93'
-secrets=[value for key,value in values.items() if key.endswith('_PASSWORD') or key in ['PLATFORM_FILES_SECRET','PLATFORM_MAIL_SECRET','PLATFORM_EVENTS_SECRET','KEYCLOAK_PROVISIONER_SECRET']]
-assert all(len(value)==64 for value in secrets) and len(set(secrets))==len(secrets)
-assert values['COMPOSE_FILE']=='compose.yml|compose.nas.yml' and values['COMPOSE_PATH_SEPARATOR']=='|'
-args=['docker','compose','--env-file',str(envfile),'config','--format','json']
-result=subprocess.run(args,cwd=root,capture_output=True,text=True,encoding='utf-8')
-assert result.returncode==0,'Compose configuration failed; inspect with redaction'
-config=json.loads(result.stdout)
-for service,path,target in [('db','postgres','/var/lib/postgresql/data'),('file-service','files','/app/storage'),('loki','loki','/loki')]:
-    entry=next(v for v in config['services'][service]['volumes'] if v['target']==target)
-    assert entry['type']=='bind' and entry['source'].replace('\\','/').endswith('/volume2/homes/platform/'+path)
-for name,service in config['services'].items():
-    assert 'build' not in service,name
-    if name!='nginx':assert not service.get('ports'),name
-    assert float(service.get('cpus',0))==0,name
-    assert service.get('mem_limit') not in (None,0,'0'),name
-assert config['services']['project-service']['environment']['PLATFORM_MODE']=='prod'
-assert len(config['services'])==10 and 'storage-init' in config['services']
-assert not config['services']['identity-setup'].get('profiles')
-assert config['services']['identity-setup']['depends_on']['keycloak']['condition']=='service_healthy'
-assert config['services']['project-service']['depends_on']['identity-setup']['condition']=='service_completed_successfully'
-for name in ['db','file-service','loki']:
-    assert config['services'][name]['depends_on']['storage-init']['condition']=='service_completed_successfully'
-assert config['services']['storage-init']['network_mode']=='none'
-assert config['networks']['logs']['internal'] is True
-assert config['networks']['database']['internal'] is True
-subnets=[ip_network(config['networks'][name]['ipam']['config'][0]['subnet']) for name in ['app','database','logs']]
-assert len(set(subnets))==3 and all(net.prefixlen==24 for net in subnets)
-assert all(not a.overlaps(b) for i,a in enumerate(subnets) for b in subnets[i+1:])
-assert all(not net.overlaps(ip_network(used)) for net in subnets for used in ['172.16.0.0/12','192.168.0.0/16'])
-assert {n for n,s in config['services'].items() if 'logs' in s.get('networks',{})}=={'loki','project-service'}
-# The same commands select local build configuration using only .env values.
-envfile.write_text(before.decode().replace('compose.yml|compose.nas.yml','compose.yml|compose.dev.yml').replace('IMAGE_REGISTRY=registry.shnea.kr','IMAGE_REGISTRY=registry.example.invalid').replace('IMAGE_TAG=configuration-check-only','IMAGE_TAG=tag-check'),encoding='utf-8')
-result=subprocess.run(args,cwd=root,capture_output=True,text=True,encoding='utf-8')
-assert result.returncode==0
-local=json.loads(result.stdout)
-expected={'admin-web','db','keycloak','project-service','file-service','notification-service','nginx','identity-setup'}
-assert {name for name,s in local['services'].items() if 'build' in s}==expected
-for name in expected:
-    assert local['services'][name]['image'].startswith('registry.example.invalid/platform-')
-    assert local['services'][name]['image'].endswith(':tag-check')
-assert 'build' not in local['services']['loki']
-envfile.write_text((root/'.env.build.example').read_text(encoding='utf-8'),encoding='utf-8')
-result=subprocess.run(args,cwd=root,capture_output=True,text=True,encoding='utf-8')
-assert result.returncode==0
-build=json.loads(result.stdout)
-assert set(build['services'])==expected
-assert all('build' in s and not any(key in s for key in ['environment','ports','volumes','profiles']) for s in build['services'].values())
-# Only ephemeral generated check files are removed, never the real .env.
-assert envfile.resolve().parent==folder.resolve() and folder.resolve().parent==(root/'output/job-checks').resolve()
-envfile.unlink();(folder/'.env.example').unlink();folder.rmdir()
-print('PASS .env-only local/NAS selection, eight build images, registry/tag overrides, private NAS volumes, automatic storage/identity startup, fresh secrets/no overwrite')
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--baseline', type=Path, help='Private directory containing before-dev.json and before-nas.json')
+args = parser.parse_args()
+tool = root / '.tools' / ('dotenvx.exe' if os.name == 'nt' else 'dotenvx')
+
+def run(command, env=None):
+    result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, encoding='utf-8')
+    if result.returncode:
+        raise RuntimeError('Command failed (output suppressed to protect secrets): ' + str(command[0]))
+    return result.stdout
+
+def configuration(mode, profiles=False):
+    file = root / ('.env.' + mode)
+    for line in file.read_text(encoding='utf-8').splitlines():
+        if re.match(r'^[A-Z_][A-Z0-9_]*=', line) and not line.startswith('DOTENV_PUBLIC_KEY'):
+            value = line.split('=', 1)[1].strip().strip('"').strip("'")
+            assert not value or value.startswith('encrypted:'), 'Plaintext setting in ' + file.name
+    values = json.loads(run([str(tool), 'get', '--strict', '--overload', '--no-armor', '--no-native', '-f', str(file), '--format', 'json']))
+    assert 'IMAGE_TAG' not in values and 'IMAGE_REGISTRY' not in values
+    env = dict(os.environ)
+    for key in ('COMPOSE_FILE', 'COMPOSE_PATH_SEPARATOR', 'COMPOSE_PROFILES'):
+        env.pop(key, None)
+    env.update(values)
+    env['IMAGE_TAG'] = 'dev' if mode == 'dev' else '012345abcdef'
+    command = ['docker', 'compose', '--env-file', '.env.example', '-f', 'compose.yml']
+    if mode == 'dev': command += ['-f', 'compose.dev.yml']
+    if profiles: command += ['--profile', 'test']
+    command += ['config', '--format', 'json', '--no-path-resolution']
+    return json.loads(run(command, env))
+
+dev, prod = configuration('dev'), configuration('prod')
+assert dev['name'] == 'shnea-platform-dev' and prod['name'] == 'shnea-platform-prod'
+assert len(prod['services']) == 10 and 'storage-init' not in dev['services']
+assert len({s['image'] for s in prod['services'].values() if '/platform-' in s['image']}) == 8
+for name, service in prod['services'].items():
+    assert 'build' not in service and float(service.get('cpus', 0)) == 0, name
+    if name != 'nginx': assert not service.get('ports'), name
+for service, target, directory in [('db', '/var/lib/postgresql/data', 'postgres'), ('file-service', '/app/storage', 'files'), ('loki', '/loki', 'loki')]:
+    mount = next(v for v in prod['services'][service]['volumes'] if v['target'] == target)
+    assert mount['type'] == 'bind' and mount['source'] == '/volume2/homes/platform/' + directory
+    assert prod['services'][service]['depends_on']['storage-init']['condition'] == 'service_completed_successfully'
+    local = next(v for v in dev['services'][service]['volumes'] if v['target'] == target)
+    assert local['type'] == 'volume'
+for service in dev['services'].values():
+    assert 'storage-init' not in service.get('depends_on', {})
+    assert all('/volume2/' not in v.get('source', '') for v in service.get('volumes', []))
+assert all(not n.get('ipam') for n in dev['networks'].values())
+assert prod['services']['identity-setup']['depends_on']['keycloak']['condition'] == 'service_healthy'
+assert prod['services']['project-service']['depends_on']['identity-setup']['condition'] == 'service_completed_successfully'
+assert prod['networks']['database']['internal'] and prod['networks']['logs']['internal']
+assert {p['image'].split(':')[0] for p in configuration('dev', True)['services'].values() if '/platform-' in p['image']}
+for mode, filename in [('dev', 'before-dev.json'), ('prod', 'before-nas.json')]:
+    if not args.baseline: continue
+    old = json.loads((args.baseline / filename).read_text(encoding='utf-8'))
+    current = dev if mode == 'dev' else prod
+    assert old['name'] == current['name']
+    for name, service in old['services'].items():
+        now = current['services'][name]
+        for field in ('environment', 'volumes', 'depends_on', 'networks', 'ports', 'cpus', 'mem_limit', 'command', 'entrypoint', 'healthcheck'):
+            assert service.get(field) == now.get(field), f'Changed runtime contract: {mode}/{name}/{field}'
+    assert old['networks'] == current['networks'], 'Changed network contract: ' + mode
+    assert old.get('volumes', {}) == current.get('volumes', {}) or mode == 'prod', 'Changed development volumes'
+print('PASS encrypted environments, eight production images, storage/identity ordering, dev isolation, runtime contract preservation')

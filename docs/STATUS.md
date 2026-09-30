@@ -2,6 +2,17 @@
 
 ## 현재 단계
 
+### Docker 공통 표준 전환·NAS 실행 검증 (2026-10-01)
+
+- **완료:** 다운로드의 `docker-workflow-standard` 지침을 platform에 적용했다. 기본 Compose는 운영 `compose.yml`과 개발 `compose.dev.yml`로 정리하고 기존 격리 테스트 3개는 `compose.test.yml`의 jobs/callbacks/logs로 합쳤다. 별도 build/nas Compose와 `.env.build`, 기존 환경 준비 스크립트를 폐기했다. 운영 경로·권한 준비·네트워크·초기화 순서는 기본 구성으로 옮겼고 개발 named volume·프로젝트 이름은 보존했다.
+- **환경/명령:** 실제 운영 공유 폴더의 값과 로컬 개발 값을 각각 유지한 채 `.env.dev`·`.env.prod`를 Dotenvx 2.24.0으로 암호화했다. Git에는 암호문만 포함한다. `.env.keys`, `.secrets/`, `.tools/`, `.deploy/`와 백업은 제외했다. dev는 복호화·개발 빌드·실행, release는 운영 키 없이 자체 이미지 8개를 Git SHA 앞 12자리로 빌드·게시, deploy는 전체 Pull·revision 확인·`--no-build --wait`·Loki 준비 확인이다. 새 태그 덮어쓰기와 실패한 배포의 정상 상태 기록을 차단한다.
+- **로컬 검증:** `python -X utf8 scripts/check-nas-config.py --baseline output/docker-standard`에서 이전 운영·개발의 환경변수, 데이터 마운트, 초기화 의존성, 포트, 네트워크, 자원 제한의 동일성을 확인했다. `./scripts/dev.ps1`로 자체 이미지 8개 빌드·개발 기동 성공, `./scripts/dev.ps1 --profile test run --rm smoke`의 HTTP·인증 discovery·차단 경로 검사 통과. 각 독립 테스트 프로필의 `config --quiet` 통과. 격리 DB 전체 테스트를 다시 실행한 것은 아니다.
+- **스크립트 검증:** `./scripts/check-release.ps1`로 미커밋·기존 태그·인증 실패 차단, 전체 빌드 전 Push 차단, 8개 SHA 태그·revision·digest 기록을 모의 CLI로 확인했다. `docker run --rm --network none --mount "type=bind,source=$PWD/scripts,target=/checks,readonly" python:3.13-alpine python /checks/check-deploy.py`로 복호화·구성·Pull·revision·기동·readiness 실패와 성공 시 상태 기록·잠금 해제를 확인했다. 실제 Registry manifest 조회 형식, NAS ZIP의 키 제외, 환경파일 암호화·Git 제외 규칙, Python 구문과 `git diff --check`도 확인했다.
+- **NAS 반영/실측:** 사용자 직접 SSH·sudo 비밀번호 입력으로 `/volume1/docker/prod/platform`에 적용했다. Docker 24.0.2, Compose 2.20.1, amd64, Dotenvx 2.24.0에서 복호화·구성 해석·`sh scripts/deploy.sh --legacy 0.1.3` 성공. 현재 운영 이미지 ID를 `.deploy/legacy-images`로 보호해 Pull 전후 동일함을 검사했다. DB·파일·로그 bind 경로, Nginx 192.168.0.93:30140, 관리자·외부 연동 설정을 보존했다. 상시 서비스의 기존 26~27시간 uptime을 유지하고 초기화 작업만 정상 재실행했다. Loki readiness, `/healthz`, 프로젝트·파일·알림 health 모두 통과했으며 `.deploy/current`는 `0.1.3`이다.
+- **실행 중 수정:** NAS sudo PATH 누락과 일회성 이관 검사 파일의 CRLF를 수정했다. 처음 두 시도는 운영 변경 전에 중단됐다. 새 구성 반영 뒤 최초 Loki readiness 응답 503에서는 성공 상태를 기록하지 않았고, 최대 60초 재확인을 추가해 재실행에 성공했다. 서비스·데이터 자동 롤백이나 초기화는 하지 않았다.
+- **보관/복구:** NAS 원래 설정은 `.docker-standard-backup-20261001`에 보관했다(평문 이전 환경파일 포함, 접근 제한). 이전 `compose.nas.yml`·`scripts/init-env.py`는 활성 경로에서 이 백업으로 옮겼다. 일회성 이관 스크립트·결과는 NAS `.docker-standard-stage`, 로컬 검증·기존 환경 백업은 Git 제외 `output/docker-standard`에 있다. 실행 중인 SSH 작업·백그라운드 이관 프로세스는 없으며 직접 입력용 터미널은 Enter로 닫을 수 있다. 개발 환경은 실행 중이며 중지는 `./scripts/dev.ps1 down`이다(볼륨 보존).
+- **남은 사항:** 실제 새 SHA 이미지 Build+Push와 해당 SHA의 운영 배포는 수행하지 않았다. 현재 서비스 버전은 의도적으로 기존 `0.1.3`을 유지했고 다음 릴리스부터 새 `release.ps1`을 사용한다. 이미지 롤백·백업 복원, 이번 변경의 macOS 실기동은 미검증이다. CI/CD·Registry 자동 삭제는 별도 도입 범위다. 보존 정책은 최근 최소 5개 또는 30일, 현재·직전 정상·진행 중·보호 릴리스 유지로 문서화했다. 운영 명령·키 준비·복구 절차는 `docs/NAS_DEPLOYMENT.md`를 따른다.
+
 ### JPG 미리보기 입력 형식 허용 (2026-09-30)
 
 - **원인/수정:** 운영 FFprobe가 `.jpg` 입력을 `image2` demuxer로 선택했지만, 입력 허용 목록에 `image2`가 없어 즉시 거부했다. 미리보기·썸네일·형식 검사 목록에 `image2`를 추가하고, 코덱 검증을 유지하면서 FFprobe가 반환하는 `image2` 형식 이름도 인정한다. 원본 입력 프로토콜은 계속 로컬 `file`만 허용한다.

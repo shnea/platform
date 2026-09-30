@@ -180,29 +180,29 @@ UTC 달력 기준이며 월말·윤년은 유효한 마지막 날로 맞춘다. 
 - 날짜는 업로드 접수 시각의 한국 날짜(Asia/Seoul)다. V9의 `files.storage_path`에 상대 경로를 고정하므로 다음 날 재개하거나 서버를 재시작해도 위치가 바뀌지 않는다. 예: `images/2026/09/27/<프로젝트ID>/<환경ID>/<파일ID>/original.png`.
 - V9 이전 파일은 `storage_path=NULL`로 유지해 기존 `<파일ID>.bin`, `<파일ID>.jpg`, `<파일ID>.hls/`를 계속 사용한다. 진행 중 업로드도 이어서 전송할 수 있고 기존 파일 URL은 유지한다. 기존 파일을 자동 이동하지 않으며 저장 파일·폴더를 수동으로 옮기면 DB 경로와 불일치하므로 관리자 API로 관리한다. 삭제 정리기는 해당 파일의 원본·썸네일·HLS와 비어진 파일ID 폴더만 지우고 공유 날짜·프로젝트 폴더는 보존한다.
 - 처음 사용하는 환경에 `default`(달력 1년), `tmp`(1일), `영구` 정책 행을 만든다. 미등록/사용 중지 코드는 신규 선택 시 거부한다. V3는 보존 관리·전송 lease, V4는 보기 작업·권한 토큰을 추가한다.
-- 파일 서비스 메모리 기본값은 `FILE_MEMORY=1g`, JVM은 전용 `FILE_JAVA_TOOL_OPTIONS`의 MaxRAMPercentage=35다. FFmpeg의 프로세스 공간을 남긴다. 기존 `.env`의 512m 값은 자동 upgrade로 바뀌지 않으므로 배포 시 1g로 조정한다. 새 외부 포트/상시 프로세스는 없고 변환할 때만 제한된 FFmpeg 프로세스를 실행한다.
+- 파일 서비스 메모리 기본값은 `FILE_MEMORY=1g`, JVM은 전용 `FILE_JAVA_TOOL_OPTIONS`의 MaxRAMPercentage=35다. FFmpeg의 프로세스 공간을 남긴다. 기존 `.env.dev` / `.env.prod`의 512m 값은 자동 upgrade로 바뀌지 않으므로 배포 시 1g로 조정한다. 새 외부 포트/상시 프로세스는 없고 변환할 때만 제한된 FFmpeg 프로세스를 실행한다.
 - 기본 환경 예약 한도: `FILE_ENVIRONMENT_QUOTA=50000000000`(50GB), 미완료 세션 수: `FILE_PENDING_LIMIT=20`. 파일 크기를 미리 예약해 완료 파일과 진행 중 업로드를 함께 계산한다. 단일 공유 디스크에서 모든 환경의 남은 예약 바이트도 확인하고 실제 여유 256MiB를 남긴다. 전체 DB 메타데이터 수/요청 빈도 제한은 별도 운영 보완 사항이다.
 - 단일 파일 서비스와 로컬 영속 볼륨으로 시작한다. 인스턴스를 여러 호스트에 복제하기 전 공유 저장소·분산 파일 잠금/배치 전략을 별도로 검토한다. DB만 복구하거나 볼륨만 복구하면 일치하지 않을 수 있어 둘을 함께 백업한다. 전원 장애·디스크 장애 복구는 별도 검수 대상이다.
 - Nginx 파일 경로만 요청 상한 8MiB, 본문 대기 30초, 응답 대기 300초다. 외부 NPM도 이 크기/시간을 허용해야 한다. 다른 API의 기존 1MiB 상한은 유지한다. HTTP 진입은 기존 30140이며 새 외부 포트를 열지 않는다.
 
-설정 추가는 `python scripts/init-env.py --upgrade`로 한다. 기존 `.env` 값을 덮어쓰지 않는다. 파일/프로젝트/Nginx 이미지를 빌드한 뒤 해당 서비스만 재생성한다. 기존 볼륨에 사용자 파일을 임의로 복사하거나 이전 파일 서비스를 이전하지 않는다.
+설정 추가는 [암호화 환경 관리](NAS_DEPLOYMENT.md#설정-변경)를 따른다. 기존 키·비밀번호는 보존한다. 개발은 dev 명령으로 재생성하고 운영은 release/deploy로 갱신한다. 기존 볼륨에 사용자 파일을 임의로 복사하거나 이전 파일 서비스를 이전하지 않는다.
 
 ## 검증과 재개
 
 격리 DB 검증은 운영 Compose와 결합하지 않는다.
 
 ```powershell
-docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check
-docker compose -p platform-job-checks -f compose.jobs-test.yml down
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check
+docker compose --env-file .env.example -p platform-job-checks -f compose.test.yml --profile jobs down
 ```
 
 개발 서버 실제 검사는 전용 프로젝트 2개와 DEV/PROD 환경을 만들며 일반 회원·기존 프로젝트를 변경하지 않는다. 검사 후 키 폐기·파일 삭제/취소·프로젝트 중지·검사 관리자 세션 로그아웃을 수행하고 감사 이력은 남긴다. 중간 상태 파일에는 단기 검사 키가 있어 Git 제외 `output/playwright/file-check.json`에만 두며 정상 종료 후 삭제한다.
 
 ```powershell
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps file-check --phase start
-docker compose -f compose.yml -f compose.dev.yml restart file-service
+./scripts/dev.ps1 --profile test run --rm --no-deps file-check --phase start
+./scripts/dev.ps1 restart file-service
 # file-service가 healthy가 된 뒤
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --no-deps file-check --phase finish
+./scripts/dev.ps1 --profile test run --rm --no-deps file-check --phase finish
 ```
 
 중간 종료 시 `--phase cleanup`을 사용한다. 검사 키가 만료되면 관리자에서 해당 검사 프로젝트·키를 확인해 정리하고, 미완료 원본은 세션 만료 정리기가 처리한다. 검사 스크립트는 비밀값을 출력하지 않는다. 기본 실제 전송 샘플은 약 7MB이며 5GB 선언 상한/초과 거부와 실제 5GB 전체 전송 성능은 다른 검증이다. 실제 실행 결과와 미검증 범위는 [STATUS](STATUS.md)를 따른다.

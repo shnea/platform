@@ -27,7 +27,7 @@
 
 감사 이벤트는 `user.enabled`, `user.disabled`, `user.session.ended`, `user.sessions.ended`다. 인증 서버 작업 중 거부·실패는 `.failed`로 기록한다. 기존 감사 응답에 nullable `environment_id`, `session_id`를 추가했으며 `target_id`는 회원 ID다. 입력 검증·인증 실패 등 작업 진입 전 거부는 회원 관리 이벤트를 생성하지 않는다. DB 기록 실패·프로세스 중단과 Keycloak 변경을 하나의 트랜잭션으로 보장하지 않는다. 기존 접근 토큰을 자체 검증하는 서비스는 만료까지 허용할 수 있으며 별도 즉시 차단 정책이 필요하다.
 
-검사: `docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-members.py`. 새 전용 프로젝트만 만들며 기본 종료 시 키 폐기·프로젝트 중지, 계정 보존을 수행한다. `--keep-active`는 성공한 검수 데이터를 화면 확인용으로 유지하므로 확인 후 해당 프로젝트를 중지한다.
+검사: `./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-members.py`. 새 전용 프로젝트만 만들며 기본 종료 시 키 폐기·프로젝트 중지, 계정 보존을 수행한다. `--keep-active`는 성공한 검수 데이터를 화면 확인용으로 유지하므로 확인 후 해당 프로젝트를 중지한다.
 
 ## DEV 테스트 계정 초기화
 
@@ -56,7 +56,7 @@
 검증 명령:
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock-reset.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-mock-reset.py
 ```
 
 새 검증 프로젝트만 생성해 삭제·보호·온라인/오프라인 세션·동시 요청·감사 이력·20명 묶음을 검사한다. 기본 종료 시 발급 키를 폐기하고 검증 프로젝트를 중지하며, 보호 대상 fixture는 보존한다. `--keep-active`는 화면 검수용으로 성공한 프로젝트를 유지하므로 검수 후 중지한다. 단위 검사는 로그아웃 실패 시 삭제 금지·부분 실패 결과와 독립 감사 기록을 추가로 확인한다.
@@ -66,10 +66,10 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 기존 설치는 [README](../README.md)의 환경 업그레이드 후 다음 명령을 실행한다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile setup run --rm --build identity-setup
+./scripts/dev.ps1 --profile setup run --rm --build identity-setup
 ```
 
-`PLATFORM_MODE=dev`이면 `platform-admin-dev`, `prod`이면 `platform-admin-prod` realm을 사용한다. 초기 플랫폼 관리자 이름은 `admin`, 비밀번호는 `.env`의 `PLATFORM_ADMIN_PASSWORD`다. Keycloak의 master 관리자와는 별도 계정이다. 재실행은 기존 사용자 비밀번호를 바꾸지 않는다. 관리자에게 실제 사용할 프로필·MFA·복구 방법을 설정하는 작업은 출시 전 필요하다.
+`PLATFORM_MODE=dev`이면 `platform-admin-dev`, `prod`이면 `platform-admin-prod` realm을 사용한다. 초기 플랫폼 관리자 이름은 `admin`, 비밀번호는 `.env.dev` / `.env.prod`의 `PLATFORM_ADMIN_PASSWORD`다. Keycloak의 master 관리자와는 별도 계정이다. 재실행은 기존 사용자 비밀번호를 바꾸지 않는다. 관리자에게 실제 사용할 프로필·MFA·복구 방법을 설정하는 작업은 출시 전 필요하다.
 
 초기화 코드는 `platform-tools` 이미지에 포함된다. 이미지를 게시한 뒤 운영에서는 `docker compose --profile setup run --rm identity-setup`으로 실행할 수 있으며 소스 파일은 필요 없다. 현재는 로컬 빌드만 검증했고 운영 배포·이미지 게시를 완료한 상태는 아니다.
 
@@ -197,8 +197,8 @@ provider는 `kakao`, `naver`, `google`, subject는 영문·숫자·밑줄·하�
 프로젝트 서비스의 Flyway가 자기 DB에 프로젝트·환경·키 해시·감사 이벤트 테이블을 생성한다. Keycloak 데이터는 공식 관리 API로만 다룬다. 관리 API에 감사 기록 수정·삭제 기능은 없다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock.py
+./scripts/dev.ps1 --profile test run --rm project-check
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-mock.py
 ```
 
 실제 토큰·DB·Keycloak으로 검증한다. 검사 프로젝트 이름은 `check-...`이며 확인용 데이터를 개발 DB에 남긴다. 토큰·키 원문은 출력하지 않는다. 상태 코드 400은 잘못된 입력, 401은 인증 실패, 403은 권한·환경 제한, 409는 중복·준비 미완료를 의미한다.
@@ -207,7 +207,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 
 ```sh
 docker compose -f compose.yml run --rm --no-deps --pull never -d --name shnea-platform-dev-prod-auth-check -e PLATFORM_MODE=prod -e SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://keycloak:8080/auth/realms/platform-admin-dev/protocol/openid-connect/certs project-service
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-prod-mode.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-prod-mode.py
 docker stop shnea-platform-dev-prod-auth-check
 ```
 
@@ -215,7 +215,7 @@ realm 생성 실패·복구 검사:
 
 ```sh
 docker compose -f compose.yml run --rm --no-deps --pull never -d --name shnea-platform-dev-failure-check -e KEYCLOAK_PROVISIONER_SECRET=deliberately-invalid project-service
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-provision-recovery.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-provision-recovery.py
 docker stop shnea-platform-dev-failure-check
 ```
 
@@ -241,7 +241,7 @@ docker stop shnea-platform-dev-failure-check
 변경·반영·Mock·키 발급은 프로젝트 행 잠금으로 순서를 맞추며 같은 프로젝트의 인증 관리 작업은 직렬 처리한다. 환경 단위 병렬 처리가 필요한 규모가 되면 잠금 전략을 다시 설계한다. API 키 검사는 잠금 대기 후 다시 검증한다. 중지 전에 이미 처리 중이던 요청의 소급 취소를 보장하지는 않는다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-lifecycle.py
 ```
 
 검사는 새 `lifecycle-...` 프로젝트에서 동시 수정 충돌, 콜백·가입 반영, 세션 종료, 중지 중 키·Mock·환경 생성 차단, 중지 중 설정 변경, 재개·폐기를 확인한다. 위의 실패 복구 검사는 Keycloak 자격증명 오류 중 중지·재개 상태 보존과 키 차단도 검증한다.
@@ -259,7 +259,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 }
 ```
 
-- 키를 API로 입력하지 않는다. `.env`의 공통 자격증명을 Keycloak만 읽는다. 프로젝트 서비스는 Keycloak 내부 경로 `/realms/master/platform-social/configuration`에서 준비 여부만 확인한다. 해당 경로는 외부 Nginx에서 차단한다.
+- 키를 API로 입력하지 않는다. `.env.dev` / `.env.prod`의 공통 자격증명을 Keycloak만 읽는다. 프로젝트 서비스는 Keycloak 내부 경로 `/realms/master/platform-social/configuration`에서 준비 여부만 확인한다. 해당 경로는 외부 Nginx에서 차단한다.
 - `enabled`·`revision`은 필수다. 실제 활성화는 운영 모드·PROD·공통 키 준비 상태에서만 허용한다. 미준비 상태에서도 비활성 설정 저장·기존 활성 설정 끄기는 가능하다.
 - 프로젝트 잠금과 revision으로 동시 저장 중 한 건만 성공하고 나머지는 409다. 소유 표시가 없는 Keycloak 설정은 덮어쓰지 않는다.
 - 기존 관리 대상 `oidc`·`google` 설정도 읽을 수 있다. 저장 시 같은 별칭을 유지하면서 `platform-kakao`·`platform-google`로 전환하고 공통 모드를 적용한다. 기존 회원 연결을 삭제하거나 비밀키를 API로 조회하지 않는다.
@@ -270,7 +270,7 @@ Keycloak의 기본 `first broker login`, `trustEmail=false`, `storeToken=false`�
 로컬 설정 검증 명령(비활성 제공자와 가짜 전환 설정만 사용, 외부 소셜 로그인 없음):
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-social-settings.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-social-settings.py
 ```
 
 검사 후 가짜 소셜 설정과 검사 API 키를 제거/폐기하고 `social-settings-...` 프로젝트를 중지 상태로 남긴다.
@@ -302,7 +302,7 @@ docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project
 기존 일반 가입·콜백 변경, 프로젝트 중지·재개와 realm 재반영은 추가 정책을 보존한다. 기존 비밀번호·사용자별 별도 필수 작업·현재 세션은 변경하지 않는다. 비밀번호 길이 규칙은 새 가입·비밀번호 변경/재설정부터 적용한다. 정책을 저장해도 사용자 이메일 발송이나 실제 로그인 검사를 실행하지 않는다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-authentication-policy.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-authentication-policy.py
 ```
 
 검사는 가짜 로컬 계정에 대한 비밀번호 설정으로 길이 제한을 확인한 뒤 계정을 삭제한다. 이메일·외부 소셜 로그인은 실행하지 않으며 검사 API 키는 폐기하고 프로젝트는 중지 상태로 남긴다.

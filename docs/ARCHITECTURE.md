@@ -53,9 +53,10 @@ Keycloak은 [공식 컨테이너 빌드 방식](https://www.keycloak.org/server/
 ## 실행·설정 경계
 
 - `compose.yml`: 이미지·환경변수·영속 볼륨으로 실행. 소스 파일이 없어도 구성 해석 가능.
-- `compose.dev.yml`: 빌드 경로, 개발 DB 포트, 선택 실행하는 검증 컨테이너. 로컬 `.env`의 `COMPOSE_FILE=compose.yml|compose.dev.yml`, `COMPOSE_PATH_SEPARATOR=|`로 기본 명령에 포함한다.
-- `compose.nas.yml`: NAS `.env`의 `COMPOSE_FILE=compose.yml|compose.nas.yml`로 선택한다. 데이터 루트 아래 세 볼륨을 연결하고 네트워크 없는 일회성 `storage-init`이 빈 디렉터리만 준비한다. 인증 초기화는 Keycloak health 성공 후 실행하고 project-service는 성공 완료를 기다린다. 사용자 비밀번호·기존 데이터는 재설정하지 않는다.
-- `.env.example`: 비밀값 없는 설정 목록. 생성기는 기존 `.env`를 덮어쓰지 않는다.
+- `compose.dev.yml`: 빌드 경로, 개발 DB 포트, 선택 실행하는 검증 컨테이너. dev 스크립트에서 운영 기본 구성과 병합하고 운영 bind mount·고정 네트워크를 개발 named volume·네트워크로 대체한다.
+- NAS 설정도 `compose.yml`에 포함한다. 데이터 루트 아래 세 볼륨을 연결하고 네트워크 없는 일회성 `storage-init`이 빈 디렉터리만 준비한다. 인증 초기화는 Keycloak health 성공 후 실행하고 project-service는 성공 완료를 기다린다. 사용자 비밀번호·기존 데이터는 재설정하지 않는다.
+- `compose.test.yml`: 운영 데이터에 연결하지 않는 격리 검증. jobs·callbacks·logs 프로필로 선택한다.
+- `.env.example`: 비밀값 없는 설정 목록. 실제 `.env.dev`·`.env.prod`는 Dotenvx 암호문으로 Git에서 관리하며 복호화 키는 별도 보관한다. dev/deploy 스크립트가 복호화하고 release는 운영 키 없이 빌드한다.
 - 자원 설정은 환경변수로 조정한다. JVM 최대 힙 기본값은 컨테이너 메모리의 60%이며 나머지 공간은 JVM의 힙 외 메모리 등에 사용한다. 전체 서버 메모리를 고정하지 않는다.
 - 컨테이너 로그는 파일당 10MB, 3개로 회전한다. Spring 로그는 구조화 JSON이며 DB 접속 비밀번호는 출력하지 않는다.
 - Nginx는 현재 접근 로그를 끈다. 인증 코드나 공유 비밀값이 query string으로 기록되지 않도록 업무 요청 추적 구현 때 로그 형식과 마스킹을 함께 정한다.
@@ -71,7 +72,7 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 
 프로젝트별 실제 사용자 분리, 키 폐기, 개발 Mock 로그인과 운영 모드 차단 검사는 [프로젝트·인증 API](PROJECT_API.md)를 참고한다. 실제 소셜 제공자·파일·알림·웹훅·에디터, 백업 복원·부하·Windows 및 Linux amd64 실기동은 아직 별도 검증 대상이다.
 
-관리자 웹은 별도 정적 웹 이미지다. Nginx 30140의 `/`와 `/assets/`에서 프록시하고 호스트 포트·DB 자격증명을 추가하지 않는다. 공개 로그인 설정은 project-service의 `/api/v1/config`에서 읽으므로 운영 주소를 바꿀 때 웹 이미지를 다시 빌드하지 않는다. `.env`의 `PLATFORM_WEB_URL`을 수정한 뒤 인증 초기화를 재실행한다. Node 이미지도 계열 태그이며 출시 시 digest 기록 대상이다.
+관리자 웹은 별도 정적 웹 이미지다. Nginx 30140의 `/`와 `/assets/`에서 프록시하고 호스트 포트·DB 자격증명을 추가하지 않는다. 공개 로그인 설정은 project-service의 `/api/v1/config`에서 읽으므로 운영 주소를 바꿀 때 웹 이미지를 다시 빌드하지 않는다. `.env.dev` / `.env.prod`의 `PLATFORM_WEB_URL`을 수정한 뒤 인증 초기화를 재실행한다. Node 이미지도 계열 태그이며 출시 시 digest 기록 대상이다.
 
 ## 소셜 제공자 확장
 
@@ -83,6 +84,6 @@ DB 초기화는 빈 볼륨에서 한 번만 실행된다. 환경변수의 비밀
 
 확장은 별도 서비스가 아닌 Keycloak 이미지 안의 SPI JAR다. Docker 내부의 독립 Gradle Kotlin DSL 빌드로 단위 검사 후 JAR만 복사한다. Java 21·Gradle 9.7.1·Keycloak 의존성 26.7.4를 사용하며, Keycloak 이미지 버전을 바꾸면 확장 의존성·컴파일·기동·실제 로그인 호환성도 함께 검수한다. 추가 포트·DB·운영 소스 마운트는 없다. 표준 프로토콜 구현을 새로 복제하지 않는다.
 
-소셜 제공자 사용 설정은 Keycloak 관리 API로 관리한다. 공통 Client ID·Secret 원본은 `.env`이며 Keycloak 컨테이너 환경변수에서 읽는다. 새 공통 설정에는 키를 realm DB에 복제하지 않는다. 프로젝트 서비스는 내부 REST 확장에서 값 없는 준비 여부만 읽는다. 플랫폼 DB에는 감사 이벤트만 기록한다. 비밀값을 프론트엔드 응답·로그에 포함하지 않는다. 현재는 설정 관리·확장 빌드·로컬 구성을 검증한 상태이며, 실제 제공자 로그인은 인증 정보를 받은 이후 검수한다.
+소셜 제공자 사용 설정은 Keycloak 관리 API로 관리한다. 공통 Client ID·Secret 원본은 `.env.dev` / `.env.prod`이며 Keycloak 컨테이너 환경변수에서 읽는다. 새 공통 설정에는 키를 realm DB에 복제하지 않는다. 프로젝트 서비스는 내부 REST 확장에서 값 없는 준비 여부만 읽는다. 플랫폼 DB에는 감사 이벤트만 기록한다. 비밀값을 프론트엔드 응답·로그에 포함하지 않는다. 현재는 설정 관리·확장 빌드·로컬 구성을 검증한 상태이며, 실제 제공자 로그인은 인증 정보를 받은 이후 검수한다.
 
 가입·복구 정책도 Keycloak realm을 원본으로 사용하며 플랫폼에는 감사 이력만 저장한다. 일반 가입·콜백은 기존 프로젝트 DB 소유를 유지한다. 두 설정 변경 모두 같은 프로젝트 잠금으로 직렬화한다. 기존 realm에는 새 비밀번호 기본값을 소급 적용하지 않는다. NCP 이메일 발송과 개발 모의 수신함은 후속 구현 대상이다.

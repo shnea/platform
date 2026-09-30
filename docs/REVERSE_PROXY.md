@@ -46,7 +46,7 @@ set_real_ip_from 127.0.0.1;
 
 ### 플랫폼에서 검증된 접속 IP 전달
 
-실제 `.env`와 실행 중인 Nginx에 `NGINX_TRUSTED_PROXY=172.20.0.1`을 적용했다. 현재 Docker Desktop에서 관찰하는 직전 연결 상대 주소이며, 개발 PC의 30140 접근은 NAS로 제한했다. 플랫폼은 신뢰한 상대의 X-Forwarded-For에서 마지막 주소 하나를 선택해 Keycloak에 전달한다. 운영 NAS로 옮길 때는 연결 상대 주소와 포트 접근 제한을 다시 확인한다.
+실제 `.env.dev` / `.env.prod`와 실행 중인 Nginx에 `NGINX_TRUSTED_PROXY=172.20.0.1`을 적용했다. 현재 Docker Desktop에서 관찰하는 직전 연결 상대 주소이며, 개발 PC의 30140 접근은 NAS로 제한했다. 플랫폼은 신뢰한 상대의 X-Forwarded-For에서 마지막 주소 하나를 선택해 Keycloak에 전달한다. 운영 NAS로 옮길 때는 연결 상대 주소와 포트 접근 제한을 다시 확인한다.
 
 검증은 각 단계마다 새 TCP 연결로 공개·직접 경로의 기본 요청/가짜 X-Forwarded-For/가짜 X-Real-IP, 총 6건을 비교했다. `output/playwright/probe-nas-ip.py`는 인증 정보 없이 health 요청만 잠시 기록하고 원래 Nginx 설정을 복구한다. 최종 도메인 브라우저의 새 로그인·가짜 IP 무시·검사 세션 로그아웃, smoke 11항목, `nginx -t`, 개발 스택 7개 healthy를 확인했다. 실제 외부 모바일 IP 표시는 사용자 확인이며 원문 IP는 문서에 보관하지 않는다.
 
@@ -86,7 +86,7 @@ Keycloak으로 전달할 때는 복원한 주소 하나로 X-Forwarded-For를 �
 
 1. 가장 바깥쪽 프록시가 진짜 접속 IP를 보고, 외부의 가짜 IP 헤더로 그 값이 바뀌지 않는지 확인한다. DSM을 거친다면 DSM에서 헤더를 덮어쓰고 NPM은 그 프록시 주소만 신뢰해야 한다.
 2. 플랫폼의 30140 접근을 직전 프록시로 제한한다. Docker Desktop이 모든 외부 연결을 하나의 게이트웨이로 바꾸는 환경은 호스트 방화벽 제한이 필수다.
-3. 상위 구간 검증 후 `.env`의 `NGINX_TRUSTED_PROXY`를 실제 연결 상대 주소로 바꾼다. 현재 개발 값은 `172.20.0.1`이며 검증 후 활성화했다. 운영 NAS에서는 다시 관찰한다.
+3. 상위 구간 검증 후 `.env.dev` / `.env.prod`의 `NGINX_TRUSTED_PROXY`를 실제 연결 상대 주소로 바꾼다. 현재 개발 값은 `172.20.0.1`이며 검증 후 활성화했다. 운영 NAS에서는 다시 관찰한다.
 4. `docker compose -f compose.yml up -d --no-deps nginx`로 재생성하고 `docker compose exec nginx nginx -t`로 확인한다.
 5. 새 로그인에서 IP를 확인하고 가짜 X-Forwarded-For·X-Real-IP를 각각 보낸 요청에서도 주소가 변하지 않는지 검사한다. 이미 생성된 Keycloak 세션의 IP는 소급 수정되지 않는다.
 

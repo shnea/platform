@@ -23,7 +23,7 @@ Spring Boot가 이미 수집하는 `http.server.requests`의 요청 수와 총 �
 
 `GET /api/v1/admin/service-metrics`는 관리자 JWT 전용이다. 서버 API 키·일반 회원은 사용할 수 없다. 프로젝트 서비스가 고정된 내부 주소 3개에만 연결하며 각 HTTP 요청은 최대 1초, 연결은 1초로 제한하고 리다이렉트는 따르지 않는다. 최대 6개 요청을 순서대로 실행하고 결과를 10초간 공유해 반복 조회 부하를 제한한다. 각 결과의 확인 시각은 다를 수 있으며 최상위 측정 시각은 모든 확인이 끝난 시점이다.
 
-내부 `GET /internal/v1/monitoring`은 별도 `PLATFORM_MONITORING_SECRET` / `X-Platform-Monitoring-Key`로 제한한다. 메일·이벤트 키와 분리하며 Nginx 외부 경로와 OpenAPI에는 공개하지 않는다. 키가 비어 있으면 내부 조회를 거부하고 화면에는 지표 수집 미설정으로 표시한다. `.env`가 있는 환경은 `python scripts/init-env.py --upgrade`로 빠진 키만 생성한 뒤 프로젝트·파일·알림 서비스를 다시 생성한다. 실제 키는 출력·커밋하지 않는다. 원시 경로·태그·헤더·요청 본문·환경변수는 API에 반환하지 않으며 성공 응답은 `Cache-Control: no-store`다.
+내부 `GET /internal/v1/monitoring`은 별도 `PLATFORM_MONITORING_SECRET` / `X-Platform-Monitoring-Key`로 제한한다. 메일·이벤트 키와 분리하며 Nginx 외부 경로와 OpenAPI에는 공개하지 않는다. 키가 비어 있으면 내부 조회를 거부하고 화면에는 지표 수집 미설정으로 표시한다. [암호화 환경 관리](NAS_DEPLOYMENT.md#설정-변경)에 따라 키를 추가한 뒤 프로젝트·파일·알림 서비스를 다시 생성한다. 평문 키는 출력·커밋하지 않는다. 원시 경로·태그·헤더·요청 본문·환경변수는 API에 반환하지 않으며 성공 응답은 `Cache-Control: no-store`다.
 
 화면은 30초 자동 갱신·수동 새로고침, 숨긴 화면의 갱신 중지, 1분 이상 지난 값 안내를 제공한다. 전체 조회 실패 시 이전 값임을 표시하고 개별 서비스 수집 실패는 그 서비스만 미수집으로 표시한다. 새 서비스·포트·수집 프로세스는 없으며, 조회 중단은 화면을 닫거나 자동 갱신을 끄는 방식이다. 공통 HTTP 모듈이 기존 Actuator의 Micrometer 타입을 사용하며 새 외부 관측 제품을 도입하지 않았다.
 

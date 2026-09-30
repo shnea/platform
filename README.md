@@ -12,17 +12,15 @@
 
 관리자 화면의 DEV 환경에서는 **개발 로그인 테스트**로 세 소셜 제공자의 성공·취소·동의 거부·장애를 재현할 수 있다. 외부 소셜 앱 자격증명 없이 실행하며 이용자 토큰은 화면에 노출하지 않는다.
 
-Docker Desktop(또는 Linux Docker Engine)과 Compose가 필요하다. Java·Gradle·Node 빌드는 이미지 안에서 실행한다. 저장소 루트에서 실행한다. 아래 명령은 macOS 셸과 Windows PowerShell에서 사용할 수 있다.
+Docker와 Compose 2.24.4 이상, Dotenvx 2.24.0을 준비한다. Java·Gradle·Node 빌드는 이미지 안에서 실행한다. Windows PowerShell 또는 macOS의 PowerShell 7에서 저장소 루트를 기준으로 실행한다. [도구·복호화 키 준비](docs/NAS_DEPLOYMENT.md)를 먼저 따른다.
 
 ```sh
-docker run --rm --mount "type=bind,source=${PWD},target=/workspace" -w /workspace python:3.13-alpine python scripts/init-env.py
-python scripts/prepare-environments.py
-docker compose --env-file .env.dev up -d --build
+./scripts/dev.ps1
 ```
 
-첫 명령은 서로 다른 무작위 개발 비밀번호로 `.env`를 만든다. 기존 파일이 있으면 덮어쓰지 않고 종료하므로, 재실행 때는 첫 명령을 생략한다. `.env`는 커밋하지 않는다.
+Git에 포함된 암호화 `.env.dev`와 별도 전달받은 `.env.keys`를 사용한다. 기존 비밀번호·데이터를 재생성하지 않는다. 복호화 키는 Git에 포함하지 않는다.
 
-환경 파일은 `.env.dev`(개발)·`.env.build`(빌드/업로드)·`.env.prod`(NAS 운영)로 구분한다. `prepare-environments.py`는 최초 준비 시 기존 `.env`의 비밀번호·내부 키·NCP·소셜 값을 그대로 반영하고 운영 주소·모드를 구분한다. 이미 운영 중인 설정을 재생성하는 명령이 아니다. 빌드와 운영 태그는 `.env.build` 기준으로 맞춘다. `identity-setup`은 Keycloak 준비 후 자동 실행되며 완료 상태 `Exited (0)`이 정상이다. [복사 후 실행할 명령](docs/NAS_DEPLOYMENT.md)을 따른다.
+환경은 `.env.dev`·`.env.prod` 두 개다. `./scripts/release.ps1`은 운영 키 없이 이미지 8개를 빌드·게시하고 `sudo sh scripts/deploy.sh <SHA 12자리>`는 NAS에서 Pull·기동한다. 운영 Compose 하나와 개발 override 하나, 격리 테스트 Compose 하나를 사용한다. `identity-setup`은 Keycloak 준비 후 자동 실행되며 `Exited (0)`이 정상이다. [배포 안내](docs/NAS_DEPLOYMENT.md)를 따른다.
 
 | 주소 | 현재 동작 |
 |---|---|
@@ -33,35 +31,35 @@ docker compose --env-file .env.dev up -d --build
 | http://localhost:30140/api/notifications/health | 알림 서비스와 DB 연결 상태 |
 | http://localhost:30140/auth/admin/ | Keycloak 기본 관리 화면 |
 
-Keycloak의 최초 관리자 ID와 비밀번호는 로컬 `.env`의 `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`를 확인한다. 플랫폼 관리자 화면은 별도 계정 `admin`과 `.env`의 `PLATFORM_ADMIN_PASSWORD`로 로그인한다. 기본 바인딩은 로컬 PC 전용이다. 관리자 주소는 `PLATFORM_WEB_URL`의 정확한 origin과 일치해야 한다. 주소 변경 후 `identity-setup`을 다시 실행한다. 운영은 HTTPS 주소가 필요하다.
+Keycloak의 최초 관리자 ID와 비밀번호는 개발 환경의 `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`다. 플랫폼 관리자 화면은 별도 계정 `admin`과 `PLATFORM_ADMIN_PASSWORD`로 로그인한다. 값은 암호화 `.env.dev`에서 관리한다. 바인딩은 해당 환경 설정을 따르며 관리자 주소는 `PLATFORM_WEB_URL`의 정확한 origin과 일치해야 한다. 주소 변경 후 `identity-setup`을 다시 실행한다. 운영은 HTTPS 주소가 필요하다.
 
 운영 도메인은 `platform.shnea.kr`이다. TLS 배포 시 `PLATFORM_MODE=prod`, `PLATFORM_WEB_URL=https://platform.shnea.kr`, `KEYCLOAK_PUBLIC_URL=https://platform.shnea.kr/auth`로 설정하고 `identity-setup`을 실행한다. 관리자 로그인·로그아웃 콜백은 `https://platform.shnea.kr/`로 등록된다. 서비스 Nginx 진입 포트는 `30140`을 유지한다. DNS·TLS 종료 및 신뢰할 프록시의 전달 헤더 설정은 운영 배포 단계에서 적용·검증한다. 현재 로컬 개발 설정은 변경하지 않는다.
 
 ## 검증과 중지
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm smoke
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm db-check
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-lifecycle.py
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-mock.py
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-members.py
-docker compose -f compose.yml -f compose.dev.yml ps
-docker compose -f compose.yml -f compose.dev.yml logs --tail 80 project-service
-docker compose -f compose.yml -f compose.dev.yml down
+./scripts/dev.ps1 --profile test run --rm smoke
+./scripts/dev.ps1 --profile test run --rm db-check
+./scripts/dev.ps1 --profile test run --rm project-check
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-lifecycle.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-mock.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-members.py
+./scripts/dev.ps1 ps
+./scripts/dev.ps1 logs --tail 80 project-service
+./scripts/dev.ps1 down
 ```
 
-검증 명령은 실행 중인 스택을 대상으로 한다. `down`은 DB 볼륨을 보존한다. DB 비밀번호와 초기화 SQL은 빈 볼륨의 첫 시작에만 적용되므로, 기존 DB의 비밀번호는 `.env` 변경만으로 바뀌지 않는다.
+검증 명령은 실행 중인 스택을 대상으로 한다. `down`은 DB 볼륨을 보존한다. DB 비밀번호와 초기화 SQL은 빈 볼륨의 첫 시작에만 적용되므로, 기존 DB의 비밀번호는 `.env.dev` / `.env.prod` 변경만으로 바뀌지 않는다.
 
-서비스 하나만 수정했다면 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps project-service`로 다시 빌드한다. CPU·메모리 설정은 `.env`에서 바꾸고 `up -d --no-build`로 컨테이너를 재생성한다.
+서비스 하나만 수정했다면 `./scripts/dev.ps1 up -d --build --no-deps project-service`로 다시 빌드한다. CPU·메모리 설정은 `.env.dev` / `.env.prod`에서 바꾸고 `up -d --no-build`로 컨테이너를 재생성한다.
 
 운영용 `compose.yml`에는 빌드 경로나 소스 마운트가 없다. 운영 배포 전 이미지 게시, Linux 대상 아키텍처, TLS와 도메인, 관리자 보호, 백업·복원 검증을 완료해야 한다. 현재 개발 이미지는 운영 출시본이 아니다. 구성과 경계는 [실행 기반 문서](docs/ARCHITECTURE.md)를 참고한다.
 
-NAS 신규 설치는 [NAS 배포 안내](docs/NAS_DEPLOYMENT.md)를 따른다. 설정은 `/volume1/docker/prod/platform`, DB·파일·로그 데이터는 `/volume2/homes/platform` 아래에 저장한다. 사용자가 직접 배포하며 개발 데이터는 이전하지 않는다.
+NAS 신규 설치는 [NAS 배포 안내](docs/NAS_DEPLOYMENT.md)를 따른다. 설정은 `/volume1/docker/prod/platform`, DB·파일·로그 데이터는 `/volume2/homes/platform` 아래에 저장한다. 운영 배포는 사용자 승인 범위에서 수행하며 개발 데이터는 이전하지 않는다.
 
 외부 프로젝트의 [Job 워커 연결](docs/integration/JOBS.md)과 [공통 로그 연결](docs/integration/LOGS.md)은 서버 API 키로 사용한다. Job은 호스트 워커가 실행하며, 로그는 내부 Loki에 환경별로 저장한다. 관리자 비동기 작업 탭과 독립 로그 메뉴에서 확인한다.
 
-관리자 화면 수정 후에는 `docker compose -f compose.yml -f compose.dev.yml up -d --build --no-deps admin-web`을 실행한다. 이미지 빌드 과정에서 `npm ci`, TypeScript 검사와 Vite 빌드를 실행한다. 로그인·설정·모바일 수동 검수 순서는 [관리자 화면 안내](docs/ADMIN_WEB.md)에 있다.
+관리자 화면 수정 후에는 `./scripts/dev.ps1 up -d --build --no-deps admin-web`을 실행한다. 이미지 빌드 과정에서 `npm ci`, TypeScript 검사와 Vite 빌드를 실행한다. 로그인·설정·모바일 수동 검수 순서는 [관리자 화면 안내](docs/ADMIN_WEB.md)에 있다.
 
 NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프록시 안내](docs/REVERSE_PROXY.md)의 헤더 신뢰·포트 접근 제한을 먼저 확인한다.
 

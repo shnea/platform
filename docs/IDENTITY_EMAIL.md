@@ -4,10 +4,10 @@ Keycloak의 기본 이메일 인증·비밀번호 찾기·비밀번호 변경 �
 
 ## 실행과 모드
 
-기존 `.env`는 보존하고 `python scripts/init-env.py --upgrade`로 `PLATFORM_MAIL_SECRET`을 추가한다. 호스트 Python이 없으면 [PC 인계 안내](HANDOFF.md)의 Python Docker 명령에 `--upgrade`를 붙인다. 세 서비스에 같은 32자 이상 비밀값을 전달하며 값 교체 시 세 컨테이너를 함께 재생성한다. 실제 `.env`는 커밋하지 않는다.
+`PLATFORM_MAIL_SECRET`은 [암호화 환경 관리](NAS_DEPLOYMENT.md#설정-변경)에 따라 추가하며 기존 비밀번호를 재생성하지 않는다. 세 서비스에 같은 32자 이상 비밀값을 전달하며 값 교체 시 세 컨테이너를 함께 재생성한다. Git에는 암호문만 포함하고 복호화 키는 별도 보관한다.
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml up -d --build --wait --wait-timeout 300
+./scripts/dev.ps1 up -d --build --wait --wait-timeout 300
 ```
 
 | 배포 모드 / 환경 | 동작 |
@@ -59,10 +59,10 @@ NCP IAM 키·발신자는 [NCP 설정 안내](NOTIFICATION_SETUP.md)를 따른�
 ## 자동 검증
 
 ```sh
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-email.py
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm project-check python /checks/check-authentication-policy.py
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm smoke
-docker compose -f compose.yml -f compose.dev.yml --profile test run --rm --entrypoint sh db-check /checks/check-email-retention.sh
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-email.py
+./scripts/dev.ps1 --profile test run --rm project-check python /checks/check-authentication-policy.py
+./scripts/dev.ps1 --profile test run --rm smoke
+./scripts/dev.ps1 --profile test run --rm --entrypoint sh db-check /checks/check-email-retention.sh
 ```
 
 `check-email.py`는 새 프로젝트만 만들고 종료 시 중지한다. 브라우저 검증에 쓸 때만 무시되는 로컬 마운트에 `--fixture` 경로를 지정해 성공한 환경을 유지할 수 있다. 이 파일에는 테스트 비밀번호가 있으므로 Git에 넣지 않고, 종료 후 `--cleanup`으로 해당 프로젝트를 중지한다. NCP 실제 이메일은 이 검사에서 발송하지 않는다.
