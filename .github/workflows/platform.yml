@@ -27,10 +27,12 @@ jobs:
         run: |
           python3 scripts/check-ci.py
           python3 scripts/check-admin-security.py
+          python3 scripts/check-restore.py
           python3 scripts/check-deploy.py
           python3 scripts/check-ssh-gateway.py
           pwsh -NoProfile -File scripts/check-release.ps1
           sh -n scripts/deploy.sh
+          sh -n scripts/recovery-drill.sh
       - name: Test editor and administrator UI
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace node:24-alpine sh -ec '

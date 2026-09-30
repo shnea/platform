@@ -9,6 +9,7 @@ import tarfile
 
 root = Path(__file__).resolve().parents[1]
 files = ['compose.yml', '.env.prod', 'infra/loki/loki.yml', 'scripts/deploy.sh',
+         'scripts/recovery-drill.sh',
          'docs/NAS_DEPLOYMENT.md', 'docs/REVERSE_PROXY.md', 'docs/CICD.md', '운영안내.html']
 environment = (root / '.env.prod').read_text(encoding='utf-8')
 assert 'DOTENV_PUBLIC_KEY_PROD=' in environment and 'DOTENV_PRIVATE_KEY' not in environment

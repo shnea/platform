@@ -132,12 +132,14 @@ SSH 배포는 `.deploy/configs/<이전 정상 태그>`에 이전 운영 설정�
 
 ## 운영 폴더와 백업
 
+Registry의 이미지 정리는 Registry 운영 폴더의 공통 예약 작업에서 관리한다. platform에는 별도 정리 워크플로를 두지 않는다. DB의 격리 복원과 호환 이미지 왕복은 [복구 훈련 절차](NAS_DEPLOYMENT.md#db-복원이미지-롤백-훈련)를 따른다.
+
 ```text
 platform/
 ├─ 운영안내.html                 # 이 폴더에서 바로 열어 보는 설명서
 ├─ compose.yml
 ├─ .env.prod                    # 암호문
-├─ scripts/deploy.sh
+├─ scripts/                     # deploy.sh, recovery-drill.sh
 ├─ infra/loki/loki.yml
 ├─ .tools/dotenvx
 ├─ .env.keys

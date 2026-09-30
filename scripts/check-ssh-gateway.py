@@ -9,6 +9,7 @@ import tempfile
 source = Path(__file__).with_name('ssh-deploy-gateway.sh').read_text(encoding='utf-8')
 sha = '012345abcdef' + '0' * 28
 files = ['compose.yml', '.env.prod', 'infra/loki/loki.yml', 'scripts/deploy.sh',
+         'scripts/recovery-drill.sh',
          'docs/NAS_DEPLOYMENT.md', 'docs/REVERSE_PROXY.md', 'docs/CICD.md', '운영안내.html', 'SOURCE_COMMIT', 'IMAGE_DIGESTS']
 deploy = '''#!/bin/sh
 set -eu
