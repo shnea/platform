@@ -65,7 +65,7 @@ NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프�
 
 ## GitHub 자동 배포
 
-`main`에 push하면 GitHub Actions가 검사 → 이미지 빌드·게시 → `NAS_SSH_HOST:NAS_SSH_PORT` SSH 배포를 실행한다. NAS에는 Runner나 소스 빌드를 추가하지 않는다. [Actions 결과](https://github.com/shnea/platform/actions)에서 `verify / release / deploy` 모두 성공했는지 확인한다. 자동 배포 중 같은 커밋의 수동 release를 중복 실행하지 않는다.
+`main`에 push하면 GitHub 서버가 검사·이미지 빌드·게시를 수행하고, NAS의 배포 전용 Runner가 내부 SSH로 기존 deploy를 호출한다. 외부 SSH 국가 제한은 유지하며 NAS에서는 소스를 빌드하지 않는다. [Actions 결과](https://github.com/shnea/platform/actions)에서 `verify / release / deploy` 모두 성공했는지 확인한다. 자동 배포 중 같은 커밋의 수동 release를 중복 실행하지 않는다.
 
 운영 폴더의 **`운영안내.html`**을 열면 전체 흐름, 상태·로그 확인, 실패·롤백 절차를 볼 수 있다. 자세한 설명은 [CI/CD 안내](docs/CICD.md)에 있다. 이전 이관 파일은 NAS `platform_tmp`에 보관하고 실제 데이터는 `${PLATFORM_DATA_ROOT}`에 유지한다.
 

@@ -2,7 +2,7 @@
 
 ## 평소에는 무엇을 하면 되나요?
 
-개발 PC에서 수정한 코드를 검증하고 `main`에 커밋·푸시한다. 이후 GitHub Actions가 검사, 이미지 빌드·게시, NAS SSH 배포를 차례로 실행한다. 개발 PC는 푸시 뒤 꺼도 된다.
+개발 PC에서 수정한 코드를 검증하고 `main`에 커밋·푸시한다. GitHub 실행 서버가 검사·이미지 빌드·게시를 마치면 NAS의 배포 전용 Runner가 배포 작업을 받아 내부 SSH로 기존 deploy를 호출한다. 개발 PC는 푸시 뒤 꺼도 된다.
 
 **확인 화면:** [Platform Actions](https://github.com/shnea/platform/actions) → 해당 커밋의 실행 → `verify / release / deploy`가 모두 성공했는지 확인한다. `release`만 성공했다면 운영 배포가 끝난 것이 아니다.
 
@@ -11,8 +11,8 @@ flowchart LR
     A[개발 PC: main에 push] --> B[GitHub: verify 테스트]
     B --> C[GitHub: release 빌드·게시]
     C --> D[registry.shnea.kr]
-    C --> E[GitHub: deploy SSH 접속]
-    E --> F[NAS: 설정 전달·deploy.sh]
+    C --> E[NAS 배포 Runner: GitHub 작업 수신]
+    E --> F[NAS 내부 SSH: 설정 전달·deploy.sh]
     D --> F
     F --> G[Pull → 컨테이너 갱신 → 상태 확인]
 ```
@@ -25,14 +25,14 @@ flowchart LR
 | --- | --- | --- |
 | 개발 PC | 코드 수정·수동 개발 | `scripts/dev.ps1`, Git push |
 | GitHub `shnea/platform` | CI/CD 전체 흐름 제어 | `.github/workflows/platform.yml` |
-| GitHub 실행 서버 | 테스트·이미지 Build/Push·SSH 요청 | 운영 복호화 키 불필요 |
+| GitHub 실행 서버 | 테스트·이미지 Build/Push | 운영 복호화 키 불필요 |
 | `registry.shnea.kr` | 완성된 이미지 보관 | `platform-*:<Git SHA 앞 12자리>` |
-| GitHub Secret의 NAS 주소·포트 | SSH 배포 요청 수신 | `NAS_SSH_USER`, 배포 전용 키 |
+| NAS 배포 전용 Runner | GitHub의 deploy 작업 실행 | NAS 내부 SSH, 배포 전용 키 |
 | NAS `${NAS_DEPLOY_PATH}` | 운영 구성·실행 | 이미지 Pull·기동·상태 기록 |
 | NAS `${PLATFORM_DATA_ROOT}` | 영속 데이터 | postgres / files / loki |
 | NAS `${NAS_ARCHIVE_PATH}` | 이전 자료 보관 | 전환 백업·이전 구성·일회성 설치 자료 |
 
-NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub 실행 서버가 SSH로 배포를 직접 요청하며 NAS에서는 애플리케이션을 빌드하지 않는다.
+외부 GitHub 서버의 SSH 연결은 국가 제한이 있는 환경에서 실패할 수 있어 배포 전용 Runner를 사용한다. NAS가 GitHub로 연결해 작업을 받으므로 외부 SSH 허용 범위를 넓히지 않는다. 별도 Git/Registry 확인용 스케줄러는 없으며 NAS에서는 애플리케이션을 빌드하지 않는다.
 
 ## 언제 실행되나요?
 
@@ -45,7 +45,25 @@ NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub �
 
 `release`는 기존 `scripts/release.ps1`을 실행한다. 자체 이미지 8개를 같은 SHA로 게시하고 이미지 digest를 기록한다. 전부 성공해야 운영 구성 묶음을 전달한다. Compose·암호화 환경파일·스크립트·운영 설명서가 포함되며 소스·Private Key·사용자 데이터는 제외한다.
 
-`deploy`는 해당 실행의 구성 묶음을 내려받고, NAS의 확인된 호스트 키로 접속한다. 전용 SSH 키는 `check` 또는 `deploy <전체 SHA>`만 허용한다. 일반 셸·포트 전달·임의 SSH 명령에는 사용할 수 없다. NAS의 루트 소유 게이트웨이가 파일 허용 목록·출처·배포 잠금을 확인하고 이전 설정을 보관한 뒤 기존 `deploy.sh`를 실행한다. 이미지 revision·게시 digest·Compose 상태·Loki·진입 API 확인을 통과해야 성공이다.
+`deploy`만 `[self-hosted, linux, x64, platform-deploy]` Runner에서 실행한다. 해당 실행의 구성 묶음을 내려받고 NAS 내부에서 확인된 호스트 키로 접속한다. 전용 SSH 키는 `check` 또는 `deploy <전체 SHA>`만 허용한다. 일반 셸·포트 전달·임의 SSH 명령에는 사용할 수 없다. NAS의 루트 소유 게이트웨이가 파일 허용 목록·출처·배포 잠금을 확인하고 이전 설정을 보관한 뒤 기존 `deploy.sh`를 실행한다. 이미지 revision·게시 digest·Compose 상태·Loki·진입 API 확인을 통과해야 성공이다.
+
+## 배포 Runner 관리
+
+- 컨테이너: `platform-deploy-runner`. 앱 Compose와 별도로 실행해 앱 배포 중 중단되지 않는다.
+- 공식 `actions/actions-runner` 이미지를 digest로 고정해 사용한다. NAS에서 이미지를 빌드하지 않는다. Runner 프로그램 자체의 기본 자동 업데이트는 유지한다.
+- 전용 Docker volume `platform-deploy-runner`는 등록정보·작업 공간을 자동 보관한다. 별도로 복사하는 환경 파일이 아니며 Git에 올리지 않는다. 볼륨을 삭제하면 Runner 재등록이 필요하다.
+- 호스트 네트워크로 NAS 내부 SSH를 사용한다. Docker 소켓·운영 폴더·`.env.keys`는 컨테이너에 마운트하지 않는다. 비공개 저장소의 main 배포에만 사용하고 PR 검증은 GitHub 서버에서 수행한다.
+- 최초 설치는 `scripts/install-deploy-runner.sh`에 만료가 짧은 GitHub 등록 토큰을 표준입력으로 전달한다. 토큰을 소스·명령 예제에 적지 않는다. 등록 후 임시 토큰 파일은 제거한다.
+
+NAS에서 상태를 확인하거나 재시작할 때:
+
+```sh
+sudo docker ps --filter name=platform-deploy-runner
+sudo docker logs --tail 80 platform-deploy-runner
+sudo docker restart platform-deploy-runner
+```
+
+GitHub의 **Settings → Actions → Runners**에서 `platform-nas-deploy`가 Online/Idle인지 확인한다. 작업이 진행 중일 때 Runner를 재시작하지 않는다. 컨테이너 기반 이미지 교체는 진행 중인 배포가 없을 때 등록 볼륨을 보존해 수행한다. Runner가 없어도 NAS에서 같은 `deploy.sh`를 수동 실행할 수 있다.
 
 ## 비밀정보는 어디에 있나요?
 
@@ -54,7 +72,7 @@ NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub �
 | 항목 | 저장 위치 |
 | --- | --- |
 | Registry 계정·암호 | GitHub Actions Secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` |
-| NAS 접속 주소·포트·계정 | GitHub Actions Secrets: `NAS_SSH_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER` |
+| Runner에서 NAS로 접속하는 내부 주소·포트·계정 | GitHub Actions Secrets: `NAS_SSH_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER` |
 | 배포 전용 개인키 | GitHub Actions Secret: `NAS_SSH_KEY` |
 | 확인된 NAS 호스트 키 | GitHub Actions Secret: `NAS_SSH_KNOWN_HOSTS` |
 | 운영 설정 루트 | NAS 배포 진입점의 별도 설정. GitHub `NAS_DEPLOY_PATH` Secret에도 등록해 로그에서 가림 |
@@ -69,6 +87,8 @@ NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub �
 ## 상태·로그 확인
 
 NAS SSH에서:
+
+개인 PC에서 로그인하는 주소와 Runner용 `NAS_SSH_HOST`는 용도가 다르다. 사람이 로그인할 때는 별도로 관리하는 NAS 접속 주소를 사용한다.
 
 ```sh
 cd "$NAS_DEPLOY_PATH"
@@ -87,7 +107,8 @@ sudo tail -20 .deploy/ssh-history
 | --- | --- | --- |
 | verify | 기존 운영 유지 | 테스트 오류 수정 후 새 커밋 push |
 | release | 기존 운영 유지 | 빌드·Registry 오류 확인. 일부 게시된 태그를 덮어쓰지 않고 수정 후 새 커밋으로 재시도 |
-| SSH 접속·인증 | 기존 운영 유지 | 외부 주소·NAS_SSH_PORT 포트·키·호스트 키·sudo 설정 확인 |
+| deploy 대기 | 기존 운영 유지 | Runner가 Online인지와 `platform-deploy` 라벨·컨테이너 로그 확인 |
+| 내부 SSH 접속·인증 | 기존 운영 유지 | Runner의 내부 주소·포트·키·호스트 키·sudo 설정 확인 |
 | 설정 사전 검사 | 기존 운영 유지 | 오류를 수정하고 같은 deploy 작업 또는 새 릴리스로 재시도 |
 | Pull·이미지 식별 확인 | 컨테이너 갱신 전 중단 | Registry 접근과 게시된 SHA·digest 확인. 전달된 새 설정은 이미 배치되었을 수 있음 |
 | 기동·상태 확인 | 일부 갱신됐을 수 있음 | GitHub deploy 로그와 NAS 상태 확인. 실패를 성공으로 기록하지 않음 |

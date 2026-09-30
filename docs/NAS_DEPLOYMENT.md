@@ -57,7 +57,7 @@ docker compose --env-file .env.example -p platform-job-checks -f compose.test.ym
 
 미커밋 변경이나 이미 게시된 태그가 있으면 중단한다. 동일 커밋 태그를 덮어쓰지 않으며 기반 이미지 갱신도 커밋으로 남긴다. 같은 태그의 release를 동시에 실행하지 않는다. Registry가 지원하면 불변 태그 정책을 활성화한다. 일부 이미지 게시에 실패한 릴리스는 배포하지 않는다. 이 경우 기존 게시물은 보존하고 원인을 고친 새 커밋으로 릴리스한다.
 
-성공 시 `output/releases/<태그>/release.json`에 전체 SHA·이미지별 digest·게시 시각을 남긴다. GitHub Actions도 이 release와 아래 deploy를 사용한다. `main` push 시 GitHub에서 검증·빌드·게시 후 NAS에 SSH 배포한다. 자동화 사용 중 같은 커밋의 수동 release를 중복 실행하지 않는다. [CI/CD 설명서](CICD.md)를 참고한다. Registry 자동 삭제는 별도 작업이다.
+성공 시 `output/releases/<태그>/release.json`에 전체 SHA·이미지별 digest·게시 시각을 남긴다. GitHub Actions도 이 release와 아래 deploy를 사용한다. `main` push 시 GitHub에서 검증·빌드·게시 후 NAS의 전용 Runner가 내부 SSH로 배포한다. 외부 국가 제한을 유지하며 NAS에서 이미지 빌드는 하지 않는다. 자동화 사용 중 같은 커밋의 수동 release를 중복 실행하지 않는다. [CI/CD 설명서](CICD.md)를 참고한다. Registry 자동 삭제는 별도 작업이다.
 
 ## NAS 구성 전달·배포
 

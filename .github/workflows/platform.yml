@@ -85,7 +85,7 @@ jobs:
   deploy:
     needs: release
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, platform-deploy]
     environment: prod
     timeout-minutes: 15
     steps:

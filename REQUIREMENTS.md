@@ -55,7 +55,7 @@
 - 운영 도메인은 `platform.shnea.kr`. 관리자 웹·API·인증은 HTTPS로 제공.
 - 자체 이미지: `registry.shnea.kr/platform-이미지명:태그`.
 - 환경은 Dotenvx로 암호화한 `.env.dev`·`.env.prod`이며 Git에서 관리한다. 키·평문 비밀값은 Git과 이미지에서 제외한다. `dev`는 개발 빌드·실행, `release`는 운영 비밀값 없이 이미지 8개 빌드·게시, `deploy <SHA 12자리>`는 NAS Pull·실행이다. Registry 기본값은 `registry.shnea.kr`이며 `REGISTRY_HOST`로 변경한다. 새 배포 태그는 전체 Git SHA 앞 12자리로 외부 전달하고 덮어쓰지 않는다. 운영 Compose 하나에 데이터 준비·인증 초기화·네트워크를 통합하고 개발 override와 격리 테스트 Compose 하나를 둔다. 기존 데이터·키·프로젝트 이름을 보존한다.
-- GitHub Actions에서 main push 시 검사·release·NAS SSH deploy를 자동 실행한다. Pull Request는 검사만 수행하며 운영 복호화 키는 NAS에만 보관한다. 배포 전용 SSH 키와 호스트 확인, 파일 허용 목록·이미지 digest·잠금·상태 검사를 적용한다. 운영 폴더에는 바로 열 수 있는 설명서를 두고 실행과 무관한 이관 잔재는 형제 `platform_tmp`로 분리한다.
+- GitHub Actions에서 main push 시 검사·release·deploy를 자동 실행한다. 검사·빌드는 GitHub 서버에서, deploy는 NAS의 전용 Runner에서 내부 SSH로 기존 스크립트를 호출한다. 국가 제한을 유지하고 Runner에 Docker 소켓·운영 키·데이터를 마운트하지 않는다. Pull Request는 GitHub 서버의 검사만 수행하며 운영 복호화 키는 NAS에만 보관한다. 배포 전용 SSH 키와 호스트 확인, 파일 허용 목록·이미지 digest·잠금·상태 검사를 적용한다. 운영 폴더에는 설명서를 두고 실행과 무관한 이관 잔재는 지정 보관 위치로 분리한다.
 - 파일 최대 5GB, 멀티·드래그·분할·일시정지·재개 업로드(resumable upload).
 - 파일 기본 공개, 비공개·비밀번호 공유 별도 지원. 비밀번호 공유는 비공개 파일에 보기·다운로드 범위로 생성하며 기본 7일(1~30일), 즉시 철회, 비밀번호 확인 횟수 제한을 적용한다. 원본·파생 콘텐츠까지 동일하게 보호하고 OG에는 공통 안내만 노출한다.
 - 파일 기반 API는 서버 키의 `files:read`·`files:write`·`files:delete`·`files:share`를 구분한다. 기존 키에 자동 부여하지 않으며 업로드 세션·원본 저장을 프로젝트·환경별로 격리한다. 관리자 파일 메뉴는 관리자 JWT로 업로드·재개와 파일 관리를 제공하고, 저장 목록에서 썸네일·문서·영상·원본·기본 뷰어와 용도별 URL을 확인한다. 공개 고정 URL과 비공개 임시 URL, 준비 중·미지원·실패를 구분한다. 프로젝트별 파일 서비스 사용을 선택하며 새 프로젝트는 기본 꺼짐, 기존 프로젝트는 유지한다. 사용자별 업로드 허용 판단은 호스트 서버가 담당하고 플랫폼의 이용자 JWT·위임 업로드는 현재 범위에서 제외한다. 브라우저는 호스트 서버를 통해 업로드한다.
