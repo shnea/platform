@@ -73,8 +73,15 @@ case $MODE in
 esac
 
 mkdir -p .deploy
-mkdir .deploy/lock 2>/dev/null || fail 'Another deployment is active. Inspect .deploy/lock before retrying.'
-printf '%s\n' "$$" > .deploy/lock/pid
+OWNS_LOCK=true
+if [ -n "${DEPLOY_PARENT_PID:-}" ]; then
+    [ -f .deploy/lock/pid ] && [ "$(cat .deploy/lock/pid)" = "$DEPLOY_PARENT_PID" ] || fail 'Invalid parent deployment lock.'
+    kill -0 "$DEPLOY_PARENT_PID" 2>/dev/null || fail 'Parent deployment has stopped.'
+    OWNS_LOCK=false
+else
+    mkdir .deploy/lock 2>/dev/null || fail 'Another deployment is active. Inspect .deploy/lock before retrying.'
+    printf '%s\n' "$$" > .deploy/lock/pid
+fi
 SUCCESS=false
 finish() {
     code=$?
@@ -82,8 +89,8 @@ finish() {
     if [ "$SUCCESS" != true ]; then
         printf '%s failed tag=%s exit=%s; inspect live containers before retrying\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$IMAGE_TAG" "$code" >> .deploy/history
     fi
-    rm -f .deploy/lock/pid .deploy/target-images .deploy/new-current
-    rmdir .deploy/lock
+    rm -f .deploy/target-images .deploy/new-current
+    if [ "$OWNS_LOCK" = true ]; then rm -f .deploy/lock/pid; rmdir .deploy/lock; fi
     exit "$code"
 }
 trap finish EXIT
@@ -93,6 +100,13 @@ printf '%s pending tag=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$IMAGE_TAG" >> 
 compose config --images > .deploy/target-images.raw
 sort -u .deploy/target-images.raw > .deploy/target-images
 compose pull
+if [ -n "${RELEASE_DIGESTS:-}" ]; then
+    [ -f "$RELEASE_DIGESTS" ] || fail 'Release digest list is missing.'
+    while read -r ref expected; do
+        digests=$(docker image inspect --format '{{join .RepoDigests " "}}' "$ref")
+        case " $digests " in *" ${ref%:*}@$expected "*) ;; *) fail "Published image digest mismatch: $ref";; esac
+    done < "$RELEASE_DIGESTS"
+fi
 if [ "$LEGACY" = true ] && [ -f .deploy/legacy-images ]; then
     while read -r ref expected; do
         actual=$(docker image inspect --format '{{.Id}}' "$ref")
@@ -138,6 +152,11 @@ while True:
         if time.monotonic() >= deadline:
             raise SystemExit("Loki readiness failed after 60 seconds: " + str(error))
         time.sleep(2)'
+docker run --rm --network "${COMPOSE_PROJECT_NAME}_app" --entrypoint python "$TOOLS_IMAGE" -c \
+    'import urllib.request
+for path in ("/healthz", "/api/projects/health", "/api/files/health", "/api/notifications/health"):
+    urllib.request.urlopen("http://nginx:8080" + path, timeout=15).read()
+    print("PASS " + path)'
 
 : > .deploy/new-images
 while IFS= read -r ref; do

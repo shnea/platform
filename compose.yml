@@ -31,7 +31,7 @@ services:
     mem_limit: 64m
     entrypoint: [python, /tools/prepare-storage.py]
     volumes:
-      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}:/data
+      - ${PLATFORM_DATA_ROOT:-./data}:/data
 
   identity-setup:
     restart: "no"
@@ -75,7 +75,7 @@ services:
       NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Load encrypted environment with the scripts}
       IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Load encrypted environment with the scripts}
     volumes:
-      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/postgres:/var/lib/postgresql/data
+      - ${PLATFORM_DATA_ROOT:-./data}/postgres:/var/lib/postgresql/data
     depends_on:
       storage-init: {condition: service_completed_successfully}
     healthcheck:
@@ -159,7 +159,7 @@ services:
     cpus: ${LOKI_CPUS:-1.0}
     volumes:
       - ./infra/loki/loki.yml:/etc/loki/platform.yml:ro
-      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/loki:/loki
+      - ${PLATFORM_DATA_ROOT:-./data}/loki:/loki
     depends_on:
       storage-init: {condition: service_completed_successfully}
 
@@ -169,7 +169,7 @@ services:
     mem_limit: ${FILE_MEMORY:-1g}
     cpus: ${FILE_CPUS:-1.0}
     volumes:
-      - ${PLATFORM_DATA_ROOT:-/volume2/homes/platform}/files:/app/storage
+      - ${PLATFORM_DATA_ROOT:-./data}/files:/app/storage
     depends_on:
       db: {condition: service_healthy}
       storage-init: {condition: service_completed_successfully}

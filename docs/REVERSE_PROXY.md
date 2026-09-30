@@ -4,18 +4,20 @@
 
 ## 현재 적용 결과
 
+이 문서의 `NAS_LAN_ADDRESS`, `DEV_LAN_ADDRESS`, `LAN_GATEWAY_ADDRESS`는 실제 주소를 가린 변수명이다. 명령 실행 전 해당 환경에서 별도로 지정한다.
+
 2026-09-26 NAS·NPM·플랫폼 전달 설정을 수정해 새 로그인에 접속 IP가 기록되는 것을 확인했다. 사용자는 Wi-Fi를 끈 휴대폰의 LTE/5G 접속에서도 통신사 공인 IP 표시를 확인했다. 기존 Keycloak 세션의 IP는 소급 변경되지 않는다.
 
 | 경로 | 수정 전 | 수정 후 |
 | --- | --- | --- |
-| 개발 PC → NAS 5443 직접 연결 | NPM이 172.18.0.1 전달 | 실제 PC 주소 192.168.0.55 전달 |
-| 내부망 PC → 공개 도메인 | NPM이 172.18.0.1 전달 | 공유기를 돌아 들어오는 경로의 192.168.0.1 전달 |
+| 개발 PC → NAS 5443 직접 연결 | NPM이 172.18.0.1 전달 | 실제 PC 주소 ${DEV_LAN_ADDRESS} 전달 |
+| 내부망 PC → 공개 도메인 | NPM이 172.18.0.1 전달 | 공유기를 돌아 들어오는 경로의 ${LAN_GATEWAY_ADDRESS} 전달 |
 | 휴대폰 LTE/5G → 공개 도메인 | 플랫폼이 172.20.0.1로 덮어씀 | 새 로그인에서 통신사 공인 IP 표시 확인 |
 | 가짜 X-Real-IP 요청 | 호출자가 보낸 가짜 주소 수용 | 가짜 주소 무시 |
 
-개발 연결은 NAS `192.168.0.93`의 Nginx Proxy Manager(NPM) → 개발 PC `192.168.0.55:30140` → 플랫폼 Nginx → Keycloak이다. 운영 시 플랫폼도 NAS로 이동하고 30140은 유지할 예정이다. Cloudflare는 DNS 전용이므로 `CF-Connecting-IP`를 신뢰하지 않는다. [Cloudflare 설명](https://developers.cloudflare.com/dns/proxy-status/)
+개발 연결은 NAS `${NAS_LAN_ADDRESS}`의 Nginx Proxy Manager(NPM) → 개발 PC `${DEV_LAN_ADDRESS}:30140` → 플랫폼 Nginx → Keycloak이다. 운영 시 플랫폼도 NAS로 이동하고 30140은 유지할 예정이다. Cloudflare는 DNS 전용이므로 `CF-Connecting-IP`를 신뢰하지 않는다. [Cloudflare 설명](https://developers.cloudflare.com/dns/proxy-status/)
 
-사용자 환경은 헤놀로지·Container Manager이며 NPM Compose의 게시 포트는 `580:80`, `581:81`, `5443:443`이다. 컨테이너 `npm`은 `npm_default` 네트워크의 `172.18.0.2`, 게이트웨이는 `172.18.0.1`이다. SSH는 9022이며 에이전트 키 인증이 없어 NAS 명령은 사용자가 실행했다. NPM Compose·데이터/인증서 볼륨·다른 컨테이너 포트·공유기 설정은 변경하지 않았다. 5443을 공유기에서 새로 개방할 필요도 없다.
+사용자 환경은 헤놀로지·Container Manager이며 NPM Compose의 게시 포트는 `580:80`, `581:81`, `5443:443`이다. 컨테이너 `npm`은 `npm_default` 네트워크의 `172.18.0.2`, 게이트웨이는 `172.18.0.1`이다. SSH는 <NAS_SSH_PORT>이며 에이전트 키 인증이 없어 NAS 명령은 사용자가 실행했다. NPM Compose·데이터/인증서 볼륨·다른 컨테이너 포트·공유기 설정은 변경하지 않았다. 5443을 공유기에서 새로 개방할 필요도 없다.
 
 ## 수정한 세 구간
 
@@ -26,14 +28,14 @@ NAT의 `DOCKER` 체인에는 5443→`172.18.0.2:443` DNAT가 있었지만 `PRERO
 현재 적용된 명령은 다음과 같다. 이미 있으면 중복 추가하지 않는다.
 
 ```sh
-sudo iptables -t nat -C PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
-sudo iptables -t nat -I PREROUTING 1 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+sudo iptables -t nat -C PREROUTING -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
+sudo iptables -t nat -I PREROUTING 1 -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER
 ```
 
-NPM HTTPS를 사용하는 다른 도메인의 접속 IP에도 영향을 줄 수 있음을 안내하고 사용자가 적용했다. 초기 PC 한정 검사 규칙은 같은 포트 규칙에 포함되므로 사용자가 아래 명령으로 정리했다. 이후 제공한 조회 출력에는 `DEFAULT_PREROUTING` 이름으로 목적지 `192.168.0.93:5443`의 DOCKER 연결 규칙 하나만 남아 있었다. 정리 후 공개·직접 경로 6건을 재검사해 실제 주소 유지·가짜 헤더 무시와 Nginx 설정 복구를 확인했다.
+NPM HTTPS를 사용하는 다른 도메인의 접속 IP에도 영향을 줄 수 있음을 안내하고 사용자가 적용했다. 초기 PC 한정 검사 규칙은 같은 포트 규칙에 포함되므로 사용자가 아래 명령으로 정리했다. 이후 제공한 조회 출력에는 `DEFAULT_PREROUTING` 이름으로 목적지 `${NAS_LAN_ADDRESS}:5443`의 DOCKER 연결 규칙 하나만 남아 있었다. 정리 후 공개·직접 경로 6건을 재검사해 실제 주소 유지·가짜 헤더 무시와 Nginx 설정 복구를 확인했다.
 
 ```sh
-sudo iptables -t nat -D PREROUTING -s 192.168.0.55/32 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+sudo iptables -t nat -D PREROUTING -s ${DEV_LAN_ADDRESS}/32 -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER
 ```
 
 ### NPM에서 외부 IP 헤더 위조 거부
@@ -57,8 +59,8 @@ set_real_ip_from 127.0.0.1;
 ```sh
 for attempt in $(seq 1 60); do
     if iptables -t nat -S DOCKER >/dev/null 2>&1; then
-        iptables -t nat -C PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
-        iptables -t nat -I PREROUTING 1 -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+        iptables -t nat -C PREROUTING -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER 2>/dev/null ||
+        iptables -t nat -I PREROUTING 1 -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER
         exit $?
     fi
     sleep 5
@@ -71,7 +73,7 @@ Docker NAT 체인을 최대 5분 기다린다. 준비되지 않거나 규칙 추
 되돌릴 때는 먼저 부팅 작업을 비활성화하고 플랫폼의 신뢰 설정을 루프백으로 돌린 뒤 아래 NAS 규칙을 제거한다. 초기 PC 한정 규칙도 남아 있다면 위 제거 명령을 함께 사용한다. NPM의 위조 방지 설정은 복원된 원본 주소와 별개의 조치다.
 
 ```sh
-sudo iptables -t nat -D PREROUTING -d 192.168.0.93/32 -p tcp --dport 5443 -j DOCKER
+sudo iptables -t nat -D PREROUTING -d ${NAS_LAN_ADDRESS}/32 -p tcp --dport 5443 -j DOCKER
 ```
 
 ## 플랫폼에서 신뢰할 프록시 설정
@@ -94,7 +96,7 @@ Keycloak으로 전달할 때는 복원한 주소 하나로 X-Forwarded-For를 �
 
 현재 Windows의 활성 네트워크는 Public이고 해당 방화벽이 켜져 있다. 이번에 아래 두 규칙만 추가했다. 다른 Docker 포트·기존 규칙·방화벽 프로필 설정은 변경하지 않았다.
 
-- `Platform30140AllowNpm`: TCP 30140의 NAS `192.168.0.93` 접근 허용.
+- `Platform30140AllowNpm`: TCP 30140의 NAS `${NAS_LAN_ADDRESS}` 접근 허용.
 - `Platform30140BlockOtherSources`: TCP 30140의 나머지 IPv4 범위와 전체 IPv6 접근 차단. 기존 Docker 허용 규칙보다 차단이 우선한다.
 
 규칙 확인과 NPM 경유 HTTPS 200은 통과했다. 다른 LAN 기기에서의 실제 차단 검사는 별도로 남아 있다. 현재 꺼져 있는 Private 프로필로 네트워크를 변경하면 이 제한이 적용되지 않으므로 프록시 신뢰 활성화 전에 해당 프로필도 확인한다. 운영 NAS에서는 Docker 포트에 실제 적용되는 방화벽·네트워크 경계를 다시 검증한다.

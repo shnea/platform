@@ -2,13 +2,21 @@
 
 ## 현재 단계
 
+### GitHub Actions·SSH 배포 구성 (2026-10-01, 실행 검증 중)
+
+- **구성:** main push → verify → 기존 release.ps1로 이미지 8개 게시 → GitHub Artifact → NAS의 제한된 SSH 진입점 → 기존 deploy.sh 순서로 구성했다. PR은 검증만 실행한다. NAS에 Runner·주기 조회 작업을 설치하지 않는다. SSH 키는 check/deploy 명령만 허용하고 호스트 키·파일 허용 목록·출처 SHA·이미지 digest·배포 잠금·서비스 상태를 검사한다.
+- **운영 정리:** 사용자 지정 보관 폴더로 전환 백업·스테이징·운영에 불필요한 예제를 옮겼다. 운영 키·도구·배포 이력·영속 데이터는 유지했다. 바로 열 수 있는 `운영안내.html`과 `docs/CICD.md`를 배포 묶음에 포함했다.
+- **운영 정보:** 문서·Compose 기본값·검증 코드에 남은 실제 NAS 경로와 접속 주소를 변수·예시로 바꿨다. 암호화된 운영 환경의 실제 값은 유지한다. CI에서 NAS 실제 경로의 평문 포함 여부를 검사한다. 기존 Git 이력은 변경하지 않았다.
+- **검증:** 격리 DB 백엔드 검증, Node 24 에디터·관리자 테스트/빌드, release·deploy·SSH 파일 전달의 모의 검증을 통과했다. NAS에 배포 전용 키와 제한된 sudo 진입점 설치를 확인했다. 현재 운영은 기존 0.1.3이며 GitHub에서 첫 실제 Build/Push/Deploy 실행은 아직 남아 있다.
+- **다음:** 경로 변경 후 운영·개발 구성 보존 확인, 전용 SSH 키 접속 검증, 커밋·푸시 후 GitHub 전체 실행과 NAS 상태를 확인한다. Registry 자동 삭제는 별도 범위로 남긴다.
+
 ### Docker 공통 표준 전환·NAS 실행 검증 (2026-10-01)
 
 - **완료:** 다운로드의 `docker-workflow-standard` 지침을 platform에 적용했다. 기본 Compose는 운영 `compose.yml`과 개발 `compose.dev.yml`로 정리하고 기존 격리 테스트 3개는 `compose.test.yml`의 jobs/callbacks/logs로 합쳤다. 별도 build/nas Compose와 `.env.build`, 기존 환경 준비 스크립트를 폐기했다. 운영 경로·권한 준비·네트워크·초기화 순서는 기본 구성으로 옮겼고 개발 named volume·프로젝트 이름은 보존했다.
 - **환경/명령:** 실제 운영 공유 폴더의 값과 로컬 개발 값을 각각 유지한 채 `.env.dev`·`.env.prod`를 Dotenvx 2.24.0으로 암호화했다. Git에는 암호문만 포함한다. `.env.keys`, `.secrets/`, `.tools/`, `.deploy/`와 백업은 제외했다. dev는 복호화·개발 빌드·실행, release는 운영 키 없이 자체 이미지 8개를 Git SHA 앞 12자리로 빌드·게시, deploy는 전체 Pull·revision 확인·`--no-build --wait`·Loki 준비 확인이다. 새 태그 덮어쓰기와 실패한 배포의 정상 상태 기록을 차단한다.
 - **로컬 검증:** `python -X utf8 scripts/check-nas-config.py --baseline output/docker-standard`에서 이전 운영·개발의 환경변수, 데이터 마운트, 초기화 의존성, 포트, 네트워크, 자원 제한의 동일성을 확인했다. `./scripts/dev.ps1`로 자체 이미지 8개 빌드·개발 기동 성공, `./scripts/dev.ps1 --profile test run --rm smoke`의 HTTP·인증 discovery·차단 경로 검사 통과. 각 독립 테스트 프로필의 `config --quiet` 통과. 격리 DB 전체 테스트를 다시 실행한 것은 아니다.
 - **스크립트 검증:** `./scripts/check-release.ps1`로 미커밋·기존 태그·인증 실패 차단, 전체 빌드 전 Push 차단, 8개 SHA 태그·revision·digest 기록을 모의 CLI로 확인했다. `docker run --rm --network none --mount "type=bind,source=$PWD/scripts,target=/checks,readonly" python:3.13-alpine python /checks/check-deploy.py`로 복호화·구성·Pull·revision·기동·readiness 실패와 성공 시 상태 기록·잠금 해제를 확인했다. 실제 Registry manifest 조회 형식, NAS ZIP의 키 제외, 환경파일 암호화·Git 제외 규칙, Python 구문과 `git diff --check`도 확인했다.
-- **NAS 반영/실측:** 사용자 직접 SSH·sudo 비밀번호 입력으로 `/volume1/docker/prod/platform`에 적용했다. Docker 24.0.2, Compose 2.20.1, amd64, Dotenvx 2.24.0에서 복호화·구성 해석·`sh scripts/deploy.sh --legacy 0.1.3` 성공. 현재 운영 이미지 ID를 `.deploy/legacy-images`로 보호해 Pull 전후 동일함을 검사했다. DB·파일·로그 bind 경로, Nginx 192.168.0.93:30140, 관리자·외부 연동 설정을 보존했다. 상시 서비스의 기존 26~27시간 uptime을 유지하고 초기화 작업만 정상 재실행했다. Loki readiness, `/healthz`, 프로젝트·파일·알림 health 모두 통과했으며 `.deploy/current`는 `0.1.3`이다.
+- **NAS 반영/실측:** 사용자 직접 SSH·sudo 비밀번호 입력으로 `${NAS_DEPLOY_PATH}`에 적용했다. Docker 24.0.2, Compose 2.20.1, amd64, Dotenvx 2.24.0에서 복호화·구성 해석·`sh scripts/deploy.sh --legacy 0.1.3` 성공. 현재 운영 이미지 ID를 `.deploy/legacy-images`로 보호해 Pull 전후 동일함을 검사했다. DB·파일·로그 bind 경로, Nginx ${NAS_LAN_ADDRESS}:30140, 관리자·외부 연동 설정을 보존했다. 상시 서비스의 기존 26~27시간 uptime을 유지하고 초기화 작업만 정상 재실행했다. Loki readiness, `/healthz`, 프로젝트·파일·알림 health 모두 통과했으며 `.deploy/current`는 `0.1.3`이다.
 - **실행 중 수정:** NAS sudo PATH 누락과 일회성 이관 검사 파일의 CRLF를 수정했다. 처음 두 시도는 운영 변경 전에 중단됐다. 새 구성 반영 뒤 최초 Loki readiness 응답 503에서는 성공 상태를 기록하지 않았고, 최대 60초 재확인을 추가해 재실행에 성공했다. 서비스·데이터 자동 롤백이나 초기화는 하지 않았다.
 - **보관/복구:** NAS 원래 설정은 `.docker-standard-backup-20261001`에 보관했다(평문 이전 환경파일 포함, 접근 제한). 이전 `compose.nas.yml`·`scripts/init-env.py`는 활성 경로에서 이 백업으로 옮겼다. 일회성 이관 스크립트·결과는 NAS `.docker-standard-stage`, 로컬 검증·기존 환경 백업은 Git 제외 `output/docker-standard`에 있다. 실행 중인 SSH 작업·백그라운드 이관 프로세스는 없으며 직접 입력용 터미널은 Enter로 닫을 수 있다. 개발 환경은 실행 중이며 중지는 `./scripts/dev.ps1 down`이다(볼륨 보존).
 - **남은 사항:** 실제 새 SHA 이미지 Build+Push와 해당 SHA의 운영 배포는 수행하지 않았다. 현재 서비스 버전은 의도적으로 기존 `0.1.3`을 유지했고 다음 릴리스부터 새 `release.ps1`을 사용한다. 이미지 롤백·백업 복원, 이번 변경의 macOS 실기동은 미검증이다. CI/CD·Registry 자동 삭제는 별도 도입 범위다. 보존 정책은 최근 최소 5개 또는 30일, 현재·직전 정상·진행 중·보호 릴리스 유지로 문서화했다. 운영 명령·키 준비·복구 절차는 `docs/NAS_DEPLOYMENT.md`를 따른다.
@@ -108,7 +116,7 @@
 
 ### 파일 유형·날짜별 실제 저장 폴더 정리 (2026-09-27)
 
-- 새 업로드는 `/app/storage/유형/YYYY/MM/DD/프로젝트ID/환경ID/파일ID/`에 원본(`original.확장자`)·썸네일(`thumbnail.jpg`)·영상 스트리밍(`hls/변환ID/`)을 함께 저장한다. NAS 루트는 기존 `/volume2/homes/platform/files`다. 유형은 이미지·영상·오디오·문서·압축·기타이며 확장자 분류와 실제 콘텐츠 검증은 구분한다. 원래 이름은 DB와 다운로드 응답에 유지한다.
+- 새 업로드는 `/app/storage/유형/YYYY/MM/DD/프로젝트ID/환경ID/파일ID/`에 원본(`original.확장자`)·썸네일(`thumbnail.jpg`)·영상 스트리밍(`hls/변환ID/`)을 함께 저장한다. NAS 루트는 기존 `${PLATFORM_DATA_ROOT}/files`다. 유형은 이미지·영상·오디오·문서·압축·기타이며 확장자 분류와 실제 콘텐츠 검증은 구분한다. 원래 이름은 DB와 다운로드 응답에 유지한다.
 - 한국 시간 업로드 접수일의 상대 경로를 V9 `files.storage_path`에 저장한다. 재개·재시작에도 경로가 유지된다. V9 이전 행은 NULL로 남겨 기존 평면 UUID 파일·썸네일·HLS와 진행 중 업로드를 그대로 사용하며 자동 이동하지 않는다. 접근 권한·URL·보존 정책 계약은 유지한다.
 - `code-review` 기준으로 원본 이름의 경로 미사용, 저장 루트 밖 경로 거부, 파일별 정리 범위, DB 롤백 후 재개와 기존 경로 호환을 검토했다. 기존 데이터의 대량 이동이나 새 의존성은 없다.
 - **검증:** `docker compose -p platform-job-checks -f compose.jobs-test.yml up --abort-on-container-exit --exit-code-from check` 통과. 프로젝트 57·알림 19·파일 60개, 총 136개 모두 통과(실패·건너뜀 0). 한국 자정 경계·유형/확장자·빈 파일·재시작·기존 업로드 재개·썸네일/HLS 경로·이웃 파일을 보존하는 삭제·경로 이탈 거부를 포함한다. `docker compose --env-file .env.build build file-service`로 배포 이미지 빌드 통과. 실제 NAS 미디어 생성·재생 재검수는 수행하지 않았다.
@@ -132,11 +140,11 @@
 - **자동 준비:** NAS는 세 데이터 디렉터리를 기존 volume2 경로에 직접 bind한다. `storage-init`은 네트워크 없는 읽기 전용 루트 컨테이너에서 빈 디렉터리만 생성/소유권 설정하며 비어 있지 않은 기존 폴더는 변경하지 않는다. Keycloak healthy → identity-setup 성공 → project-service 순서로 시작한다. 초기화 컨테이너 `Exited (0)`은 정상이며 별도 setup 명령이 필요 없다.
 - **검증:** `docker compose build`와 최종 `docker compose --env-file .env.build build` 각각 8개 빌드 통과. `python -X utf8 scripts/check-nas-config.py`로 환경 파일 선택·태그/레지스트리·빌드 전용 8개 서비스·운영 포트/마운트/시작 순서를 확인했다. 실제 tools 이미지의 tmpfs `/data`에서 `check-storage.py`로 소유권·권한·반복 실행 보존·심볼릭 링크 거부 통과. 격리 `platform-bootstrap-check`에서 빈 DB로 운영 인증 자동 초기화·MFA 설정·project-service healthy, 같은 up 명령 재실행 통과 후 컨테이너/볼륨 정리했다. DEV 스택이나 NAS는 재기동하지 않았다.
 - **파일 검수:** 배포 문서를 PowerShell 파이프로 저장하며 한글이 `?`로 변한 오류를 발견해 UTF-8 원문으로 복구했다. 실제 파일과 ZIP 내부 문서의 한글·대체문자 부재를 확인했다. 개발/운영 비밀값·외부 연동 설정이 기존 `.env`와 일치하고 빌드 파일에 비밀값이 없음을 값 출력 없이 검사했다.
-- **인계:** `output/releases/platform-nas-deploy.zip`에는 **`.env.prod` 원래 이름 그대로**와 Compose·Loki·안내 파일이 있다. `/volume1/docker/prod/platform`에 복사 후 안내된 두 NAS 명령을 실행한다. `python scripts/package-nas.py --env-file .env.prod`로 같은 형태를 다시 묶을 수 있다. 이 ZIP은 비밀값을 포함하므로 공개하지 않는다. 이미지 push·NAS 실행·DSM ACL·프록시 실IP·실제 백업/복원은 아직 수행하지 않았다. 이전 수동 생성/이름 변경/긴 `-f` 안내는 이 절과 최신 NAS 문서로 대체한다.
+- **인계:** `output/releases/platform-nas-deploy.zip`에는 **`.env.prod` 원래 이름 그대로**와 Compose·Loki·안내 파일이 있다. `${NAS_DEPLOY_PATH}`에 복사 후 안내된 두 NAS 명령을 실행한다. `python scripts/package-nas.py --env-file .env.prod`로 같은 형태를 다시 묶을 수 있다. 이 ZIP은 비밀값을 포함하므로 공개하지 않는다. 이미지 push·NAS 실행·DSM ACL·프록시 실IP·실제 백업/복원은 아직 수행하지 않았다. 이전 수동 생성/이름 변경/긴 `-f` 안내는 이 절과 최신 NAS 문서로 대체한다.
 
 ### 외부 Job·공통 로그·연결 지침과 NAS 배포 준비 완료 (2026-09-27)
 
-- **최신 합의:** 외부 프로젝트의 워커가 작업을 가져가 실행한다. 플랫폼은 큐·상태·재시도·감사를 관리하며 외부 실행 코드를 받지 않는다. NAS 배포는 사용자가 직접 하며 개발 데이터·실제 `.env`를 이전하지 않는다. 배포 루트는 `/volume1/docker/prod/platform`, DB·파일·로그 데이터는 `/volume2/homes/platform/{postgres,files,loki}`다.
+- **최신 합의:** 외부 프로젝트의 워커가 작업을 가져가 실행한다. 플랫폼은 큐·상태·재시도·감사를 관리하며 외부 실행 코드를 받지 않는다. NAS 배포는 사용자가 직접 하며 개발 데이터·실제 `.env`를 이전하지 않는다. 배포 루트는 `${NAS_DEPLOY_PATH}`, DB·파일·로그 데이터는 `${PLATFORM_DATA_ROOT}/{postgres,files,loki}`다.
 - **외부 Job:** 환경별 `jobs:write/read/work` 키로 등록·조회·점유·점유 연장·완료/실패·취소·재접수를 제공한다. UUID 접수 중복 방지, 60초 점유, 만료 워커 거부, 최대 10회 실행, 점유 만료 복구, 실행 이력·감사와 완료 후 30일 보존을 구현했다. 호스트 업무의 중복 방지는 호스트 책임이다. 내부 Job과 별도 테이블·관리자 탭이며 기존 키에 새 권한을 자동 부여하지 않는다.
 - **공통 로그:** `logs:write/read`로 환경별 수집·검색·요청/Trace 추적을 제공한다. 프로젝트 서비스가 환경 UUID를 tenant로 정하고 외부 tenant 헤더는 사용하지 않는다. Loki 3.7.0은 전용 내부 네트워크·영속 볼륨을 사용하고 호스트 포트는 없다. 7일 보존, 환경별 하루 10 MiB·10,000회·분당 120회, 배치 100건/256 KiB, 마스킹·전송 제한·장애 응답을 적용했다. 자동 마스킹이 모든 개인정보를 검출하는 것은 아니며 송신 측 비밀값 제외가 필요하다.
 - **화면·공개 자료:** 독립 로그 메뉴에 검색·조회 결과 분포 차트·상세·같은 요청 조회·한국어 오류/재시도를 추가했다. 개발자 센터의 `Job·로그 연결`에서 지침·OpenAPI·표준 라이브러리 Python 워커/비동기 로그 전송기를 받는다. [AI 연결 진입점](https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md)은 54줄, 무인증 공개 링크 15개다. 관리자/내부 계약은 공개 명세에서 제외한다.
@@ -487,11 +495,11 @@
 
 - 모바일 계정 헤더의 자동 여백 때문에 점 3개 메뉴가 가운데 놓이던 원인을 수정했다. 프로필 아이콘 옆에 정렬하고 터치 영역을 확보했으며, 접속 기기 이름·로그아웃·상세 정보의 모바일 배치를 보완했다. Keycloak 기본 JavaScript는 유지하고 계정 테마 CSS만 추가했다.
 - 공개 도메인 Chromium에서 320/390/768/1440px 정렬·가로 넘침 없음, 메뉴·Escape·포커스 복귀, 320px 기기 로그아웃 버튼 겹침 없음·확인 취소를 검증했다. 실제 iPhone/Android의 화면 배치 검수는 별도 미실행이다.
-- IP 문제는 NAS에 5443→NPM 443 DNAT가 있으나 `PREROUTING → DOCKER` 연결이 빠진 점과, 플랫폼이 전달 IP를 Docker 게이트웨이로 덮어쓰던 점을 확인해 수정했다. 사용자가 NAS `192.168.0.93:5443`에만 NAT 연결을 적용했고, 개발 PC에서 직접 접속한 실제 주소·도메인 경로의 공유기 주소가 전달되는 것을 확인했다.
+- IP 문제는 NAS에 5443→NPM 443 DNAT가 있으나 `PREROUTING → DOCKER` 연결이 빠진 점과, 플랫폼이 전달 IP를 Docker 게이트웨이로 덮어쓰던 점을 확인해 수정했다. 사용자가 NAS `${NAS_LAN_ADDRESS}:5443`에만 NAT 연결을 적용했고, 개발 PC에서 직접 접속한 실제 주소·도메인 경로의 공유기 주소가 전달되는 것을 확인했다.
 - NPM 기본 사설망 신뢰 때문에 가짜 X-Real-IP가 수용되던 문제도 검사로 발견했다. 해당 도메인의 Advanced에 `set_real_ip_from 127.0.0.1;`을 저장한 뒤 두 경로 모두 위조 거부를 확인했다. 검증 후 플랫폼 `.env`와 Nginx에 `NGINX_TRUSTED_PROXY=172.20.0.1`을 활성화했다. Windows TCP 30140은 NAS만 허용하고 다른 IPv4/IPv6를 차단하는 규칙을 적용했다. 활성 Public 방화벽과 규칙은 확인했으며 다른 LAN 기기의 차단 실측은 미완료다.
-- 최종 새 브라우저 로그인에서 내부망 도메인 경로의 `192.168.0.1` 기록·가짜 IP 무시·검사 세션 로그아웃을 확인했다. 사용자는 Wi-Fi를 끈 휴대폰 LTE/5G에서 새 로그인 후 통신사 공인 IP 표시를 확인했다. 기존 세션의 IP는 소급 변경되지 않는다. 진단 로그 설정은 제거하고 사용자 세션은 보존했다.
+- 최종 새 브라우저 로그인에서 내부망 도메인 경로의 `${LAN_GATEWAY_ADDRESS}` 기록·가짜 IP 무시·검사 세션 로그아웃을 확인했다. 사용자는 Wi-Fi를 끈 휴대폰 LTE/5G에서 새 로그인 후 통신사 공인 IP 표시를 확인했다. 기존 세션의 IP는 소급 변경되지 않는다. 진단 로그 설정은 제거하고 사용자 세션은 보존했다.
 - Keycloak·Nginx 빌드/반영, 격리 `scripts/check-proxy-ip.sh` 16항목, 최종 smoke 11항목·`nginx -t` 통과. 현재 스택은 `dev`, 7개 컨테이너 healthy다. 공개·직접 경로의 6건 비교는 무시 파일 `output/playwright/probe-nas-ip.py`, 브라우저 검사는 기존 비밀값 비출력 래퍼로 실행했다. 레지스트리 게시·별도 운영 서버 배포는 미실행이다.
-- NAS는 헤놀로지·Container Manager, SSH 9022이며 에이전트 키 인증이 없어 사용자가 NAS 명령을 실행했다. NPM Compose·데이터/인증서 볼륨·다른 컨테이너 포트·공유기는 변경하지 않았다. 사용자가 `NPM HTTPS IP Restore` 부팅 작업 등록·수동 실행과 PC 한정 임시 규칙 정리를 완료했다. 제공한 조회 출력에는 `DEFAULT_PREROUTING`의 NAS 5443 연결 규칙 하나만 남았으며, 정리 후 공개·직접 경로 6건 재검사에서 실제 주소 유지·가짜 헤더 무시·Nginx 설정 복구를 확인했다. 부팅 스크립트의 셸 문법 검사는 통과했으며 NAS 재부팅 검증은 미실행이다. 운영 NAS 이동 시 프록시 주소·방화벽을 재검증한다. 설정·검증·되돌리기는 [역방향 프록시 안내](REVERSE_PROXY.md)를 따른다.
+- NAS는 헤놀로지·Container Manager, SSH <NAS_SSH_PORT>이며 에이전트 키 인증이 없어 사용자가 NAS 명령을 실행했다. NPM Compose·데이터/인증서 볼륨·다른 컨테이너 포트·공유기는 변경하지 않았다. 사용자가 `NPM HTTPS IP Restore` 부팅 작업 등록·수동 실행과 PC 한정 임시 규칙 정리를 완료했다. 제공한 조회 출력에는 `DEFAULT_PREROUTING`의 NAS 5443 연결 규칙 하나만 남았으며, 정리 후 공개·직접 경로 6건 재검사에서 실제 주소 유지·가짜 헤더 무시·Nginx 설정 복구를 확인했다. 부팅 스크립트의 셸 문법 검사는 통과했으며 NAS 재부팅 검증은 미실행이다. 운영 NAS 이동 시 프록시 주소·방화벽을 재검증한다. 설정·검증·되돌리기는 [역방향 프록시 안내](REVERSE_PROXY.md)를 따른다.
 - 사용자 요청으로 다른 프로젝트에 독립적으로 복사할 수 있는 [실제 접속 IP 공통 지침](CLIENT_IP_GUIDE.md)을 추가했다. 신뢰 경계·Nginx/NPM 예시·애플리케이션 기록·위조/우회 검증·NAS별 조치 구분과 AGENTS.md 복사용 지침을 담았다. 문서 예시는 배포 템플릿이 아니며 새 프로젝트의 주소·포트·설치 버전에 맞춰 적용·검증한다.
 
 ### 운영 관리자 MFA·분실 복구

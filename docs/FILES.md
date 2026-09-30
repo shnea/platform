@@ -175,7 +175,7 @@ UTC 달력 기준이며 월말·윤년은 유효한 마지막 날로 맞춘다. 
 ## 저장소와 운영
 
 - 파일 DB: `platform_file`. 메타데이터·세션·보존 코드 참조·감사 기록을 저장한다.
-- 저장 루트: 컨테이너 `/app/storage`, NAS에서는 `/volume2/homes/platform/files`. 비특권 앱 사용자 소유이며 Nginx에서 직접 공개하지 않는다.
+- 저장 루트: 컨테이너 `/app/storage`, NAS에서는 `${PLATFORM_DATA_ROOT}/files`. 비특권 앱 사용자 소유이며 Nginx에서 직접 공개하지 않는다.
 - 새 파일은 `유형/YYYY/MM/DD/프로젝트ID/환경ID/파일ID/` 아래에 `original.확장자`, `thumbnail.jpg`, `hls/변환ID/`를 함께 둔다. 유형 폴더는 `images`, `videos`, `audio`, `documents`, `archives`, `others`다. 확장자 분류는 폴더 정리 용도이며 기존 내용 검사·미리보기 지원 여부와 구분한다. 확장자가 없거나 안전한 영문·숫자 1~16자가 아니면 `original.bin`으로 저장한다. 원래 파일명은 DB와 다운로드 응답에 보존한다.
 - 날짜는 업로드 접수 시각의 한국 날짜(Asia/Seoul)다. V9의 `files.storage_path`에 상대 경로를 고정하므로 다음 날 재개하거나 서버를 재시작해도 위치가 바뀌지 않는다. 예: `images/2026/09/27/<프로젝트ID>/<환경ID>/<파일ID>/original.png`.
 - V9 이전 파일은 `storage_path=NULL`로 유지해 기존 `<파일ID>.bin`, `<파일ID>.jpg`, `<파일ID>.hls/`를 계속 사용한다. 진행 중 업로드도 이어서 전송할 수 있고 기존 파일 URL은 유지한다. 기존 파일을 자동 이동하지 않으며 저장 파일·폴더를 수동으로 옮기면 DB 경로와 불일치하므로 관리자 API로 관리한다. 삭제 정리기는 해당 파일의 원본·썸네일·HLS와 비어진 파일ID 폴더만 지우고 공유 날짜·프로젝트 폴더는 보존한다.

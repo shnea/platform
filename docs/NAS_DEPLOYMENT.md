@@ -55,20 +55,22 @@ docker compose --env-file .env.example -p platform-job-checks -f compose.test.ym
 
 미커밋 변경이나 이미 게시된 태그가 있으면 중단한다. 동일 커밋 태그를 덮어쓰지 않으며 기반 이미지 갱신도 커밋으로 남긴다. 같은 태그의 release를 동시에 실행하지 않는다. Registry가 지원하면 불변 태그 정책을 활성화한다. 일부 이미지 게시에 실패한 릴리스는 배포하지 않는다. 이 경우 기존 게시물은 보존하고 원인을 고친 새 커밋으로 릴리스한다.
 
-성공 시 `output/releases/<태그>/release.json`에 전체 SHA·이미지별 digest·게시 시각을 남긴다. CI도 이 release와 아래 deploy를 사용한다. 현재는 수동 실행을 기본으로 하며 CI/CD와 Registry 자동 삭제 작업은 추가하지 않는다.
+성공 시 `output/releases/<태그>/release.json`에 전체 SHA·이미지별 digest·게시 시각을 남긴다. GitHub Actions도 이 release와 아래 deploy를 사용한다. `main` push 시 GitHub에서 검증·빌드·게시 후 NAS에 SSH 배포한다. 자동화 사용 중 같은 커밋의 수동 release를 중복 실행하지 않는다. [CI/CD 설명서](CICD.md)를 참고한다. Registry 자동 삭제는 별도 작업이다.
 
 ## NAS 구성 전달·배포
+
+`NAS_DEPLOY_PATH`는 운영 설정 폴더, `PLATFORM_DATA_ROOT`는 영속 데이터 루트를 뜻한다. 실제 경로는 Git에 적지 않고 운영 설정으로 관리한다. 아래 수동 명령은 NAS 셸에 `NAS_DEPLOY_PATH`를 별도로 지정한 뒤 실행한다. 신규 설치는 암호화된 `.env.prod`의 데이터 루트·바인딩 주소를 해당 서버에 맞게 설정해야 한다.
 
 ```sh
 python scripts/package-nas.py
 ```
 
-생성된 `output/releases/platform-nas-config.zip`을 NAS **`/volume1/docker/prod/platform`**에 푼다. ZIP에는 `compose.yml`, 암호화 `.env.prod`, deploy 스크립트, Loki 설정과 운영 문서만 들어 있다. 키·도구·데이터·개발 Compose는 포함하지 않는다. 키와 Dotenvx는 최초 준비 때 별도로 전달한다.
+생성된 `output/releases/platform-nas-config.zip`을 NAS **`${NAS_DEPLOY_PATH}`**에 푼다. ZIP에는 `compose.yml`, 암호화 `.env.prod`, deploy 스크립트, Loki 설정과 운영 문서·`운영안내.html`만 들어 있다. 키·도구·데이터·개발 Compose는 포함하지 않는다. 키와 Dotenvx는 최초 준비 때 별도로 전달한다. CI는 release 기록이 있을 때 생성되는 `.tar.gz`를 전용 SSH 명령으로 전달하며 직접 ZIP을 풀 필요가 없다.
 
 NAS SSH에서 프로젝트 폴더로 이동해 **release에 성공한 실제 태그**를 전달한다.
 
 ```sh
-cd /volume1/docker/prod/platform
+cd "$NAS_DEPLOY_PATH"
 sudo chmod 644 infra/loki/loki.yml
 sudo sh scripts/deploy.sh check <SHA_12>
 sudo sh scripts/deploy.sh <SHA_12>
@@ -81,12 +83,12 @@ sudo sh scripts/deploy.sh status
 
 | 위치 | 저장 내용 |
 | --- | --- |
-| `/volume1/docker/prod/platform` | 실행 설정·운영 키·도구·배포 기록 |
-| `/volume2/homes/platform/postgres` | DB·Job |
-| `/volume2/homes/platform/files` | 파일·이미지·영상 |
-| `/volume2/homes/platform/loki` | 로그 |
+| `${NAS_DEPLOY_PATH}` | 실행 설정·운영 키·도구·배포 기록 |
+| `${PLATFORM_DATA_ROOT}/postgres` | DB·Job |
+| `${PLATFORM_DATA_ROOT}/files` | 파일·이미지·영상 |
+| `${PLATFORM_DATA_ROOT}/loki` | 로그 |
 
-운영 데이터 경로와 권한 준비는 `compose.yml`에 포함된다. 기존 데이터를 초기화하지 않는다. NAS 커널을 위해 운영 `*_CPUS=0`을 유지하고 메모리 제한은 보존한다. 네트워크는 앱 `10.250.10.0/24`, DB `10.250.11.0/24`, 로그 `10.250.12.0/24`이며 DB·로그는 내부 전용이다. NPM 전달 주소는 **HTTP / 192.168.0.93 / 30140**, 외부 주소는 **https://platform.shnea.kr**이다. 기존 관리자 비밀번호·MFA·외부 연동 값은 유지한다.
+운영 데이터 경로와 권한 준비는 `compose.yml`에 포함된다. 기존 데이터를 초기화하지 않는다. NAS 커널을 위해 운영 `*_CPUS=0`을 유지하고 메모리 제한은 보존한다. 네트워크는 앱 `10.250.10.0/24`, DB `10.250.11.0/24`, 로그 `10.250.12.0/24`이며 DB·로그는 내부 전용이다. NPM 전달 주소는 **HTTP / ${NAS_LAN_ADDRESS} / 30140**, 외부 주소는 **https://platform.shnea.kr**이다. 기존 관리자 비밀번호·MFA·외부 연동 값은 유지한다.
 
 ## 롤백·기존 이미지 보호
 

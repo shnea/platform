@@ -30,7 +30,7 @@ set -eu
 [ "${FAIL_AT:-}" != decrypt ] || exit 3
 while [ "$1" != -- ]; do shift; done
 shift
-export PLATFORM_MODE=prod COMPOSE_PROJECT_NAME=shnea-platform-prod PLATFORM_DATA_ROOT=/volume2/homes/platform
+export PLATFORM_MODE=prod COMPOSE_PROJECT_NAME=shnea-platform-prod PLATFORM_DATA_ROOT=/test/platform-data
 exec "$@"
 '''
 
@@ -49,15 +49,17 @@ def case(failure='', tag='012345abcdef'):
         (root / '.env.prod').write_text('# test only\n')
         (root / '.deploy/current').write_text('0.1.3\n')
         (root / '.deploy/legacy-tag').write_text('0.1.3\n')
+        expected = 'b' * 64 if failure == 'digest' else 'a' * 64
+        (root / 'digests').write_text('registry.shnea.kr/platform-tools:' + tag + ' sha256:' + expected + '\n')
         env = dict(os.environ, PATH=str(root / 'bin') + os.pathsep + os.environ['PATH'],
-                   FAIL_AT=failure, TEST_LOG=str(root / 'calls'))
+                   FAIL_AT=failure, TEST_LOG=str(root / 'calls'), RELEASE_DIGESTS=str(root / 'digests'))
         result = subprocess.run(['sh', str(root / 'scripts/deploy.sh'), tag], env=env, capture_output=True, text=True)
         calls = (root / 'calls').read_text() if (root / 'calls').exists() else ''
         current = (root / '.deploy/current').read_text().strip()
         if failure or tag != '012345abcdef':
             assert result.returncode != 0, (failure, result.stdout)
             assert current == '0.1.3', 'Failed deployment replaced last successful state'
-            if failure in ('decrypt', 'config', 'pull', 'revision') or tag != '012345abcdef':
+            if failure in ('decrypt', 'config', 'pull', 'digest', 'revision') or tag != '012345abcdef':
                 assert ' up -d ' not in calls, 'Containers changed before successful preflight and pull'
             if failure == 'decrypt': assert not calls
         else:
@@ -68,7 +70,7 @@ def case(failure='', tag='012345abcdef'):
             assert '--no-build' in calls and '--wait' in calls
         assert not (root / '.deploy/lock').exists(), 'Deployment lock leaked'
 
-for failure in ('decrypt', 'config', 'pull', 'revision', 'up', 'health', ''):
+for failure in ('decrypt', 'config', 'pull', 'digest', 'revision', 'up', 'health', ''):
     case(failure)
 case(tag='latest')
 case(tag='0.1.3')

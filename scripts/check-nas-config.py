@@ -44,15 +44,17 @@ assert len({s['image'] for s in prod['services'].values() if '/platform-' in s['
 for name, service in prod['services'].items():
     assert 'build' not in service and float(service.get('cpus', 0)) == 0, name
     if name != 'nginx': assert not service.get('ports'), name
+data_root = next(v['source'] for v in prod['services']['storage-init']['volumes'] if v['target'] == '/data')
+assert data_root.startswith('/') and data_root != '/'
 for service, target, directory in [('db', '/var/lib/postgresql/data', 'postgres'), ('file-service', '/app/storage', 'files'), ('loki', '/loki', 'loki')]:
     mount = next(v for v in prod['services'][service]['volumes'] if v['target'] == target)
-    assert mount['type'] == 'bind' and mount['source'] == '/volume2/homes/platform/' + directory
+    assert mount['type'] == 'bind' and mount['source'] == data_root.rstrip('/') + '/' + directory
     assert prod['services'][service]['depends_on']['storage-init']['condition'] == 'service_completed_successfully'
     local = next(v for v in dev['services'][service]['volumes'] if v['target'] == target)
     assert local['type'] == 'volume'
 for service in dev['services'].values():
     assert 'storage-init' not in service.get('depends_on', {})
-    assert all('/volume2/' not in v.get('source', '') for v in service.get('volumes', []))
+    assert all(v.get('source', '') != data_root and not v.get('source', '').startswith(data_root.rstrip('/') + '/') for v in service.get('volumes', []))
 assert all(not n.get('ipam') for n in dev['networks'].values())
 assert prod['services']['identity-setup']['depends_on']['keycloak']['condition'] == 'service_healthy'
 assert prod['services']['project-service']['depends_on']['identity-setup']['condition'] == 'service_completed_successfully'

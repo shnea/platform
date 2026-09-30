@@ -27,7 +27,7 @@ for key in values:
         values[key] = secrets.token_hex(32)
 if args.environment == 'prod':
     values.update(COMPOSE_PROJECT_NAME='shnea-platform-prod', PLATFORM_MODE='prod',
-                  BIND_ADDRESS='192.168.0.93', PLATFORM_WEB_URL='https://platform.shnea.kr',
+                  BIND_ADDRESS='127.0.0.1', PLATFORM_WEB_URL='https://platform.shnea.kr',
                   KEYCLOAK_PUBLIC_URL='https://platform.shnea.kr/auth')
     for key in values:
         if key.endswith('_CPUS'):
