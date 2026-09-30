@@ -13,7 +13,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 if [ "${1:-}" != --loaded ]; then
     DOTENVX=${DOTENVX_BIN:-"$ROOT/.tools/dotenvx"}
     [ -x "$DOTENVX" ] || DOTENVX=$(command -v dotenvx) || fail 'Install Dotenvx 2.24.0; see docs/NAS_DEPLOYMENT.md.'
-    KEYS=${DOTENV_KEYS_FILE:-"$ROOT/.secrets/prod.keys"}
+    KEYS=${DOTENV_KEYS_FILE:-"$ROOT/.env.keys"}
     [ -f "$KEYS" ] || [ -n "${DOTENV_PRIVATE_KEY_PROD:-}" ] || fail 'Provide the production decryption key separately.'
     if [ -f "$KEYS" ]; then
         chmod 600 "$KEYS"

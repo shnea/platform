@@ -44,9 +44,9 @@ try:
             if value and not value.startswith('encrypted:'):
                 raise RuntimeError('Unencrypted value remains')
 except (OSError, RuntimeError):
-    private = root / '.secrets'
+    private = root / '.recovery'
     private.mkdir(exist_ok=True)
     recovery = private / (target.name + '.' + secrets.token_hex(4) + '.recovery')
     target.replace(recovery)
-    raise SystemExit('Encryption failed. Plaintext moved to ignored .secrets; do not commit it.')
+    raise SystemExit('Encryption failed. Plaintext moved to ignored .recovery for recovery only; do not commit it.')
 print(f'Created encrypted {target.name}. Keep .env.keys separate from Git and images.')

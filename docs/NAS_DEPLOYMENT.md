@@ -10,10 +10,12 @@
 
 ## 최초 도구·키 준비
 
+**프로젝트 이동 시 별도로 챙길 환경 관련 파일은 `.env.keys` 하나다.** `.env.dev`·`.env.prod`는 암호화되어 Git으로 전달된다. 개발 PC의 `.env.keys`에는 필요한 환경 키를, NAS의 같은 이름 파일에는 운영 키만 둔다. 별도 `.secrets` 폴더를 준비하거나 복사하지 않는다. SSH·Registry 인증은 GitHub Secrets와 서버의 인증 저장소에 최초 설정하며 배포마다 파일을 옮기지 않는다.
+
 - 개발 PC: Docker와 Compose **2.24.4 이상**, Windows PowerShell 또는 PowerShell 7. macOS에서는 PowerShell 7로 같은 `.ps1`을 실행한다. NAS의 운영 구성은 Compose **2.20 이상**을 사용한다. NAS에서 개발 Compose를 사용하지 않는다.
 - Dotenvx **2.24.0**: [공식 릴리스](https://github.com/dotenvx/dotenvx/releases/tag/v2.24.0)의 OS·CPU에 맞는 파일을 받고 checksums.txt의 SHA-256과 비교한다. 개발 PC의 `.tools/dotenvx.exe`(Windows) 또는 `.tools/dotenvx`(macOS), NAS의 `.tools/dotenvx`에 둔다. PATH 설치도 가능하다. 배포마다 자동 설치하지 않는다.
-- 개발 키는 별도 보안 경로로 받은 `.env.keys`에 둔다. NAS에는 `DOTENV_PRIVATE_KEY_PROD` **한 개만** 있는 `.secrets/prod.keys`를 별도로 제공한다. 전체 개발 키 파일을 운영에 복사하지 않는다. 대안으로 실행 환경에 운영 키를 제공할 수 있다.
-- NAS 파일 키는 `chmod 600 .secrets/prod.keys`, 바이너리는 `chmod 700 .tools/dotenvx`로 제한한다. SMB 접근 권한도 운영자에게만 허용한다. 키와 백업은 Git·배포 ZIP에서 제외한다.
+- 개발 키는 별도 보안 경로로 받은 `.env.keys`에 둔다. NAS에는 `DOTENV_PRIVATE_KEY_PROD` **한 개만** 있는 `.env.keys`를 별도로 제공한다. 전체 개발 키 파일을 운영에 복사하지 않는다. 대안으로 실행 환경에 운영 키를 제공할 수 있다.
+- NAS 파일 키는 `chmod 600 .env.keys`, 바이너리는 `chmod 700 .tools/dotenvx`로 제한한다. SMB 접근 권한도 운영자에게만 허용한다. 키와 백업은 Git·배포 ZIP에서 제외한다.
 - 레지스트리 인증은 `docker login registry.shnea.kr`로 각 실행 계정에 준비한다. NAS에서 sudo를 사용한다면 sudo 실행 계정도 Pull 권한이 필요하다. 인증정보는 파일 예제나 명령 인자에 적지 않는다.
 
 `.env.dev`와 `.env.prod`는 암호문 상태로 Git에 포함된다. Compose에 `--env-file .env.prod`를 직접 전달하지 않는다. 스크립트가 먼저 복호화해 필요한 환경변수를 주입한다. 이전 `.env`나 `COMPOSE_FILE`에 의존하지 않는다.

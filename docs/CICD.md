@@ -49,6 +49,8 @@ NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub �
 
 ## 비밀정보는 어디에 있나요?
 
+개발 PC·NAS에서 직접 별도 보관할 환경 관련 파일은 `.env.keys` 하나다. `.secrets` 폴더 전체를 옮기는 절차는 없다. SSH·Registry 인증은 GitHub Secrets·NAS 인증 저장소에서 최초 설정하고, 암호화 환경파일은 이후 배포와 함께 자동 전달한다.
+
 | 항목 | 저장 위치 |
 | --- | --- |
 | Registry 계정·암호 | GitHub Actions Secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` |
@@ -57,7 +59,7 @@ NAS에 GitHub Runner나 정기 조회 작업을 설치하지 않는다. GitHub �
 | 확인된 NAS 호스트 키 | GitHub Actions Secret: `NAS_SSH_KNOWN_HOSTS` |
 | 운영 설정 루트 | NAS 배포 진입점의 별도 설정. GitHub `NAS_DEPLOY_PATH` Secret에도 등록해 로그에서 가림 |
 | 운영 설정 | NAS `.env.prod` — Git에도 암호문만 저장 |
-| 운영 복호화 키 | NAS `.secrets/prod.keys` — GitHub에 올리지 않음 |
+| 운영 복호화 키 | NAS `.env.keys` — GitHub에 올리지 않음 |
 | SSH 공개키·실행 제한 | NAS 배포 계정의 `.ssh/authorized_keys` |
 | 제한된 sudo 규칙 | NAS 관리자가 별도 설치·관리 |
 | 루트 소유 배포 진입점 | NAS 관리자가 별도 설치하며 실제 경로는 운영 설정에서 관리 |
@@ -117,7 +119,7 @@ platform/
 ├─ scripts/deploy.sh
 ├─ infra/loki/loki.yml
 ├─ .tools/dotenvx
-├─ .secrets/prod.keys
+├─ .env.keys
 ├─ .deploy/                     # 상태·잠금·digest·이전 설정
 └─ docs/                        # 자세한 운영·CI/CD·프록시 문서
 ```

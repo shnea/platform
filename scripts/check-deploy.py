@@ -37,14 +37,14 @@ exec "$@"
 def case(failure='', tag='012345abcdef'):
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
-        for name in ('scripts', '.tools', '.secrets', '.deploy', 'bin'):
+        for name in ('scripts', '.tools', '.deploy', 'bin'):
             (root / name).mkdir()
         shutil.copyfile(script, root / 'scripts/deploy.sh')
         for name, text in [('bin/docker', docker), ('.tools/dotenvx', dotenv)]:
             p = root / name
             p.write_text(text)
             p.chmod(0o700)
-        (root / '.secrets/prod.keys').write_text('dummy-test-key')
+        (root / '.env.keys').write_text('dummy-test-key')
         (root / 'compose.yml').write_text('services: {}\n')
         (root / '.env.prod').write_text('# test only\n')
         (root / '.deploy/current').write_text('0.1.3\n')

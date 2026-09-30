@@ -12,7 +12,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 case "$1" in
     check)
         test -x "$ROOT/.tools/dotenvx"
-        test -f "$ROOT/.secrets/prod.keys"
+        test -f "$ROOT/.env.keys"
         docker version --format '{{.Server.Version}}'
         printf '%s\n' 'PASS platform SSH deployment gateway'
         exit 0;;
@@ -56,7 +56,7 @@ if grep -qv '^-' "$STAGE/details"; then fail 'Archive must contain only regular 
 tar -xzf "$STAGE/package.tar.gz" -C "$STAGE"
 [ "$(cat "$STAGE/SOURCE_COMMIT")" = "$SHA" ] || fail 'Archive belongs to a different source commit.'
 [ "$(wc -l < "$STAGE/IMAGE_DIGESTS" | tr -d ' ')" = 8 ] || fail 'Incomplete image digest list.'
-DOTENVX_BIN="$ROOT/.tools/dotenvx" DOTENV_KEYS_FILE="$ROOT/.secrets/prod.keys" \
+DOTENVX_BIN="$ROOT/.tools/dotenvx" DOTENV_KEYS_FILE="$ROOT/.env.keys" \
     sh "$STAGE/scripts/deploy.sh" check "$TAG"
 
 # Keep the matching previous configuration for a deliberate rollback.

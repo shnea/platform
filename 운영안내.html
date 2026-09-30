@@ -79,17 +79,18 @@ sudo tail -20 .deploy/ssh-history</pre></div></div>
 ├─ scripts/deploy.sh
 ├─ infra/loki/loki.yml
 ├─ .tools/dotenvx
-├─ .secrets/prod.keys     운영 복호화 키
+├─ .env.keys     운영 복호화 키
 ├─ .deploy/              상태·이전 설정
 └─ docs/                 상세 설명서</pre></div><div><h3>설정과 데이터의 위치</h3><p><strong>운영 설정</strong><br><code>${NAS_DEPLOY_PATH}</code></p><p><strong>DB·파일·로그</strong><br><code>${PLATFORM_DATA_ROOT}</code><br><span class="subtle">하위 postgres / files / loki 폴더에 영속 저장합니다.</span></p><p><strong>이전 자료 보관</strong><br><code>${NAS_ARCHIVE_PATH}</code><br><span class="subtle">이관 백업·이전 구성·일회성 설치 파일. 운영 실행에는 사용하지 않습니다.</span></p></div></div>
-    <p class="subtle">.deploy/configs는 롤백에 필요한 기록입니다. 예전 잔재와 구분해 유지합니다. platform_tmp에는 이전 평문 환경 백업이 있으므로 접근을 제한합니다.</p>
+    <p><strong>별도로 챙기는 환경 파일은 .env.keys 하나입니다.</strong> 암호화된 .env.dev·.env.prod는 Git으로 전달됩니다. NAS의 .env.keys에는 운영 키만 둡니다. .secrets 폴더를 따로 옮길 필요가 없습니다.</p>
+    <p class="subtle">.deploy는 배포가 자동 기록하며 .deploy/configs는 롤백에 필요합니다. .tools는 최초 도구 설치 위치이고 .playwright-cli는 개발 검증의 임시 출력입니다. platform_tmp에는 이전 평문 환경 백업이 있으므로 접근을 제한합니다.</p>
   </section>
 
   <section id="access"><h2>접속과 키는 이렇게 구분합니다</h2><div class="table-wrap"><table><thead><tr><th>항목</th><th>보관 위치</th><th>용도</th></tr></thead><tbody>
     <tr><td>Registry 인증정보</td><td>GitHub Actions Secrets</td><td>완성된 이미지 게시</td></tr>
     <tr><td>배포 전용 SSH 개인키</td><td>GitHub Actions Secrets</td><td>정해진 NAS 배포 명령만 실행</td></tr>
     <tr><td>NAS 서버 확인 키</td><td>GitHub Actions Secrets</td><td>접속한 대상이 실제 NAS인지 확인</td></tr>
-    <tr><td>운영 복호화 키</td><td>NAS .secrets/prod.keys</td><td>NAS에서 .env.prod 복호화. GitHub에는 전달하지 않음</td></tr>
+    <tr><td>운영 복호화 키</td><td>NAS .env.keys</td><td>NAS에서 .env.prod 복호화. GitHub에는 전달하지 않음</td></tr>
   </tbody></table></div><p class="subtle">루트 소유 배포 진입점과 제한된 sudo 규칙은 NAS 관리자가 별도로 관리합니다. 실제 설치 경로·접속 정보는 운영 설정에만 보관합니다.</p></section>
   <footer>상세 문서: <a href="docs/CICD.md">CI/CD 운영 안내</a> · <a href="docs/NAS_DEPLOYMENT.md">개발·릴리스·배포</a> · <a href="docs/REVERSE_PROXY.md">역방향 프록시</a><br>이 설명서는 인터넷 없이도 읽을 수 있습니다. GitHub·운영 서비스 링크는 인터넷 연결이 필요합니다.</footer>
 </main><script>
