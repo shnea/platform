@@ -93,7 +93,7 @@ docker exec -i "$TEMP_NAME" psql -U platform_restore_drill -d postgres -v ON_ERR
 : > "$BACKUP/results.jsonl"
 for database in $DATABASES; do
     docker exec -i "$TEMP_NAME" pg_restore -U platform_restore_drill -d postgres --create --exit-on-error < "$BACKUP/$database.dump" 2> "$BACKUP/$database-restore.log"
-    docker exec -i "$TEMP_NAME" pg_restore --data-only --no-owner --no-privileges < "$BACKUP/$database.dump" > "$BACKUP/$database-source.sql"
+    docker exec -i "$TEMP_NAME" pg_restore --data-only --no-owner --no-privileges --file=- < "$BACKUP/$database.dump" > "$BACKUP/$database-source.sql"
     docker exec "$TEMP_NAME" pg_dump -U platform_restore_drill -d "$database" --data-only --no-owner --no-privileges > "$BACKUP/$database-restored.sql"
     result=$(docker run --rm --user 0:0 --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
         --mount "type=bind,source=$BACKUP,target=/backup,readonly" --entrypoint python "$TOOLS_IMAGE" \
