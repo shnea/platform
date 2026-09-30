@@ -20,9 +20,63 @@
 
 `.env.dev`와 `.env.prod`는 암호문 상태로 Git에 포함된다. Compose에 `--env-file .env.prod`를 직접 전달하지 않는다. 스크립트가 먼저 복호화해 필요한 환경변수를 주입한다. 이전 `.env`나 `COMPOSE_FILE`에 의존하지 않는다.
 
-### 설정 변경
+<a id="env-management"></a>
+### 환경값 확인·변경·복호화·암호화
 
-기존 환경은 `.env.example`의 변수 설명을 참고해 Dotenvx로 필요한 항목만 수정한다. Dotenvx `set`의 암호화 기능을 사용하며 비밀값을 셸 이력·채팅·검증 로그에 남기지 않는다. 수정 후 암호문인지 확인하고 키를 따로 보관한다. 기존 DB 비밀번호는 환경파일 수정만으로 바뀌지 않으므로 DB 계정 변경과 함께 계획해야 한다.
+**개발 PC의 해당 프로젝트 폴더에서 PowerShell로 실행한다.** `.tools/dotenvx.exe`와 그 프로젝트의 `.env.keys`가 필요하다. 아래는 운영 `.env.prod` 예시이며 개발은 `.env.dev`로 바꾼다. 다른 프로젝트의 키로는 복호화할 수 없다. 키가 없으면 기존 키를 받아야 하며 새로 생성해서 대체하지 않는다.
+
+#### 1. 내용만 확인 — 파일은 암호화 상태 유지
+
+```powershell
+# 전체 값 보기
+.\.tools\dotenvx.exe get -f .env.prod --format shell --no-armor --no-native
+
+# 한 항목만 보기
+.\.tools\dotenvx.exe get REGISTRY_HOST -f .env.prod --no-armor --no-native
+
+# 원래 env 파일 형식으로 화면에만 복호화
+.\.tools\dotenvx.exe decrypt -f .env.prod --stdout --no-armor --no-native
+```
+
+조회 결과에는 실제 비밀값이 포함될 수 있으므로 공유 로그·채팅에 붙여 넣지 않는다. `--stdout`은 파일을 바꾸지 않으며, 아래의 일반 `decrypt`와 다르다.
+
+#### 2. 한두 값 변경 — set이 자동 암호화
+
+```powershell
+# 공개 설정 예시: 필요한 변수명과 값으로 바꿔 실행
+.\.tools\dotenvx.exe set REGISTRY_HOST 'registry.shnea.kr' -f .env.prod --no-armor --no-native
+```
+
+**별도 복호화·재암호화 단계가 필요 없다.** `set`은 기본적으로 새 값을 암호화해 저장한다. 비밀번호·토큰을 명령줄에 직접 입력하면 셸 이력에 남을 수 있으므로 비밀값을 직접 편집할 때는 아래 방법을 사용한다.
+
+#### 3. 여러 값 직접 편집 — 복호화 → 편집 → 재암호화
+
+이 방법은 `.env.prod` 자체를 잠시 평문으로 바꾼다. 편집을 마치고 재암호화할 때까지 커밋·푸시하지 않는다.
+
+```powershell
+# 1) 파일을 평문으로 변환. 성공했을 때만 다음 단계 진행
+.\.tools\dotenvx.exe decrypt -f .env.prod --no-armor --no-native
+
+# 2) 편집기를 열어 값 수정 → UTF-8로 저장 → 편집기 닫기
+notepad .env.prod
+
+# 3) 저장을 마친 뒤 다시 암호화
+.\.tools\dotenvx.exe encrypt -f .env.prod --no-armor --no-native
+
+# 4) 평문 설정·키가 포함되지 않았는지 검사
+python scripts/check-ci.py
+```
+
+각 단계를 따로 실행하고 명령이 실패하면 중단한다. 키·`DOTENV_PUBLIC_KEY_PROD` 등 암호화 메타데이터는 편집하지 않는다. 검사가 실패했다면 커밋하지 말고 암호화 상태부터 확인한다. 편집기의 평문 복사본·백업 파일도 Git에 올리지 않는다.
+
+#### 4. 변경 반영
+
+- 개발: 암호화된 `.env.dev`를 저장한 뒤 `./scripts/dev.ps1`로 컨테이너를 갱신한다.
+- 운영: 암호화 검사 후 `.env.prod` 변경을 커밋·푸시한다. 자동 배포가 연결된 프로젝트에서는 GitHub Actions의 **deploy 성공**까지 확인한다. 파일을 바꾸는 것만으로 실행 중인 컨테이너가 갱신되지는 않는다.
+- NAS에서는 조회가 필요할 때 운영 폴더에서 `sudo ./.tools/dotenvx get -f .env.prod --format shell --no-armor --no-native`를 사용한다. 변경은 개발 PC의 Git 관리 파일에서 진행한다. NAS에서만 고친 값은 다음 배포 때 덮어써질 수 있다.
+- `.env.keys`는 별도 보관하고 커밋하지 않는다. 일반적인 값 변경에는 키 교체나 키 재배포가 필요 없다. DB 비밀번호는 환경파일 수정만으로 실제 DB 계정 비밀번호가 바뀌지 않으므로 별도로 맞춰야 한다.
+
+명령 기준: 설치된 Dotenvx **2.24.0**의 도움말과 [공식 암호화 안내](https://dotenvx.com/docs/quickstart/). 안내 명령은 임시 예제 파일에서 조회·변경·복호화·재암호화와 기존 키 유지까지 확인했다.
 
 `python scripts/init-env.py --environment dev` 또는 `--environment prod`는 **환경파일이 없는 신규 설치 전용**이다. 기존 파일을 덮어쓰거나 이미 운영 중인 비밀번호를 재생성하지 않는다. Git에서 받은 기존 환경은 해당 키를 받아 사용한다.
 
