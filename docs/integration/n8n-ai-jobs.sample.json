@@ -1,0 +1,130 @@
+{
+  "name": "플랫폼 v12 · 8종 AI 작업 호출 수동 예제",
+  "active": false,
+  "nodes": [
+    {
+      "id": "125b35bb-ba9c-453f-a7da-90a600cd9e03",
+      "name": "수동 실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "c3dcd4dc-cb16-47fb-a1b4-1a1843ff40e9",
+      "name": "고정 요청 ID·작업 선택",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Keep this ID when retransmitting the same operation. Use a new ID only for a new operation.\nconst request = {request_id: 'replace-with-stable-host-operation-id', task_type: 'chat.general',\n  prompt: '한 문장으로 인사해 주세요.', sync: true, input: {}};\nconst tasks = ['blog.tags','blog.summary','portfolio.search','ui.render','comment.generate','document.analyze','code.analyze','chat.general'];\nif (!tasks.includes(request.task_type) || !request.request_id || !request.prompt) throw new Error('AI 요청을 확인하세요.');\n// For RAG, input.collection is a logical name such as document. Platform namespaces it from the key.\nreturn [{json:request}];"
+      }
+    },
+    {
+      "id": "73b3b15e-9ce0-4a62-8e8d-a34a1a06a5cf",
+      "name": "플랫폼 AI 작업 접수",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PLATFORM_URL.replace(/\\/$/, '') + '/api/v1/ai/jobs' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 100000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "id": "18ea395c-7d20-4c62-9fc6-2a928e16e194",
+      "name": "작업 결과·접수 상태 검증",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst request = $('고정 요청 ID·작업 선택').first().json;\nif (result.request_id !== request.request_id || result.task_type !== request.task_type ||\n    !['running','succeeded','failed','cancelled'].includes(result.status) || !result.id)\n  throw new Error('AI 작업 응답 계약이 다릅니다. 다시 실행하지 말고 요청 ID를 조회하세요.');\nreturn [{json:result}];"
+      }
+    },
+    {
+      "id": "9b2d418f-8605-441e-b5fb-818aa1d84283",
+      "name": "사용법",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        100,
+        240
+      ],
+      "parameters": {
+        "content": "## 비활성 수동 예제\nPLATFORM_URL과 Header Auth X-Platform-Key(ai:execute)를 설정합니다.\n8종 task_type 중 하나를 선택합니다. sync=false는 접수 후 GET /api/v1/ai/jobs/{id}로 조회합니다.\n조회 ai:jobs:read · 취소 ai:cancel · 사용량 ai:usage는 별도 권한입니다.\n같은 ID·내용은 기존 조회. 실패/취소/타임아웃 후 자동 재실행 없음.\n결과는 호스트가 검증하며 사용자 검토 없이 UI 변경을 적용하지 않습니다.\nCredential ID·주소·키·자동 웹훅 없음. 실행 데이터 보존을 검토합니다.",
+        "height": 300,
+        "width": 680
+      }
+    }
+  ],
+  "connections": {
+    "수동 실행": {
+      "main": [
+        [
+          {
+            "node": "고정 요청 ID·작업 선택",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "고정 요청 ID·작업 선택": {
+      "main": [
+        [
+          {
+            "node": "플랫폼 AI 작업 접수",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "플랫폼 AI 작업 접수": {
+      "main": [
+        [
+          {
+            "node": "작업 결과·접수 상태 검증",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "pinData": {}
+}

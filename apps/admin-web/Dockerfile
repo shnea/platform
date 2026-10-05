@@ -11,6 +11,8 @@ COPY docs/integration/JOBS.md /workspace/docs/integration/JOBS.md
 COPY docs/integration/LOGS.md /workspace/docs/integration/LOGS.md
 COPY docs/integration/AI.md /workspace/docs/integration/AI.md
 COPY docs/integration/n8n-embeddings.sample.json /workspace/docs/integration/n8n-embeddings.sample.json
+COPY docs/integration/n8n-ai-jobs.sample.json /workspace/docs/integration/n8n-ai-jobs.sample.json
+COPY docs/integration/n8n-vector-indexing.sample.json /workspace/docs/integration/n8n-vector-indexing.sample.json
 COPY services/project-service/src/main/resources/openapi.json /workspace/services/project-service/src/main/resources/openapi.json
 COPY services/file-service/src/main/resources/openapi.json /workspace/services/file-service/src/main/resources/openapi.json
 COPY scripts/build-integration.mjs /workspace/scripts/build-integration.mjs

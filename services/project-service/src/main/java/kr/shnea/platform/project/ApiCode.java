@@ -31,6 +31,11 @@ enum ApiCode {
     DEV_ENVIRONMENT_REQUIRED(403, "개발 모드의 DEV 환경에서만 사용할 수 있습니다."),
     MOCK_USER_DISABLED(403, "테스트 계정의 로그인이 차단되어 있습니다."),
     RESOURCE_NOT_FOUND(404, "대상을 찾을 수 없습니다. 목록을 새로고침해 주세요."),
+    AI_JOB_NOT_FOUND(404, "이 환경에서 AI 작업을 찾을 수 없습니다."),
+    AI_REQUEST_CONFLICT(409, "같은 AI 요청 ID의 내용을 변경할 수 없습니다. 새 작업에는 새 요청 ID를 사용하세요."),
+    AI_REQUEST_UNCONFIRMED(409, "AI 요청의 접수 여부를 확인하지 못했습니다. 작업 목록과 요청 ID를 확인하세요. 자동 재실행하지 않습니다."),
+    AI_REQUEST_CAPACITY(409, "이 환경의 AI 요청 이력 한도에 도달했습니다. 운영자에게 문의해 주세요."),
+    AI_RESULT_EXPIRED(410, "AI 결과의 보관 기간이 지났습니다. 기존 결과를 다시 요청하지 마세요."),
     METHOD_NOT_ALLOWED(405, "지원하지 않는 요청 방식입니다."),
     NOT_ACCEPTABLE(406, "요청한 응답 형식을 제공할 수 없습니다."),
     RESOURCE_CONFLICT(409, "이미 있는 항목이거나 다른 데이터와 충돌합니다. 현재 상태를 확인해 주세요."),
@@ -67,6 +72,7 @@ enum ApiCode {
     final String detail;
     ApiCode(int status, String detail) { this.status = status; this.detail = detail; }
     Failure failure() { return new Failure(this); }
+    Failure beforeDispatch() { return new Failure(this, false); }
 
     static ApiCode forStatus(int status) {
         return switch (status) {
@@ -88,6 +94,8 @@ enum ApiCode {
 
     static final class Failure extends ResponseStatusException {
         final ApiCode code;
-        Failure(ApiCode code) { super(HttpStatus.valueOf(code.status), code.detail); this.code = code; }
+        final boolean dispatched;
+        Failure(ApiCode code) { this(code, true); }
+        Failure(ApiCode code, boolean dispatched) { super(HttpStatus.valueOf(code.status), code.detail); this.code = code; this.dispatched = dispatched; }
     }
 }

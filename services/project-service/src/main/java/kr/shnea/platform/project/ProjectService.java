@@ -139,7 +139,11 @@ class ProjectService {
             new Scope("logs:read","로그 조회","같은 환경의 진단 로그를 조회합니다."),
             new Scope("ai:read","AI 지원 기능 조회","AI 연결 기능과 아직 제공되지 않는 기능을 확인합니다."),
             new Scope("ai:route","AI 난이도 판단","뇌대리 Raya로 텍스트 요청의 모델 성능 등급을 판단합니다. 답변은 생성하지 않습니다."),
-            new Scope("ai:embed","공통 텍스트 임베딩","뇌대리 공통 API로 단일·배치 텍스트 벡터를 생성합니다. 서버에서만 사용하세요.")));
+            new Scope("ai:embed","공통 텍스트 임베딩","뇌대리 공통 API로 단일·배치 텍스트 벡터를 생성합니다. 서버에서만 사용하세요."),
+            new Scope("ai:execute","AI 작업 실행","8종 AI·RAG 작업을 동기 또는 비동기로 접수합니다."),
+            new Scope("ai:jobs:read","AI 작업 조회","이 환경의 AI 작업 상태·결과·목록을 조회합니다."),
+            new Scope("ai:cancel","AI 작업 취소 요청","이 환경의 AI 작업 취소를 요청합니다. 실행 종료 보장과 구분합니다."),
+            new Scope("ai:usage","AI 사용량 조회","이 환경의 뇌대리 보고 사용량을 조회합니다. 실제 측정 여부는 별도 확인합니다.")));
         if(mode.equals("dev") && env.kind().equals("DEV"))scopes.add(MOCK);
         if(project(env.projectId(),false).filesEnabled())scopes.addAll(List.of(FILE_READ,FILE_WRITE,FILE_DELETE,FILE_SHARE));
         return List.copyOf(scopes);

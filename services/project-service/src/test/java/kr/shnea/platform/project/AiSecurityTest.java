@@ -17,10 +17,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AiSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, AiController.class})
+    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, AiController.class, AiJobController.class})
     static class Config {
         @Bean ProjectService projects() { return mock(ProjectService.class); }
         @Bean AiGateway ai() { return mock(AiGateway.class); }
+        @Bean AiJobs jobs() { return mock(AiJobs.class); }
         @Bean JsonMapper json() { return new JsonMapper(); }
         @Bean JwtDecoder decoder() {
             return token -> Jwt.withTokenValue(token).header("alg", "RS256").subject("user")
@@ -32,17 +33,36 @@ class AiSecurityTest {
             context.setServletContext(new MockServletContext()); context.register(Config.class); context.refresh();
             var mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean(kr.shnea.platform.http.RequestTrace.class), context.getBean("springSecurityFilterChain", Filter.class)).build();
             var projects = context.getBean(ProjectService.class); var ai = context.getBean(AiGateway.class);
-            for (String scope : List.of("ai:read", "ai:route", "ai:embed")) {
+            for (String scope : List.of("ai:read", "ai:route", "ai:embed", "ai:execute", "ai:jobs:read", "ai:cancel", "ai:usage")) {
                 when(projects.context(null, scope)).thenThrow(ApiCode.INVALID_API_KEY.failure());
                 when(projects.context("old-key", scope)).thenThrow(ApiCode.INSUFFICIENT_SCOPE.failure());
+                when(projects.context("scoped-key", scope)).thenReturn(new ProjectService.Context(UUID.randomUUID(), UUID.randomUUID(), "DEV", "https://identity.example", List.of(scope)));
             }
-            for (String path : List.of("/api/v1/ai/raya/route", "/api/v1/ai/embeddings")) {
+            for (String path : List.of("/api/v1/ai/raya/route", "/api/v1/ai/embeddings", "/api/v1/ai/jobs")) {
                 mvc.perform(post(path).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
                 mvc.perform(post(path).header("Authorization", "Bearer admin").contentType("application/json").content("{}"))
                     .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_API_KEY"));
                 mvc.perform(post(path).header("X-Platform-Key", "old-key").contentType("application/json").content("{}"))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("INSUFFICIENT_SCOPE"));
             }
+            var jobs = context.getBean(AiJobs.class);
+            for (String path : List.of("/api/v1/ai/jobs", "/api/v1/ai/jobs/" + UUID.randomUUID(), "/api/v1/ai/usage")) {
+                mvc.perform(get(path)).andExpect(status().isUnauthorized());
+                mvc.perform(get(path).header("X-Platform-Key", "old-key")).andExpect(status().isForbidden());
+                mvc.perform(get(path).header("Authorization", "Bearer admin")).andExpect(status().isUnauthorized());
+            }
+            mvc.perform(post("/api/v1/ai/jobs/" + UUID.randomUUID() + "/cancel")).andExpect(status().isUnauthorized());
+            verifyNoInteractions(jobs);
+            mvc.perform(get("/api/v1/ai/jobs").header("X-Platform-Key", "scoped-key").param("project", "other"))
+                .andExpect(status().isUnprocessableEntity());
+            mvc.perform(get("/api/v1/ai/usage").header("X-Platform-Key", "scoped-key").param("environment", "other"))
+                .andExpect(status().isUnprocessableEntity());
+            verifyNoInteractions(jobs);
+            mvc.perform(get("/api/v1/ai/jobs").header("X-Platform-Key", "scoped-key")).andExpect(status().isOk());
+            verify(jobs).list(any(), isNull(), eq(50));
+            mvc.perform(post("/api/v1/ai/jobs").header("X-Platform-Key", "scoped-key").contentType("application/json").content("{}"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
+            verify(projects).context("scoped-key", "ai:execute");
             mvc.perform(get("/api/v1/ai/services")).andExpect(status().isUnauthorized());
             mvc.perform(get("/api/v1/admin/ai/services")).andExpect(status().isUnauthorized());
             mvc.perform(get("/api/v1/admin/ai/services").header("Authorization", "Bearer reader")).andExpect(status().isForbidden());

@@ -17,6 +17,9 @@ import tools.jackson.databind.json.JsonMapper;
 class AiGateway {
     static final String EMBEDDING_MODEL = "models/gemini-embedding-001";
     static final int ROUTE_LIMIT = 64 * 1024, EMBEDDING_LIMIT = 1024 * 1024;
+    static final int JOB_LIMIT = 2 * 1024 * 1024;
+    static final Set<String> TASKS = Set.of("blog.tags", "blog.summary", "portfolio.search", "ui.render",
+        "comment.generate", "document.analyze", "code.analyze", "chat.general");
     private final URI base;
     private final String key;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
@@ -49,11 +52,9 @@ class AiGateway {
             Map.of("id", "raya.route", "status", "implemented", "path", "/api/v1/ai/raya/route", "scope", "ai:route"),
             Map.of("id", "embeddings", "status", "implemented", "path", "/api/v1/ai/embeddings", "scope", "ai:embed",
                 "model", EMBEDDING_MODEL, "defaultDimensions", 768, "maxDimensions", 3072, "maxBatch", 100),
-            Map.of("id", "n8n.execute", "status", "awaiting_upstream_api", "taskTypes", List.of(
-                "blog.tags", "blog.summary", "portfolio.search", "ui.render", "comment.generate",
-                "document.analyze", "code.analyze", "chat.general")),
-            Map.of("id", "usage", "status", "awaiting_upstream_api"),
-            Map.of("id", "portfolio.index", "status", "workflow_example_only")));
+            Map.of("id", "n8n.execute", "status", "implemented", "path", "/api/v1/ai/jobs", "scope", "ai:execute", "taskTypes", TASKS.stream().sorted().toList()),
+            Map.of("id", "usage", "status", "implemented", "path", "/api/v1/ai/usage", "scope", "ai:usage", "measurement", "upstream_reported_unverified"),
+            Map.of("id", "vector.index", "status", "workflow_example_only")));
     }
 
     JsonNode parse(byte[] bytes, int limit) {
@@ -134,26 +135,34 @@ class AiGateway {
     }
 
     private JsonNode call(String path, JsonNode input, int limit) {
-        if (!configured()) throw ApiCode.AI_NOT_CONFIGURED.failure();
-        if (!slots.tryAcquire()) throw ApiCode.AI_BUSY.failure();
+        return exchange("POST", path, input, limit);
+    }
+
+    JsonNode exchange(String method, String path, JsonNode input, int limit) {
+        if (!configured()) throw ApiCode.AI_NOT_CONFIGURED.beforeDispatch();
+        if (!slots.tryAcquire()) throw ApiCode.AI_BUSY.beforeDispatch();
         CompletableFuture<HttpResponse<byte[]>> future = null;
         try {
             var request = HttpRequest.newBuilder(base.resolve(path)).timeout(Duration.ofSeconds(100))
                 .header("X-Noedaeri-API-Key", key).header("Content-Type", "application/json")
-                .header("Accept", "application/json").POST(HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(input))).build();
+                .header("Accept", "application/json").method(method, input == null ? HttpRequest.BodyPublishers.noBody()
+                    : HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(input))).build();
             future = http.sendAsync(request, info -> new LimitedBody(limit));
             var response = future.get(105, TimeUnit.SECONDS);
             int status = response.statusCode();
             if (status != 200) throw switch (status) {
                 case 400, 413, 422 -> ApiCode.AI_INVALID_REQUEST.failure();
                 case 401, 403 -> ApiCode.AI_UPSTREAM_AUTH_FAILED.failure();
+                case 404 -> ApiCode.AI_JOB_NOT_FOUND.failure();
+                case 409 -> ApiCode.AI_REQUEST_CONFLICT.failure();
+                case 410 -> ApiCode.AI_RESULT_EXPIRED.failure();
                 case 429 -> ApiCode.AI_BUSY.failure();
                 case 504 -> ApiCode.AI_TIMEOUT.failure();
                 default -> ApiCode.AI_UNAVAILABLE.failure();
             };
             if (!response.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT).startsWith("application/json")) invalidResponse();
             JsonNode value = json.readTree(response.body());
-            if (value == null || !value.isObject()) invalidResponse();
+            if (value == null || (!value.isObject() && !value.isArray())) invalidResponse();
             return value;
         } catch (ApiCode.Failure failure) { throw failure; }
         catch (InterruptedException error) { Thread.currentThread().interrupt(); throw ApiCode.AI_UNAVAILABLE.failure(); }
@@ -165,21 +174,21 @@ class AiGateway {
         finally { if (future != null && !future.isDone()) future.cancel(true); slots.release(); }
     }
 
-    private JsonNode select(JsonNode source, Set<String> names) {
+    JsonNode select(JsonNode source, Set<String> names) {
         var result = json.createObjectNode();
         for (String name : names) if (source.has(name)) result.set(name, source.get(name));
         return result;
     }
-    private static void fields(JsonNode value, Set<String> allowed) {
+    static void fields(JsonNode value, Set<String> allowed) {
         for (String name : value.propertyNames()) if (!allowed.contains(name)) throw ApiCode.AI_INVALID_REQUEST.failure();
     }
-    private static String text(JsonNode value, int max, boolean nonblank) {
+    static String text(JsonNode value, int max, boolean nonblank) {
         if (value == null || !value.isString()) throw ApiCode.AI_INVALID_REQUEST.failure();
         String text = value.asText();
         if (text.codePointCount(0, text.length()) > max || nonblank && text.isBlank()) throw ApiCode.AI_INVALID_REQUEST.failure();
         return text;
     }
-    private static boolean nonnegativeInteger(JsonNode value) { return value.isIntegralNumber() && value.canConvertToLong() && value.asLong() >= 0; }
+    static boolean nonnegativeInteger(JsonNode value) { return value.isIntegralNumber() && value.canConvertToLong() && value.asLong() >= 0; }
     private static void probability(JsonNode value) {
         if (!value.isNumber() || !Double.isFinite(value.asDouble()) || value.asDouble() < 0 || value.asDouble() > 1) invalidResponse();
     }

@@ -11,6 +11,10 @@
 !docs/integration/AUTH.md
 !docs/integration/JOBS.md
 !docs/integration/LOGS.md
+!docs/integration/AI.md
+!docs/integration/n8n-embeddings.sample.json
+!docs/integration/n8n-ai-jobs.sample.json
+!docs/integration/n8n-vector-indexing.sample.json
 !scripts/
 !scripts/build-integration.mjs
 !services/

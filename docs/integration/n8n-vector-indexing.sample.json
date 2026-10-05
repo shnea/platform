@@ -1,0 +1,348 @@
+{
+  "name": "플랫폼 v12 · 범용 네이티브 벡터 인덱싱 수동 예제",
+  "active": false,
+  "nodes": [
+    {
+      "id": "3bcb230c-3605-4e15-b2d3-3d9bc8697fa3",
+      "name": "수동 실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a910bf6c-9e1f-474f-8bf2-d88803456d55",
+      "name": "키의 프로젝트·환경 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.PLATFORM_URL.replace(/\\/$/, '') + '/api/v1/integration/context' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 100000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "id": "80a55fd0-8987-4a1c-90dc-e5ffa86cb4a5",
+      "name": "범위와 문서 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const scope = $input.first().json;\nconst uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;\nif (!uuid.test(scope.projectId) || !uuid.test(scope.environmentId)) throw new Error('키의 프로젝트·환경 정보를 확인하세요.');\nconst logical = 'document_sample';\nconst collection = `platform_${scope.projectId.replace(/-/g,'')}_${scope.environmentId.replace(/-/g,'')}_${logical}`;\nconst documents = [{title:'공통 인덱싱 검수', content:'서버 키의 프로젝트와 환경별로 문서를 격리합니다.'}];\nreturn documents.map(d => ({json:{collection,text:d.content,metadata:{title:d.title,project:scope.projectId,environment:scope.environmentId,collection,embedding_model:'models/gemini-embedding-001'}}}));"
+      }
+    },
+    {
+      "id": "35d1129e-3e11-41ec-8a97-791146ca854b",
+      "name": "Qdrant 컬렉션 차원 확인",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.QDRANT_URL.replace(/\\/$/, '') + '/collections/' + $json.collection }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 100000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      },
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "id": "465b3195-9c65-4ee9-a599-6c73789dd561",
+      "name": "컬렉션 검증·문서 복원",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const result = $input.first().json.result;\nconst vectors = result?.config?.params?.vectors;\n// Native Gemini node currently does not set outputDimensionality. Pre-create a new 3072/Cosine collection.\nif (vectors?.size !== 3072 || vectors?.distance !== 'Cosine') throw new Error('검색·인덱싱의 모델과 3072/Cosine 컬렉션을 맞추세요. 기존 벡터를 섞지 않습니다.');\nreturn $('범위와 문서 준비').all();"
+      }
+    },
+    {
+      "id": "9dba0663-61aa-4401-8e4e-3285387e95ee",
+      "name": "문서 한 건씩",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "d670c5f0-b880-4a8d-9b05-6ce608873b6e",
+      "name": "Qdrant 문서 저장",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        120
+      ],
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": "={{ $json.collection }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "33097843-87e1-4c80-b47d-59d94ac41570",
+      "name": "Gemini 임베딩",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1230,
+        360
+      ],
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      }
+    },
+    {
+      "id": "72082d7a-d196-46d8-b95e-e917d2b5da31",
+      "name": "문서 로더",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1450,
+        360
+      ],
+      "parameters": {
+        "dataType": "json",
+        "jsonData": "={{ $json.text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "project",
+                "value": "={{ $json.metadata.project }}"
+              },
+              {
+                "name": "environment",
+                "value": "={{ $json.metadata.environment }}"
+              },
+              {
+                "name": "collection",
+                "value": "={{ $json.collection }}"
+              },
+              {
+                "name": "title",
+                "value": "={{ $json.metadata.title }}"
+              },
+              {
+                "name": "embedding_model",
+                "value": "models/gemini-embedding-001"
+              }
+            ]
+          }
+        },
+        "jsonMode": "expressionData"
+      }
+    },
+    {
+      "id": "33baae94-6569-4d3e-8a8a-3682e6dee678",
+      "name": "문서 500자·중복 50자 분할",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1550,
+        540
+      ],
+      "parameters": {
+        "chunkSize": 500,
+        "chunkOverlap": 50
+      }
+    },
+    {
+      "id": "fd5a5a8c-bec0-49f0-9869-9f8e2afccfb3",
+      "name": "인덱싱 처리 완료",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        -160
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{status:'completed',emitted_chunk_count:$input.all().length,collection:$('범위와 문서 준비').first().json.collection}}];"
+      }
+    },
+    {
+      "id": "3421f338-ea02-4889-a13c-1e4547caf2ca",
+      "name": "사용법",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "content": "## 운영 데이터와 분리된 비활성 수동 예제\n프로젝트 서버 키(integration:read)·Header Auth X-Platform-Key 선택.\nQdrant 조회 Header Auth api-key 및 저장 qdrantApi, Gemini googlePalmApi는 운영자 Credentials만 선택.\n새 이름의 3072/Cosine 컬렉션을 준비하고 모델을 기록합니다. 예제는 컬렉션 생성/삭제·기존 벡터 전환을 하지 않습니다.\n현재 네이티브 Gemini 노드는 차원을 지정하지 않습니다. 검색도 같은 모델/실제 차원으로 맞추고, 공통 API 기본 768 벡터와 혼합하지 마세요.\n문서별 소유권은 호스트 서버가 검증. 대량 입력·변경 문서 중복/삭제 정책은 연결 전에 확정.\n실제 n8n import·벡터 차원·검색 대조 검수 후 사용합니다.",
+        "height": 320,
+        "width": 800
+      }
+    }
+  ],
+  "connections": {
+    "수동 실행": {
+      "main": [
+        [
+          {
+            "node": "키의 프로젝트·환경 조회",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "키의 프로젝트·환경 조회": {
+      "main": [
+        [
+          {
+            "node": "범위와 문서 준비",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "범위와 문서 준비": {
+      "main": [
+        [
+          {
+            "node": "Qdrant 컬렉션 차원 확인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant 컬렉션 차원 확인": {
+      "main": [
+        [
+          {
+            "node": "컬렉션 검증·문서 복원",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "컬렉션 검증·문서 복원": {
+      "main": [
+        [
+          {
+            "node": "문서 한 건씩",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "문서 한 건씩": {
+      "main": [
+        [
+          {
+            "node": "인덱싱 처리 완료",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Qdrant 문서 저장",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant 문서 저장": {
+      "main": [
+        [
+          {
+            "node": "문서 한 건씩",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 임베딩": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant 문서 저장",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "문서 로더": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant 문서 저장",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "문서 500자·중복 50자 분할": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "문서 로더",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "pinData": {}
+}

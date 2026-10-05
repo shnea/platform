@@ -6,6 +6,7 @@ from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -27,7 +28,8 @@ class Client:
 
     def call(self, path, body=None):
         data = None if body is None else json.dumps(body, ensure_ascii=False, allow_nan=False).encode('utf-8')
-        if data is not None and len(data) > (64 * 1024 if path.endswith('/route') else 1024 * 1024):
+        limit = 2 * 1024 * 1024 if path == '/api/v1/ai/jobs' else 64 * 1024 if path.endswith('/route') else 1024 * 1024
+        if data is not None and len(data) > limit:
             raise ValueError('AI 입력 본문 한도를 초과했습니다.')
         request = urllib.request.Request(self.base + path, data=data, method='GET' if body is None else 'POST',
             headers={'X-Platform-Key': self.key, 'Content-Type': 'application/json', 'Accept': 'application/json'})
@@ -53,6 +55,28 @@ class Client:
         return self.call('/api/v1/ai/raya/route', {'task_type': task_type, 'prompt': prompt,
             'instruction': instruction, 'has_images': has_images})
 
+    def submit(self, request):
+        # Persist request_id with the host operation. Never generate a new ID to retry uncertain execution.
+        return self.call('/api/v1/ai/jobs', request)
+
+    def jobs(self, status=None, limit=50):
+        query = {'limit': limit}
+        if status is not None:
+            query['status'] = status
+        return self.call('/api/v1/ai/jobs?' + urllib.parse.urlencode(query))
+
+    def job(self, job_id):
+        return self.call('/api/v1/ai/jobs/' + str(uuid.UUID(job_id)))
+
+    def cancel(self, job_id):
+        return self.call('/api/v1/ai/jobs/' + str(uuid.UUID(job_id)) + '/cancel', {})
+
+    def usage(self, task_type=None, limit=50):
+        query = {'limit': limit}
+        if task_type is not None:
+            query['task_type'] = task_type
+        return self.call('/api/v1/ai/usage?' + urllib.parse.urlencode(query))
+
 
 def read(path, limit):
     with Path(path).open('rb') as file:
@@ -74,6 +98,16 @@ def main():
     route.add_argument('--prompt', required=True, help='UTF-8 텍스트 파일')
     route.add_argument('--instruction', help='UTF-8 작업 지침 파일')
     route.add_argument('--has-images', action='store_true')
+    submit = commands.add_parser('submit')
+    submit.add_argument('--input', required=True, help='고정 request_id·task_type·prompt·input·sync를 포함한 JSON 파일')
+    listing = commands.add_parser('jobs')
+    listing.add_argument('--status', choices=['running', 'succeeded', 'failed', 'cancelled'])
+    listing.add_argument('--limit', type=int, default=50)
+    for name in ['job', 'cancel']:
+        commands.add_parser(name).add_argument('--id', required=True)
+    usage = commands.add_parser('usage')
+    usage.add_argument('--task-type')
+    usage.add_argument('--limit', type=int, default=50)
     args = parser.parse_args()
     try:
         client = Client()
@@ -84,9 +118,19 @@ def main():
             result = {name: response.get(name) for name in ('model', 'dimensions', 'usage')}
             result['count'] = len(response['data'])
             # Import Client.embeddings() in the host server to consume actual vectors.
-        else:
+        elif args.command == 'route':
             result = client.route(args.task_type, read(args.prompt, 64 * 1024),
                 read(args.instruction, 64 * 1024) if args.instruction else '', args.has_images)
+        elif args.command == 'submit':
+            result = client.submit(json.loads(read(args.input, 2 * 1024 * 1024)))
+        elif args.command == 'jobs':
+            result = client.jobs(args.status, args.limit)
+        elif args.command == 'job':
+            result = client.job(args.id)
+        elif args.command == 'cancel':
+            result = client.cancel(args.id)
+        else:
+            result = client.usage(args.task_type, args.limit)
         print(json.dumps(result, ensure_ascii=False))
     except (ValueError, OSError, RuntimeError):
         # Local parse/file errors can contain original text, paths or configuration.

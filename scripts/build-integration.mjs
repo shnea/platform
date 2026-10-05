@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const out=resolve(process.argv[2]??resolve(root,'output/integrations'));
 await mkdir(out,{recursive:true});
-for(const [source,name] of [['docs/SERVICE_INTEGRATION.md','SERVICE_INTEGRATION.md'],['docs/integration/AUTH.md','auth.md'],['docs/integration/JOBS.md','jobs.md'],['docs/integration/LOGS.md','logs.md'],['docs/integration/AI.md','ai.md'],['docs/integration/n8n-embeddings.sample.json','n8n-embeddings.sample.json'],['packages/editor/INTEGRATION.md','editor.md']]){
+for(const [source,name] of [['docs/SERVICE_INTEGRATION.md','SERVICE_INTEGRATION.md'],['docs/integration/AUTH.md','auth.md'],['docs/integration/JOBS.md','jobs.md'],['docs/integration/LOGS.md','logs.md'],['docs/integration/AI.md','ai.md'],['docs/integration/n8n-embeddings.sample.json','n8n-embeddings.sample.json'],['docs/integration/n8n-ai-jobs.sample.json','n8n-ai-jobs.sample.json'],['docs/integration/n8n-vector-indexing.sample.json','n8n-vector-indexing.sample.json'],['packages/editor/INTEGRATION.md','editor.md']]){
  await copyFile(resolve(root,source),resolve(out,name));
 }
 for(const service of ['project','file','jobs','logs','ai']){

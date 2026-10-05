@@ -1,30 +1,65 @@
 # 공통 AI·임베딩 연결 지침
 
-기준: 2026-10-05에 받은 뇌대리 연동 지침 v11(공통 임베딩 추가본). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
+기준: 2026-10-05에 받은 뇌대리 연동 지침 v12(AI 실행·상태·취소·usage·공통 RAG 추가본). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
 
 ## 로그인 없이 서버에서 연결
 
 플랫폼 로그인 기능을 사용하지 않거나 다른 OIDC로 로그인하는 프로젝트도 이용할 수 있다. 호스트 서버가 자신의 이용자 인증·인가·익명 이용 허용을 확인한 뒤 프로젝트·환경별 플랫폼 키로 호출한다. 플랫폼 Keycloak으로 이용자를 이전할 필요가 없다. 프로젝트 등록·환경 설정·키 발급에는 플랫폼 관리자 로그인이 필요하다.
 
-관리자 **프로젝트 → API 키**에서 필요한 `ai:read`·`ai:route`·`ai:embed`만 선택한다. 기존 키는 새 권한을 자동으로 받지 않으므로 필요한 권한의 새 키를 발급한다. 환경 READY·프로젝트 활성·키 만료/폐기를 매 호출 확인한다. 키는 브라우저·모바일 앱·URL·모델 입력에 넣지 않는다.
+관리자 **프로젝트 → API 키**에서 필요한 `ai:read`·`ai:route`·`ai:embed`·`ai:execute`·`ai:jobs:read`·`ai:cancel`·`ai:usage` 중 필요한 권한만 선택한다. 기존 키는 새 권한을 자동으로 받지 않으므로 필요한 권한의 새 키를 발급한다. 환경 READY·프로젝트 활성·키 만료/폐기를 매 호출 확인한다. 키는 브라우저·모바일 앱·URL·모델 입력에 넣지 않는다.
 
-호출은 **호스트 서버 → 플랫폼 → 뇌대리** 순서다. 향후 n8n 작업도 이 경로에서 뇌대리를 거쳐 실행한다. 뇌대리 키·n8n 관리/실행 키·공급자 키는 호스트에 배포하지 않는다.
+AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 실행한다. 임베딩·Raya 동기 호출도 플랫폼을 거쳐 뇌대리에 연결한다. 뇌대리 키·n8n 관리/실행 키·공급자 키는 호스트에 배포하지 않는다.
 
-## 현재 API와 미제공 기능
+## 현재 API와 권한
 
 | 플랫폼 경로 | 권한 | 동작 |
 | --- | --- | --- |
 | `GET /api/v1/ai/services` | `ai:read` | 지원 목록·설정 존재 여부·미제공 상태 |
 | `POST /api/v1/ai/raya/route` | `ai:route` | 동기 텍스트 난이도 판단, 답변 생성 없음 |
 | `POST /api/v1/ai/embeddings` | `ai:embed` | 동기 단일/배치 텍스트 벡터 생성 |
+| `POST /api/v1/ai/jobs` | `ai:execute` | 8종 AI·RAG 작업 동기/비동기 접수 |
+| `GET /api/v1/ai/jobs` | `ai:jobs:read` | 현재 환경의 최근 작업 목록·status/limit 필터 |
+| `GET /api/v1/ai/jobs/{id}` | `ai:jobs:read` | 현재 환경의 상태·결과 |
+| `POST /api/v1/ai/jobs/{id}/cancel` | `ai:cancel` | 소유 범위 확인 뒤 취소 요청 |
+| `GET /api/v1/ai/usage` | `ai:usage` | 현재 환경의 공급자·모델·작업별 집계/상세 |
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`의 `awaiting_upstream_api`는 뇌대리 외부 접수·실행·결과·사용량 API가 없다는 뜻이다. `portfolio.index`의 `workflow_example_only`는 수동/내부 워크플로 예제만 있다는 뜻이다. 임의 외부 실행 API나 자동 공개 인덱싱 웹훅을 만들지 않는다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝도 현재 제공하지 않는다. 지원 목록 조회 성공과 실제 AI 실행 성공을 구분한다.
+`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에 연결한다. `vector.index`의 `workflow_example_only`는 운영자용 공통 인덱싱 예제만 제공한다는 뜻이며 플랫폼 공개 인덱싱 API는 없다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
 
-n8n 자체의 [웹훅 실행 기능](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook)은 존재한다. 여기서 미제공은 **플랫폼 요청을 받아 뇌대리가 n8n 작업을 실행하고 결과·사용량을 돌려주는 연결 API**다. 공통 임베딩과 Raya API는 이미 제공되며 이 대기 상태와 별개다.
+## AI 작업 실행·상태·취소
 
-2026-10-05 사용자 확인: 뇌대리의 n8n 작업 실행 연결 API는 현재 개발 중이다. 완료 명세를 받으면 플랫폼의 프로젝트/환경/기능 권한 경계에 연결한다. 임의 작업 접수 경로를 추측하지 않는다.
+```json
+{
+  "request_id": "host-operation-20261005-001",
+  "task_type": "portfolio.search",
+  "prompt": "프로젝트의 기술 경험을 찾아 주세요.",
+  "input": {"collection": "portfolio"},
+  "sync": false
+}
+```
+
+request_id는 비민감 업무 식별자로 공백만이 아닌 1~128자이며 제어문자를 거부한다. 원문·개인정보·키를 식별자에 넣지 않는다. 8종 task_type만 실행하고 미등록 작업을 chat.general로 대체하지 않는다. prompt는 공백 제외 1~200000자, 전체 본문은 2MiB다. input 객체에 기존 messages·이미지 참조·thread/memory·hash·context/system 등 작업별 데이터를 유지한다. 뇌대리는 prompt/input을 보관하고 n8n에 전달하므로 인증키·토큰·불필요한 개인정보를 넣지 않는다. 신뢰된 지침은 호스트 서버가 관리하며 최종 결과·태그/요약/댓글/UI 계약도 호스트가 검증한다.
+
+project/environment는 **서버 키의 프로젝트 UUID·환경 UUID로 고정**한다. 생략을 권장하며 명시한 값은 키 범위와 같아야 한다. 목록/usage 쿼리에서 외부 project/environment 필터는 거부한다. 부가 input의 project/environment/owner_id/request_id/task_type/prompt/body/routing/provider_plan/cache 주장 필드도 거부한다. 서버가 확인한 모델 경로·소유권·cache hit를 요청자가 덮어쓰지 못하게 한다.
+
+sync 기본 true는 같은 응답에서 상태/결과를 받는다. sync=false는 비동기 running 접수 후 GET 상태로 확인한다. 상태는 running/succeeded/failed/cancelled이고 result의 작업별 계약은 그대로 전달한다. 상태 조회·목록·usage는 현재 환경만 반환한다. 다른 환경의 UUID 조회·취소는 404이며 공유 upstream 키가 다른 소유자를 관리할 수 있어도 플랫폼은 권한을 먼저 확인한다. 취소는 `cancellation_requested:true,execution_stopped:null`이다. 뇌대리 v12는 상태 변경을 접수하며 실행 중 n8n HTTP/모델 프로세스 종료를 보장하지 않는다. 실제 종료 확인 전 같은 작업을 새 ID로 재실행하지 않는다.
+
+호스트는 **새 업무 작업마다 하나의 request_id를 영속 보관**한다. 통신 재전송은 같은 ID·내용을 유지한다. 플랫폼은 환경별 ID·정규화 내용 SHA-256·원격 UUID·생성 시각만 저장하고 원문/벡터/결과는 저장하지 않는다. JSON 필드 순서와 sync 변경은 실행 내용 변경으로 보지 않는다. 같은 ID·다른 내용은 409 `AI_REQUEST_CONFLICT`, 같은 내용은 GET으로 기존 작업을 반환하며 reused=true다. 실패/취소 작업에도 실행 POST를 다시 보내지 않는다. 이는 뇌대리 v12의 실패 요청 재접수 시 재실행될 수 있는 동작을 제한한다. 서버 설정 없음·로컬 동시 한도 초과처럼 뇌대리에 전송하지 않았음이 확인된 거절만 원장 예약을 해제한다. request_id 중복 처리는 내용 캐시와 별개이며 공통 cache hit로 표시하지 않는다.
+
+POST 응답이 유실되면 현재 환경의 최근 100건 목록에서 request_id를 찾아 연결한다. 찾지 못하면 409 `AI_REQUEST_UNCONFIRMED`다. 새 ID로 무조건 다시 실행하지 말고 접수·실행 상태를 운영자가 확인한다. 목록은 limit 1~100(기본50), 페이지네이션이 없으므로 이 복구 범위를 넘는 오래된 불명확 접수는 수동 확인이 필요하다. 플랫폼 원장은 환경당 10000건을 상한으로 두며 초과는 `AI_REQUEST_CAPACITY`다. 원격 작업 이력이 남아 있는 동안 식별자를 무작정 삭제해 다시 실행 가능하게 만들지 않는다.
+
+결과 보관은 뇌대리 v12의 24시간 계약과 실제 expires_at을 따른다. 만료 시 플랫폼도 result=null·result_expired=true로 결과 노출/재사용을 막는다. 작업 이력·사용량과 플랫폼 식별 원장은 결과 만료와 구분한다. AI에는 파일 완료 웹훅/receipt가 없으며 비동기 상태는 요청한 작업 ID로 조회한다. 임의 완료 웹훅을 만들지 않는다.
+
+```sh
+python ai-client.py submit --input ./ai-job.json
+python ai-client.py job --id <응답-id>
+python ai-client.py jobs --status running --limit 50
+python ai-client.py cancel --id <응답-id>
+python ai-client.py usage --task-type portfolio.search --limit 50
+```
+
+[n8n AI 작업 호출 수동 예제](https://platform.shnea.kr/integrations/n8n-ai-jobs.sample.json)는 PLATFORM_URL과 Header Auth `X-Platform-Key`를 운영자가 선택한다. 실제 주소·키·Credential ID·자동 웹훅을 포함하지 않는다. 8종 중 하나와 고정 업무 request_id를 설정하며 기본 sync=true, 오류 시 중단·자동 재시도 없음이다. 내부 공급자 분기는 뇌대리의 [v12 라우팅 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_ai_routing_sample.json)를 참조하되 기존 운영 워크플로를 자동 교체하지 않는다.
 
 ## 공통 임베딩
 
@@ -76,7 +111,7 @@ n8n 내부 Raya는 `/api/ai/v1/raya/route`와 같은 실행 전용 키를 사용
 
 ## n8n AI 작업 전체 기준
 
-뇌대리의 [AI 분기 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_ai_routing_sample.json)는 수동 초안이며 외부 실행 API가 아니다. 원래 운영 워크플로를 자동 교체하지 않는다.
+뇌대리의 [AI 분기 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_ai_routing_sample.json)는 내부 수동/웹훅 워크플로 예제이며, 외부 앱은 이 JSON의 n8n 주소를 직접 호출하지 않고 플랫폼 AI 작업 API를 사용한다. 원래 운영 워크플로를 자동 교체하지 않는다.
 
 | 작업 | 유지할 입력·출력·처리 |
 | --- | --- |
@@ -97,28 +132,35 @@ n8n 내부 Raya는 `/api/ai/v1/raya/route`와 같은 실행 전용 키를 사용
 
 캐시는 인증·소유권 확인 뒤 Raya/모델보다 먼저 조회한다. 서비스·프로젝트/환경·소유권·작업 종류·입력·이미지 식별/버전·UI revision·지침 버전·모델 정책·thread/memory를 키에 포함하고 권한 변경·만료·문맥 변경을 무효화한다. 적중은 실제 모델 호출 없이 반환하며 hit와 공급자 사용량은 분리한다. 요청자의 hit를 신뢰하지 않는다. 기존 블로그 hash 캐시는 유지하되 공통 저장소·TTL·용량·무효화 미연결은 `cache.status:not_connected,hit:null`로 유지한다.
 
-## 포트폴리오 RAG·인덱싱
+## 전 서비스 공통 RAG·인덱싱
 
-검색 질의를 같은 공통 API로 임베딩한 뒤 Qdrant `portfolio`(코사인)에서 **프로젝트·환경·소유권 필터**로 문맥을 검색한다. retrieved_context와 instruction을 합성해 Raya에 필요한 텍스트를 보내고 모델에는 전체 문맥을 전달한다. 검색 데이터의 지시문을 신뢰된 시스템 지침으로 실행하지 않는다.
+portfolio.search·document.analyze 등을 단일 공통 검색 노드로 연결한다. 질의 → Gemini 임베딩 → 동적 Qdrant 코사인 검색 → 작업별 retrieved_context/instruction 합성 → Raya → LangChain 모델 순서다. 논리 collection을 생략하면 task_type의 앞부분(portfolio/document/blog/code 등)을 사용한다. 플랫폼은 `[a-z][a-z0-9_-]{0,63}`의 논리 이름만 받으며 물리 이름은 `platform_<프로젝트UUID의하이픈제거>_<환경UUID의하이픈제거>_<논리이름>`이다. 다른 프로젝트·환경과 같은 논리 이름을 써도 컬렉션을 공유하지 않는다. 한 프로젝트 안의 최종 이용자별 소유권은 호스트가 검증하며 개별 이용자 비공개 자료를 공유 컬렉션에 무작정 넣지 않는다.
 
-[기존 인덱싱 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_portfolio_indexing_sample.json)의 수동/내부 웹훅 → 프로필·프로젝트·경력·기술 문서 → RecursiveCharacterTextSplitter 500자/50자 중복 → 임베딩 → Qdrant 저장 → 결과 반환 흐름을 유지하되, 새 공통 API를 쓸 때 검색도 같은 모델·차원으로 전환한다. 원본의 소유권은 호스트가 확인하며 임의 컬렉션명·다른 환경·사용자 ID로 권한을 우회할 수 없게 한다. 공개 인덱싱 웹훅과 기존 컬렉션 자동 덮어쓰기는 허용하지 않는다.
+검색 문맥의 지시문은 참고 데이터이며 신뢰된 시스템 지침으로 실행하지 않는다. 검색 근거가 없으면 추측하지 않는다. 검색/인덱싱은 같은 모델·실제 차원·전처리로 맞춘다. 모델이 같아도 공통 API 기본 768과 n8n 네이티브의 기본 출력 차원을 동일하다고 가정하지 않는다. 확인한 [n8n 공식 Gemini 구현](https://github.com/n8n-io/n8n/blob/master/packages/%40n8n/nodes-langchain/nodes/embeddings/EmbeddingsGoogleGemini/EmbeddingsGoogleGemini.node.ts)은 outputDimensionality를 전달하지 않는다. 네이티브 경로는 `gemini-embedding-001`의 3072차원 출력과 검색을 맞추며 설치 버전/실제 벡터를 검수한다. 768을 쓰려면 검색과 인덱싱 모두 차원을 지정할 수 있는 공통 API 연결을 사용한다.
 
-지침에 이전 `text-embedding-004` 네이티브 노드 설명이 남아 있다. 새 API가 기존 노드와 동일 모델이라고 가정하지 않는다. 공통 API는 입력별 벡터를 반환하므로 호환되는 HTTP/벡터 저장 연결을 구현하거나 같은 모델·차원으로 설정한 검증된 n8n 노드를 사용한다. 이번 공통 API 예제에는 Qdrant 접속·운영 인덱싱을 연결하지 않는다.
+[뇌대리 범용 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_vector_indexing_sample.json)는 문서 → RecursiveCharacterTextSplitter 500자/50자 중복 → `googlePalmApi` Gemini → `qdrantApi` Qdrant insert 흐름이다. [플랫폼 범위 적용 수동 예제](https://platform.shnea.kr/integrations/n8n-vector-indexing.sample.json)는 integration:read 키의 context로 물리 컬렉션을 생성하고 새 3072/Cosine 컬렉션을 읽어 확인한 뒤 네이티브 노드에 연결한다. 문서를 한 건씩 처리해 [sub-node 표현식의 첫 항목 참조](https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.documentdefaultdataloader)로 문서가 중복되는 것을 막는다. 모든 Credentials는 운영자가 선택하며 JSON에는 Credential ID·키·주소·공개 웹훅이 없다.
+
+플랫폼 예제는 컬렉션을 생성/삭제하거나 기존 인덱스를 덮어쓰지 않는다. 호스트가 문서 소유권을 확인한 뒤 새 컬렉션을 준비하고 모델·차원·전처리 기록과 조회 대조 검수를 수행한다. 변경/삭제 문서의 안정된 ID·중복·보존 정책과 대량 입력 분할은 운영 연결 전에 확정한다. 네이티브 insert 예제를 멱등 업서트·자동 정리 완료로 표시하지 않는다. 기존 text-embedding-004 컬렉션은 새 모델과 혼합하지 않고 검수 후 전환한다. 실제 n8n import/검색/인덱싱은 해당 운영 환경에서 별도로 검증한다.
 
 ## usage·보존·실패
 
-사용량 저장/조회는 뇌대리, 실제 모델 호출 보고는 n8n 책임이다. 현재 수신·조회 API는 없다. 기존 앱 수집 콜백을 먼저 끊거나 이름만 바꾸어 전환하지 않는다. API·인증·조회 범위·보존/한도/실패 보고 정책을 확정하고 이전 집계와 대조한 뒤 전환한다.
+사용량 저장/조회는 뇌대리, 실제 모델 호출 보고는 n8n 책임이다. 플랫폼은 GET /api/v1/ai/usage로 키의 현재 프로젝트/환경·task_type·limit(1~200·기본50)를 고정해 summary/records를 조회한다. 내부 보고 `/internal/ai/usage`는 워커/실행 키용이며 외부 호스트나 플랫폼 공개 API에 노출하지 않는다. 기존 앱 수집 콜백은 실제 집계 대조 검수 뒤 전환한다.
+
+summary에는 provider/model/task_type별 call_count·total_prompt_tokens·total_completion_tokens·total_tokens, records에는 요청·작업 식별자와 보고 토큰/시간을 제공한다. 뇌대리 v12 중복 키는 (project,environment,request_id,provider,model)이며 같은 보고를 1회 반영한다. 같은 요청에서 같은 provider/model을 여러 번 실제 호출했을 때 각각 식별하는 계약은 아직 없다. 공개 n8n 예제의 결과 정리에는 글자 수/4 기반 토큰 추정과 추천 등급 기반 provider/model 매핑이 남아 있으므로 실제 사용량이라고 단정하지 않는다. 플랫폼은 값의 범위와 소유권을 검증해 `measurement:upstream_reported_unverified`를 명시한다. 실제 공급자 usage·최종 모델·Agent 각 호출과 대조하기 전 비용·무료 잔여 한도·완전한 실측으로 표시하지 않는다.
 
 인증된 서비스·소유권의 request_id/task_type에 공급자 호출 ID 또는 실행·노드·차수·항목 식별자를 연결한다. 동일 보고 재전송은 1회만 반영하고 새 실제 호출은 별도 사용량이다. 추천/최종 등급·대체 사유·실제 provider/응답 model·재시도·실패 전 발생한 호출·시간을 구분한다. 모델 미확인은 미확인, 실제 입력/출력/총 토큰만 집계한다. 추정치를 실제 사용량에 더하지 않는다. Agent의 여러 호출도 각각 기록한다.
 
 관리자는 전체, 연결 서비스는 플랫폼을 통해 자기 요청만 조회한다. 원문·지침·응답 전문·인증 토큰·임의 콜백 URL을 usage에 저장하지 않는다. Raya CPU 추론/입력 토큰은 운영 지표이며 공급자 토큰/비용에 합산하지 않는다. 무료 모델도 기록하되 비용·잔여 무료 한도를 토큰 수만으로 단정하지 않는다. 수집 실패와 AI 실패는 구분하고 보고 재시도로 모델을 재호출하지 않는다. 학습 원문·결과 검토·접근·보존·내보내기·파인튜닝은 별도 미구현이다.
 
-플랫폼 동기 API는 연결 5초·요청 100초·전체 대기 105초, 인스턴스당 동시 2개다. 원격 응답은 Raya 64KiB·임베딩 16MiB 상한이며 HTTPS/TLS 검증과 리다이렉트 금지를 적용한다. 작업 큐·웹훅·파일 receipt는 사용하지 않는다. 자동 재시도·등급/모델 대체를 하지 않는다.
+플랫폼 동기 API는 연결 5초·요청 100초·전체 대기 105초, 인스턴스당 동시 2개다. 원격 응답은 Raya 64KiB·임베딩 16MiB 상한이며 HTTPS/TLS 검증과 리다이렉트 금지를 적용한다. 파일 작업 큐·웹훅·receipt는 사용하지 않는다. AI 비동기 실행과 24시간 결과는 뇌대리가 관리한다. AI 단건 응답 2MiB·목록 16MiB·usage 1MiB를 제한한다. 자동 재시도·등급/모델 대체를 하지 않는다.
 
 | HTTP / code | 처리 |
 | --- | --- |
 | 401 `INVALID_API_KEY` | 환경/프로젝트·키 만료/폐기 확인 |
 | 403 `INSUFFICIENT_SCOPE` | 해당 AI 권한의 새 키 발급 |
+| 404 `AI_JOB_NOT_FOUND` | 다른 환경 또는 없는 작업. ID를 추측해 재호출하지 않음 |
+| 409 `AI_REQUEST_CONFLICT` / `AI_REQUEST_UNCONFIRMED` / `AI_REQUEST_CAPACITY` | ID·내용·접수 여부·이력 한도를 확인하고 자동 재실행하지 않음 |
+| 410 `AI_RESULT_EXPIRED` | 결과 보관 만료. 새 요청은 별도 검토 |
 | 413 `PAYLOAD_TOO_LARGE` | 본문을 축소 |
 | 422 `AI_INVALID_REQUEST` | 필드·텍스트·등록 모델·차원·배치 또는 공급자 입력 제한 확인 |
 | 429 `AI_BUSY` | 동시 실행/공급자 한도 확인 후 제한적으로 새 요청 판단. 토큰 전체 소진과 구분 |

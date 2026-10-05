@@ -29,7 +29,7 @@ class AiController {
         projects.context(key, "ai:embed");
         return reply(ai.embeddings(read(request, AiGateway.EMBEDDING_LIMIT)));
     }
-    private static byte[] read(HttpServletRequest request, int limit) throws IOException {
+    static byte[] read(HttpServletRequest request, int limit) throws IOException {
         if (request.getContentLengthLong() > limit) throw ApiCode.PAYLOAD_TOO_LARGE.failure();
         byte[] body = request.getInputStream().readNBytes(limit + 1);
         if (body.length > limit) throw ApiCode.PAYLOAD_TOO_LARGE.failure();

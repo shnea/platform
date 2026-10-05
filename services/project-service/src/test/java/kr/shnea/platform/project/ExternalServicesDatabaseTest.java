@@ -46,7 +46,7 @@ class ExternalServicesDatabaseTest {
     db.update("UPDATE environments SET kind=? WHERE id=?",mode.equals("dev")?"DEV":"PROD",env);
     var service=new ProjectService(db,new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())),mock(IdentityClient.class),mode);
     var scopes=service.credentialScopes(env).stream().map(ProjectService.Scope::code).toList();
-    assertThat(scopes).hasSize(mode.equals("dev")?14:13);
+    assertThat(scopes).hasSize(mode.equals("dev")?18:17);
     assertThat(validator.validate(new ProjectController.NewCredential(null,scopes))).isEmpty();
     var key=service.issueCredential(env,null,scopes,"test");
     assertThat(key.scopes()).containsExactlyElementsOf(scopes);
@@ -61,7 +61,7 @@ class ExternalServicesDatabaseTest {
  }
  @Test void scopedKeysNeverGainNewPermissionsAndRevocationBlocksAccess() {
   var old=projects.issueCredential(env,null,null,"test");fails(()->projects.context(old.apiKey(),"jobs:write"),ApiCode.INSUFFICIENT_SCOPE);
-  for(String scope:List.of("jobs:read","jobs:write","jobs:work","logs:read","logs:write","ai:read","ai:route","ai:embed")) {
+  for(String scope:List.of("jobs:read","jobs:write","jobs:work","logs:read","logs:write","ai:read","ai:route","ai:embed","ai:execute","ai:jobs:read","ai:cancel","ai:usage")) {
    fails(()->projects.context(old.apiKey(),scope),ApiCode.INSUFFICIENT_SCOPE);
    var key=projects.issueCredential(env,null,List.of(scope),"test");assertThat(projects.context(key.apiKey(),scope).environmentId()).isEqualTo(env);
    String wrong=scope.equals("logs:read")?"logs:write":"logs:read";fails(()->projects.context(key.apiKey(),wrong),ApiCode.INSUFFICIENT_SCOPE);

@@ -3071,7 +3071,7 @@
       "get": {
         "operationId": "get_api_v1_ai_services",
         "summary": "AI 지원 기능 조회",
-        "description": "로그인 없이 서버 키로 호출. n8n 실행·usage·인덱싱의 미제공 상태를 구분한다.",
+        "description": "임베딩·Raya·8종 실행/조회/취소·usage 연결과 수동 인덱싱 예제를 구분. 설정 있음은 실제 n8n·공급자·사용량 검수 성공과 다름.",
         "responses": {
           "200": {
             "description": "성공 · Cache-Control: no-store",
@@ -3250,6 +3250,409 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/ai/jobs": {
+      "post": {
+        "operationId": "post_api_v1_ai_jobs",
+        "summary": "8종 AI·공통 RAG 작업 접수",
+        "description": "본문 2MiB. request_id 최대128자·prompt 200000자. 키의 프로젝트/환경 고정. 같은 ID·다른 내용은409; 같은 내용은 기존 상태 조회. 실패·취소·불명확 접수를 자동 재실행하지 않음. sync=false는running 접수 후 조회. 원문/결과는 뇌대리 보관; 플랫폼은 해시·식별자만 보관(환경당10000건).",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:execute"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiJobInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_api_v1_ai_jobs",
+        "summary": "현재 환경의 AI 작업 목록",
+        "description": "project/environment 외부 필터 금지. 키의 현재 환경만 조회. 최근100건까지·페이지네이션 없음.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJobList"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "running",
+                "succeeded",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/jobs/{id}": {
+      "get": {
+        "operationId": "get_api_v1_ai_jobs_id",
+        "summary": "현재 환경의 AI 작업 상태·결과",
+        "description": "다른 환경은404. expires_at이 지나면result=null·result_expired=true로 결과 재사용을 막으며 이력은 유지.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/jobs/{id}/cancel": {
+      "post": {
+        "operationId": "post_api_v1_ai_jobs_id_cancel",
+        "summary": "현재 환경의 AI 작업 취소 요청",
+        "description": "소유 범위 조회 후 취소. 실행 프로세스 종료 보장이 없으며 이후 실제 상태를 확인. 모델을 다시 호출하지 않음.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:cancel"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJobCancellation"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/usage": {
+      "get": {
+        "operationId": "get_api_v1_ai_usage",
+        "summary": "현재 환경의 AI 사용량 집계·기록",
+        "description": "공급자/모델/작업별 집계와 최근 상세 기록. 플랫폼이 scope 고정. upstream_reported_unverified: 실제 토큰·최종 공급자 검수 전. 원격 보고값을 비용·가용 한도로 단정하지 않음.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:usage"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "blog.tags",
+                "blog.summary",
+                "portfolio.search",
+                "ui.render",
+                "comment.generate",
+                "document.analyze",
+                "code.analyze",
+                "chat.general"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ]
       }
     }
   },
@@ -3604,12 +4007,16 @@
                     "logs:write",
                     "ai:read",
                     "ai:route",
-                    "ai:embed"
+                    "ai:embed",
+                    "ai:execute",
+                    "ai:jobs:read",
+                    "ai:cancel",
+                    "ai:usage"
                   ]
                 },
                 "uniqueItems": true,
                 "minItems": 1,
-                "maxItems": 14
+                "maxItems": 18
               },
               {
                 "type": "null"
@@ -3659,12 +4066,16 @@
                 "logs:write",
                 "ai:read",
                 "ai:route",
-                "ai:embed"
+                "ai:embed",
+                "ai:execute",
+                "ai:jobs:read",
+                "ai:cancel",
+                "ai:usage"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 14
+            "maxItems": 18
           }
         },
         "required": [
@@ -3725,12 +4136,16 @@
                 "logs:write",
                 "ai:read",
                 "ai:route",
-                "ai:embed"
+                "ai:embed",
+                "ai:execute",
+                "ai:jobs:read",
+                "ai:cancel",
+                "ai:usage"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 14
+            "maxItems": 18
           }
         },
         "required": [
@@ -3760,7 +4175,11 @@
               "logs:write",
               "ai:read",
               "ai:route",
-              "ai:embed"
+              "ai:embed",
+              "ai:execute",
+              "ai:jobs:read",
+              "ai:cancel",
+              "ai:usage"
             ]
           },
           "label": {
@@ -3816,12 +4235,16 @@
                 "logs:write",
                 "ai:read",
                 "ai:route",
-                "ai:embed"
+                "ai:embed",
+                "ai:execute",
+                "ai:jobs:read",
+                "ai:cancel",
+                "ai:usage"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 14
+            "maxItems": 18
           }
         },
         "required": [
@@ -6189,6 +6612,372 @@
         "required": [
           "configured",
           "features"
+        ]
+      },
+      "AiJobInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "blog.tags",
+              "blog.summary",
+              "portfolio.search",
+              "ui.render",
+              "comment.generate",
+              "document.analyze",
+              "code.analyze",
+              "chat.general"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200000
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "기존 messages·thread·hash·지침 등 유지. collection은 논리 이름이며 플랫폼이 프로젝트/환경별 물리 이름을 생성. 소유권·라우팅·cache 주장 필드 금지."
+          },
+          "sync": {
+            "type": "boolean",
+            "default": true
+          },
+          "project": {
+            "type": "string",
+            "format": "uuid",
+            "description": "생략 권장. 키의 프로젝트 UUID와 일치해야 함"
+          },
+          "environment": {
+            "type": "string",
+            "format": "uuid",
+            "description": "생략 권장. 키의 환경 UUID와 일치해야 함"
+          }
+        },
+        "required": [
+          "request_id",
+          "task_type",
+          "prompt"
+        ]
+      },
+      "AiJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "blog.tags",
+              "blog.summary",
+              "portfolio.search",
+              "ui.render",
+              "comment.generate",
+              "document.analyze",
+              "code.analyze",
+              "chat.general"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "result": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true,
+            "description": "작업별 기존 계약 유지. 호스트가 결과 구조를 검증하고 HTML은 실행 전에 검토"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reused": {
+            "type": "boolean"
+          },
+          "result_expired": {
+            "type": "boolean"
+          },
+          "usage_measurement": {
+            "type": "string",
+            "enum": [
+              "upstream_reported_unverified"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "project",
+          "environment",
+          "request_id",
+          "task_type",
+          "status",
+          "result",
+          "error_code",
+          "error_message",
+          "created_at",
+          "result_expired",
+          "usage_measurement"
+        ]
+      },
+      "AiJobList": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "$ref": "#/components/schemas/AiJob"
+        }
+      },
+      "AiJobCancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cancellation_requested": {
+            "type": "boolean"
+          },
+          "execution_stopped": {
+            "type": "null",
+            "description": "상태 변경 접수이며 실행 프로세스 종료를 보장하지 않음"
+          }
+        },
+        "required": [
+          "id",
+          "cancellation_requested",
+          "execution_stopped"
+        ]
+      },
+      "AiUsageSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "blog.tags",
+              "blog.summary",
+              "portfolio.search",
+              "ui.render",
+              "comment.generate",
+              "document.analyze",
+              "code.analyze",
+              "chat.general"
+            ]
+          },
+          "call_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_prompt_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_completion_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_tokens": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "task_type",
+          "call_count",
+          "total_prompt_tokens",
+          "total_completion_tokens",
+          "total_tokens"
+        ]
+      },
+      "AiUsageRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "blog.tags",
+              "blog.summary",
+              "portfolio.search",
+              "ui.render",
+              "comment.generate",
+              "document.analyze",
+              "code.analyze",
+              "chat.general"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "project": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "model_tier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "project",
+          "environment",
+          "request_id",
+          "task_type",
+          "provider",
+          "model",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "created_at"
+        ]
+      },
+      "AiUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "summary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiUsageSummary"
+            }
+          },
+          "records": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/AiUsageRecord"
+            }
+          },
+          "measurement": {
+            "type": "string",
+            "enum": [
+              "upstream_reported_unverified"
+            ],
+            "description": "공급자 실제 usage 대조 전. 토큰 추정·비용·잔여 한도로 단정하지 않음"
+          }
+        },
+        "required": [
+          "summary",
+          "records",
+          "measurement"
         ]
       }
     },
