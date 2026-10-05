@@ -39,8 +39,187 @@ class FilesDatabaseTest {
     }
     @AfterEach void cleanup() { if (admin != null) admin.execute("DROP SCHEMA " + schema + " CASCADE"); }
     RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
-    FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000);}
-    FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos());}
+    FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000,new MediaBackend("local"));}
+    FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos(),new MediaBackend("local"));}
+    class RemoteMediaFixture implements AutoCloseable {
+        final UUID id,remote=UUID.randomUUID(),event=UUID.randomUUID();
+        UUID request;
+        final boolean video;
+        boolean uploaded,succeeded,loseUploadResponse;
+        int creates,uploads,receipts,cancels;
+        final com.sun.net.httpserver.HttpServer server;
+        final NoedaeriClient client;final NoedaeriMedia media;
+        final tools.jackson.databind.json.JsonMapper json=new tools.jackson.databind.json.JsonMapper();
+        final Map<String,byte[]> artifacts=new LinkedHashMap<>();
+        RemoteMediaFixture(boolean video) throws Exception {
+            this.video=video;id=videoFile();db.update("UPDATE files SET original_name=? WHERE id=?",video?"video.mp4":"photo.png",id);
+            artifacts.put("thumbnail.jpg",new byte[]{(byte)0xff,(byte)0xd8,(byte)0xff,0});
+            if(video) {
+                artifacts.put("master.m3u8","#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1200000\n480p.m3u8\n".getBytes());
+                artifacts.put("480p.m3u8","#EXTM3U\n#EXTINF:6,\n480p-00000.ts\n#EXT-X-ENDLIST\n".getBytes());
+                artifacts.put("480p-00000.ts","segment".getBytes());
+            }else artifacts.put("preview.webp","RIFF0000WEBP".getBytes());
+            server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+            server.createContext("/api/v1/jobs",exchange->{
+                try {
+                    assertThat(exchange.getRequestHeaders().getFirst("X-Noedaeri-API-Key")).isEqualTo("test-request-key");
+                    String path=exchange.getRequestURI().getPath();byte[] response;int status=200;
+                    if(path.equals("/api/v1/jobs")) {
+                        var body=json.readTree(exchange.getRequestBody().readAllBytes());request=UUID.fromString(body.path("idempotency_key").asString());creates++;
+                        assertThat(body.path("kind").asString()).isEqualTo(video?"video.package":"image.package");
+                        assertThat(body.path("input").path("type").asString()).isEqualTo("upload");
+                        if(!video)assertThat(body.path("input").path("extension").asString()).isEqualTo("png");
+                        response=json.writeValueAsBytes(status());
+                    }else if(path.endsWith("/input")) {
+                        assertThat(exchange.getRequestBody().readAllBytes()).isEqualTo(bytes);uploads++;uploaded=true;
+                        status=loseUploadResponse?503:200;response="{}".getBytes();
+                    }else if(path.endsWith("/receipt")) {
+                        assertThat(db.queryForObject("SELECT state FROM file_media_jobs WHERE request_id=?",String.class,request)).isEqualTo("IMPORTED");
+                        assertThat(Files.readAllBytes(store.thumbnail(id))).isEqualTo(artifacts.get("thumbnail.jpg"));
+                        receipts++;response="{\"accepted\":true,\"cleanup\":\"scheduled\"}".getBytes();
+                    }else if(path.endsWith("/cancel")){cancels++;response="{}".getBytes();}
+                    else if(path.contains("/files/"))response=artifacts.get(path.substring(path.lastIndexOf('/')+1));
+                    else response=json.writeValueAsBytes(status());
+                    exchange.sendResponseHeaders(status,response.length);exchange.getResponseBody().write(response);
+                }finally{exchange.close();}
+            });server.start();
+            client=new NoedaeriClient(java.net.URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"test-request-key","shared-test-secret",536870912);
+            media=new NoedaeriMedia(db,tx,store,service,videos(),org.mockito.Mockito.mock(FileAccess.class),client,new MediaBackend("noedaeri"));
+        }
+        Map<String,Object> result() {
+            if(video) {
+                var sizes=new LinkedHashMap<String,Long>();artifacts.forEach((name,body)->sizes.put(name,(long)body.length));
+                return Map.of("type","video_package","master","master.m3u8","thumbnail","thumbnail.jpg","duration_seconds",12,
+                    "variants",List.of(Map.of("label","480p","width",852,"height",480,"bandwidth",1200000,"playlist","480p.m3u8")),
+                    "files",new ArrayList<>(artifacts.keySet()),"file_sizes",sizes);
+            }
+            return Map.of("type","image_package","source",Map.of("media_type","image/png","width",100,"height",100),
+                "thumbnail",Map.of("name","thumbnail.jpg","width",100,"height",100,"media_type","image/jpeg","bytes",artifacts.get("thumbnail.jpg").length),
+                "preview",Map.of("name","preview.webp","width",100,"height",100,"media_type","image/webp","bytes",artifacts.get("preview.webp").length),"files",new ArrayList<>(artifacts.keySet()));
+        }
+        Map<String,Object> status(){return Map.of("id",remote.toString(),"kind",video?"video.package":"image.package","idempotency_key",request.toString(),
+            "status",succeeded?"succeeded":uploaded?"queued":"uploading","terminal_event_id",event.toString(),"expires_at",java.time.Instant.now().plusSeconds(3600).toString(),"result",result());}
+        NoedaeriMedia.Job job() {
+            return db.queryForObject("SELECT * FROM file_media_jobs WHERE file_id=?",(r,n)->new NoedaeriMedia.Job(r.getObject("request_id",UUID.class),id,r.getString("kind"),
+                r.getObject("generation",UUID.class),r.getObject("job_id",UUID.class),r.getString("state"),r.getObject("event_id",UUID.class),r.getInt("attempts")),id);
+        }
+        byte[] eventBody() {return json.writeValueAsBytes(Map.of("version",1,"event_id",event.toString(),"job_id",remote.toString(),"idempotency_key",request.toString(),
+            "type","job.succeeded","job",Map.of("kind",video?"video.package":"image.package","status","succeeded","result",result())));}
+        String signature(byte[] body,String timestamp) throws Exception {
+            var mac=javax.crypto.Mac.getInstance("HmacSHA256");mac.init(new javax.crypto.spec.SecretKeySpec(client.webhookSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8),"HmacSHA256"));
+            mac.update((timestamp+".").getBytes(java.nio.charset.StandardCharsets.US_ASCII));return "sha256="+HexFormat.of().formatHex(mac.doFinal(body));
+        }
+        void due(){db.update("UPDATE file_media_jobs SET next_check_at=now() WHERE file_id=?",id);}
+        @Override public void close(){server.stop(0);}
+    }
+    @Test void remoteImageWebhookIsDurableDeduplicatedAndReceiptFollowsStorage() throws Exception {
+        try(var fixture=new RemoteMediaFixture(false)) {
+            fixture.media.work();assertThat(fixture.uploads).isEqualTo(1);assertThat(fixture.job().state()).isEqualTo("ACTIVE");
+            fixture.succeeded=true;
+            var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(new NoedaeriWebhook(db,tx,fixture.client)).setControllerAdvice(new FileErrors()).build();
+            byte[] body=fixture.eventBody();String timestamp=Long.toString(java.time.Instant.now().getEpochSecond()),signature=fixture.signature(body,timestamp);
+            for(String endpoint:List.of("/api/webhooks/noedaeri","/api/v1/files/integrations/noedaeri/events"))mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(endpoint)
+                .contentType("application/json").content(body).header("X-Noedaeri-Event-ID",fixture.event.toString()).header("X-Noedaeri-Timestamp",timestamp).header("X-Noedaeri-Signature",signature))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+            assertThat(db.queryForObject("SELECT count(*) FROM file_media_inbox",Integer.class)).isEqualTo(1);
+            byte[] malformed=new String(body,java.nio.charset.StandardCharsets.UTF_8).replace(fixture.event.toString(),"bad-event").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/webhooks/noedaeri")
+                .contentType("application/json").content(malformed).header("X-Noedaeri-Event-ID","bad-event").header("X-Noedaeri-Timestamp",timestamp).header("X-Noedaeri-Signature",fixture.signature(malformed,timestamp)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest());
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/webhooks/noedaeri")
+                .contentType("application/json").content(malformed).header("X-Noedaeri-Event-ID","bad-event").header("X-Noedaeri-Timestamp",timestamp).header("X-Noedaeri-Signature",signature))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+            assertThat(fixture.receipts).isZero();fixture.media.work();assertThat(fixture.job().state()).isEqualTo("IMPORTED");
+            assertThat(fixture.receipts).isZero();assertThat(views().view(fixture.id).kind()).isEqualTo("IMAGE");
+            assertThat(Files.readAllBytes(store.preview(fixture.id))).isEqualTo(fixture.artifacts.get("preview.webp"));
+            assertThat(Files.readAllBytes(store.path(fixture.id))).isEqualTo(bytes);
+            fixture.media.work();assertThat(fixture.receipts).isEqualTo(1);
+            service.visibility(fixture.id,owner,"PRIVATE");code("FILE_NOT_FOUND",()->views().authorize(fixture.id,null,null));
+            var links=views().manage(fixture.id,owner,null);String token=links.viewerUrl().split("token=")[1];
+            assertThat(views().authorize(fixture.id,token,null).id()).isEqualTo(fixture.id);
+        }
+    }
+    @Test void remoteVideoUsesStatusRecoveryAndNeverRunsLegacyStaleRecovery() throws Exception {
+        try(var fixture=new RemoteMediaFixture(true)) {
+            fixture.media.work();assertThat(fixture.uploads).isEqualTo(1);
+            db.update("UPDATE file_videos SET heartbeat_at=now()-interval '1 hour' WHERE file_id=?",fixture.id);
+            db.update("UPDATE file_views SET started_at=now()-interval '1 hour' WHERE file_id=?",fixture.id);
+            videos().recover();assertThat(videos().status(fixture.id).state()).isEqualTo("PROCESSING");
+            var remoteViews=new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos(),new MediaBackend("noedaeri"));
+            remoteViews.work();assertThat(views().view(fixture.id).state()).isEqualTo("PROCESSING");
+            fixture.succeeded=true;fixture.due();fixture.media.work();
+            assertThat(videos().status(fixture.id).state()).isEqualTo("READY");
+            assertThat(videos().status(fixture.id).variants()).extracting(FileVideos.Variant::quality).containsExactly(480);
+            assertThat(videos().playlist(fixture.id,"master.m3u8","capability")).contains("480p.m3u8?token=capability");
+            assertThat(videos().playlist(fixture.id,"480p.m3u8","capability")).contains("480p-00000.ts?token=capability");
+            assertThat(Files.readAllBytes(store.thumbnail(fixture.id))).isEqualTo(fixture.artifacts.get("thumbnail.jpg"));
+            fixture.media.work();assertThat(fixture.receipts).isEqualTo(1);
+        }
+    }
+    @Test void lostUploadResponseReusesRemoteJobAndDoesNotReuploadQueuedInput() throws Exception {
+        try(var fixture=new RemoteMediaFixture(false)) {
+            fixture.loseUploadResponse=true;fixture.media.work();assertThat(fixture.uploads).isEqualTo(1);
+            fixture.due();fixture.media.work();assertThat(fixture.creates).isEqualTo(1);assertThat(fixture.uploads).isEqualTo(1);
+            fixture.succeeded=true;fixture.due();fixture.media.work();assertThat(fixture.job().state()).isEqualTo("IMPORTED");
+        }
+    }
+    @Test void deletedFileAndReplacedGenerationRejectLateRemoteResults() throws Exception {
+        for(boolean deleted:List.of(true,false))try(var fixture=new RemoteMediaFixture(true)) {
+            fixture.media.work();UUID replacement=UUID.randomUUID();
+            if(deleted)service.delete(fixture.id,owner);else db.update("UPDATE file_videos SET generation=? WHERE file_id=?",replacement,fixture.id);
+            fixture.succeeded=true;fixture.due();fixture.media.work();
+            assertThat(fixture.job().state()).isEqualTo("DISCARDED");assertThat(fixture.cancels).isEqualTo(1);assertThat(fixture.receipts).isZero();
+            assertThat(db.queryForObject("SELECT media_generation FROM file_views WHERE file_id=?",UUID.class,fixture.id)).isNull();
+            if(!deleted)assertThat(db.queryForObject("SELECT generation FROM file_videos WHERE file_id=?",UUID.class,fixture.id)).isEqualTo(replacement);
+        }
+    }
+    @Test void remoteInputLimitPreservesOriginalWithoutCallingServer() throws Exception {
+        try(var fixture=new RemoteMediaFixture(true)) {
+            db.update("UPDATE files SET size_bytes=536870913 WHERE id=?",fixture.id);fixture.media.work();
+            assertThat(videos().status(fixture.id).state()).isEqualTo("UNSUPPORTED");
+            assertThat(videos().status(fixture.id).errorCode()).isEqualTo("FILE_MEDIA_INPUT_LIMIT");assertThat(fixture.creates).isZero();
+            assertThat(Files.readAllBytes(store.path(fixture.id))).isEqualTo(bytes);assertThat(service.downloadable(fixture.id).state()).isEqualTo("READY");
+        }
+    }
+    @Test void remoteManifestAndHlsUriTagsCannotEscapeFileStorage() throws Exception {
+        try(var fixture=new RemoteMediaFixture(true)) {
+            fixture.media.work();var bad=new LinkedHashMap<>(fixture.result());bad.put("files",List.of("../thumbnail.jpg"));
+            assertThatThrownBy(()->fixture.media.manifest(fixture.job(),fixture.json.valueToTree(bad))).isInstanceOf(IOException.class);
+            fixture.artifacts.put("480p.m3u8","#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"https://evil.invalid/key\"\n480p-00000.ts\n#EXT-X-ENDLIST\n".getBytes());
+            fixture.succeeded=true;fixture.due();fixture.media.work();assertThat(fixture.job().state()).isEqualTo("ACTIVE");
+            assertThat(fixture.receipts).isZero();assertThat(videos().status(fixture.id).state()).isEqualTo("PROCESSING");
+            assertThat(Files.exists(store.mediaOutput(fixture.id,fixture.job().generation(),true))).isFalse();
+            assertThat(db.queryForObject("SELECT video_reserved_bytes FROM files WHERE id=?",Long.class,fixture.id)).isZero();
+        }
+    }
+    @Test @EnabledIfEnvironmentVariable(named="NOEDAERI_LIVE_TEST",matches="1")
+    @Timeout(300) void realNoedaeriProcessesGeneratedImageAndVideoAndRegistersResults() throws Exception {
+        var client=new NoedaeriClient(System.getenv("NOEDAERI_BASE_URL"),System.getenv("NOEDAERI_PLATFORM_API_KEY"),System.getenv("NOEDAERI_PLATFORM_WEBHOOK_SECRET"),536870912);
+        var media=new NoedaeriMedia(db,tx,store,service,videos(),org.mockito.Mockito.mock(FileAccess.class),client,new MediaBackend("noedaeri"));
+        for(String name:List.of("sample.png","sample.mp4")) {
+            byte[] input=Files.readAllBytes(Path.of("/reports/samples",name));
+            UUID id=service.create(owner,new FilesService.Create(UUID.randomUUID(),name,(long)input.length,hash(input),"PRIVATE","default")).uploadId();
+            service.append(id,owner,0,input.length,hash(input),new ByteArrayInputStream(input));service.complete(id,owner);
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(120);
+            while(System.nanoTime()<deadline) {
+                db.update("UPDATE file_media_jobs SET next_check_at=now() WHERE file_id=? AND state IN ('NEW','ACTIVE','IMPORTED')",id);
+                media.work();
+                var states=db.queryForList("SELECT state FROM file_media_jobs WHERE file_id=? AND receipt_at IS NOT NULL",String.class,id);
+                if(states.contains("IMPORTED"))break;
+                var failure=db.queryForList("SELECT error_code FROM file_media_jobs WHERE file_id=? AND state='FAILED'",String.class,id);
+                assertThat(failure).as("live conversion failure").isEmpty();Thread.sleep(2000);
+            }
+            assertThat(db.queryForObject("SELECT state FROM file_media_jobs WHERE file_id=? AND receipt_at IS NOT NULL",String.class,id)).isEqualTo("IMPORTED");
+            assertThat(Files.size(store.thumbnail(id))).isPositive();assertThat(Files.readAllBytes(store.path(id))).isEqualTo(input);
+            code("FILE_NOT_FOUND",()->views().authorize(id,null,null));
+            if(name.endsWith(".png")){assertThat(Files.size(store.preview(id))).isPositive();assertThat(views().view(id).kind()).isEqualTo("IMAGE");}
+            else {
+                assertThat(videos().status(id).variants()).extracting(FileVideos.Variant::quality).containsExactly(480,720,1080);
+                for(var variant:videos().status(id).variants())assertThat(videos().playlist(id,variant.playlist(),"capability")).contains("?token=capability");
+            }
+            service.delete(id,owner);service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();assertThat(Files.exists(store.media(id))).isFalse();assertThat(Files.exists(store.video(id))).isFalse();
+        }
+    }
     FileShares shares(){return new FileShares(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),views());}
     @Test void publicShareMetadataIsScopedValidatedRevisionCheckedAndInvalidatedWithVisibility() {
         UUID id=duplicateFixture(owner,"공개 문서.txt",bytes,"PUBLIC");var shares=new FilePublicShares(db,tx,service);

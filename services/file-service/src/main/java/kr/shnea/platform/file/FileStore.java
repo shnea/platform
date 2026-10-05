@@ -52,8 +52,17 @@ class FileStore {
             throw new IllegalStateException("Invalid file storage path");
         return target;
     }
-    Path thumbnail(UUID id) { return derivative(path(id), id, "thumbnail.jpg", ".jpg"); }
-    Path preview(UUID id) { return derivative(path(id), id, "preview.webp", ".preview.webp"); }
+    Path thumbnail(UUID id) { return mediaAsset(id,"thumbnail.jpg",".jpg"); }
+    Path preview(UUID id) { return mediaAsset(id,"preview.webp",".preview.webp"); }
+    Path localThumbnail(UUID id) { return derivative(path(id),id,"thumbnail.jpg",".jpg"); }
+    Path localPreview(UUID id) { return derivative(path(id),id,"preview.webp",".preview.webp"); }
+    private Path mediaAsset(UUID id,String name,String suffix) {
+        var paths=db.query("SELECT media_generation,kind FROM file_views WHERE file_id=? AND media_generation IS NOT NULL",
+            (r,n)->(r.getString("kind").equals("VIDEO")?video(id):media(id)).resolve(r.getObject(1,UUID.class).toString()).resolve(name),id);
+        return paths.isEmpty()?derivative(path(id),id,name,suffix):paths.getFirst();
+    }
+    Path media(UUID id) { return derivative(path(id),id,"media",".media"); }
+    Path mediaOutput(UUID id,UUID generation,boolean video) { return (video?video(id):media(id)).resolve(generation.toString()); }
     Path previewTemporary(UUID id) { return derivative(path(id), id, "preview.webp.tmp", ".preview.webp.tmp"); }
     Path video(UUID id) { return derivative(path(id), id, "hls", ".hls"); }
     private Path derivative(Path original, UUID id, String name, String legacySuffix) {
@@ -137,6 +146,7 @@ class FileStore {
             Files.deleteIfExists(derivative(original, id, "preview.webp", ".preview.webp"));
             Files.deleteIfExists(derivative(original, id, "preview.webp.tmp", ".preview.webp.tmp"));
             deleteVideo(derivative(original, id, "hls", ".hls"));
+            deleteVideo(derivative(original, id, "media", ".media"));
             // Remove only this file's empty directory, never a shared date/project directory.
             if (!original.getParent().equals(root)) Files.deleteIfExists(original.getParent());
         }

@@ -28,7 +28,7 @@ class FileSecurity {
         return http.csrf(csrf -> csrf.disable()) // Explicit bearer/API-key only; no authentication cookies.
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/files/admin/**").hasRole("PLATFORM_ADMIN")
-                .requestMatchers("/api/v1/files", "/api/v1/files/**", "/actuator/health/**", "/internal/v1/monitoring", "/error").permitAll()
+                .requestMatchers("/api/webhooks/noedaeri", "/api/v1/files", "/api/v1/files/**", "/actuator/health/**", "/internal/v1/monitoring", "/error").permitAll()
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint(unauthorized).accessDeniedHandler(forbidden))
             .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(converter)).authenticationEntryPoint(unauthorized).accessDeniedHandler(forbidden))

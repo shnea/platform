@@ -3206,6 +3206,204 @@
           }
         }
       }
+    },
+    "/api/v1/files/integrations/noedaeri/events": {
+      "post": {
+        "summary": "뇌대리 완료 웹훅 수신",
+        "description": "원본 body 바이트의 HMAC-SHA256·5분 시각 범위 검증 후 event_id로 DB에 중복 없이 저장한다. 다운로드·파일 등록은 비동기로 수행하며 일반 서버 API 키나 관리자 JWT를 인증에 사용하지 않는다. 주 수신 경로 /api/webhooks/noedaeri의 호환 별칭이다.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Noedaeri-Event-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Noedaeri-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Noedaeri-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "event_id",
+                  "job_id",
+                  "idempotency_key",
+                  "type",
+                  "job"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  "event_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "job.succeeded",
+                      "job.failed",
+                      "job.cancelled"
+                    ]
+                  },
+                  "job": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "검증된 알림을 저장했거나 동일 알림을 이미 수신했다"
+          },
+          "401": {
+            "description": "서명 또는 전송 시각 검증 실패"
+          },
+          "409": {
+            "description": "같은 이벤트 ID로 다른 본문 수신"
+          },
+          "413": {
+            "description": "128KiB 본문 한도 초과"
+          },
+          "503": {
+            "description": "뇌대리 연결 미설정"
+          }
+        }
+      }
+    },
+    "/api/webhooks/noedaeri": {
+      "post": {
+        "summary": "뇌대리 완료 웹훅 수신",
+        "description": "원본 body 바이트의 HMAC-SHA256·5분 시각 범위 검증 후 event_id로 DB에 중복 없이 저장한다. 다운로드·파일 등록은 비동기로 수행하며 일반 서버 API 키나 관리자 JWT를 인증에 사용하지 않는다.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Noedaeri-Event-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Noedaeri-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Noedaeri-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "event_id",
+                  "job_id",
+                  "idempotency_key",
+                  "type",
+                  "job"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  "event_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "job_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "job.succeeded",
+                      "job.failed",
+                      "job.cancelled"
+                    ]
+                  },
+                  "job": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "검증된 알림을 저장했거나 동일 알림을 이미 수신했다"
+          },
+          "401": {
+            "description": "서명 또는 전송 시각 검증 실패"
+          },
+          "409": {
+            "description": "같은 이벤트 ID로 다른 본문 수신"
+          },
+          "413": {
+            "description": "128KiB 본문 한도 초과"
+          },
+          "503": {
+            "description": "뇌대리 연결 미설정"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -2,6 +2,15 @@
 
 ## 현재 단계
 
+### 뇌대리 이미지·영상 처리 위임 (2026-10-05)
+
+- **구현:** 기본 이미지 썸네일·WebP 생성은 `image.package`, 영상 썸네일·HLS는 `video.package` 전용 서버 API로 위임했다. 원본 업로드·보관·파일 ID·권한·URL·파생물 저장·보존·삭제와 PDF/TXT/MD·오디오 메타데이터는 플랫폼에 유지한다. 기존 READY 결과는 재변환하지 않고 두 HLS 파일명 규칙을 함께 제공한다. 명시적 `FILE_PROCESSING_BACKEND=local`도 유지한다.
+- **영속 처리:** V11은 작업 요청·원격 ID·generation·receipt 상태와 서명 inbox를 추가한다. 원문 HMAC·5분 시각·이벤트 ID·중복 내용 해시를 확인한다. 주 웹훅은 `/api/webhooks/noedaeri`이고 이전 `/api/v1/files/integrations/noedaeri/events`도 유지한다. 로그인 JWT 대신 서명으로 인증하고 Nginx가 주 경로를 파일 서비스에 전달한다. 알림 누락·업로드 응답 유실은 동일 원격 작업 상태 조회로 복구한다. manifest·파일 크기·HLS 경로·현재 generation·용량 예약을 검증하고 임시 폴더 원자적 이동·DB 등록 뒤에만 receipt를 보낸다. 삭제·교체된 결과는 폐기하고 정확한 진행률이 없는 작업에는 임의 백분율을 표시하지 않는다. 관리자·에디터 안내와 내부 에디터 패키지 `0.1.0-alpha.12`를 갱신했다.
+- **설정/운영:** 제공된 자격정보를 출력하지 않고 `FILE_PROCESSING_BACKEND`, `NOEDAERI_BASE_URL`, `NOEDAERI_PLATFORM_API_KEY`, `NOEDAERI_PLATFORM_WEBHOOK_SECRET`, `NOEDAERI_VIDEO_INPUT_LIMIT` 5개를 `.env.dev`·`.env.prod`에 암호화해 추가했다. 이전 설정값·공개 암호화 키를 보존하고 복호화 결과를 제공된 두 비밀값과 비교했다. 사용자의 SSH 입력 창 인증으로 `${NAS_DEPLOY_PATH}/.env.prod`에 같은 5개만 추가했고 0600 원본 백업·기존 파일 해시 조건·암호화 키 일치·최종 SHA-256을 확인했다. 운영 Compose·이미지는 아직 기존 상태이며 이 설정 작업에서는 재시작하지 않았다.
+- **검증:** `docker compose -p platform-job-checks -f compose.test.yml -f output/hls-compat/override.yml --profile jobs run --rm job-check`의 최종 파일 서비스 JUnit 72개 중 71개 통과·실패/오류 0·실제 서버 선택 검사 1개 건너뜀. 두 웹훅 주소·중복 알림·잘못된 UUID/서명·원본/보호 권한·동일 작업 복구·늦은 결과 폐기·512MiB 초과 원본 보존·HLS URI/경로 탈출 거부를 포함한다. `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:noedaeri-check .`에서 관리자 TypeScript/Vite·에디터 예제/패키지 빌드 통과. 해당 이미지의 `node --test tests/*.test.mjs` 46개 통과. 관리자 기존 테스트 5개 통과. 격리 Nginx `nginx -t`, `python -X utf8 scripts/check-ci.py`, 관리자 보안·릴리스 보호 검사, Linux 컨테이너의 `check-deploy.py`·`check-ssh-gateway.py`·셸 구문 검사, `git diff --check` 통과. Windows에서 배포 검사 첫 실행은 sh 미설치로 실행하지 못했고 Linux에서 통과했다. 테스트 보고서는 Git 제외 `output/hls-compat/file-results`, 실제 서버 실패 보고서는 `output/noedaeri/live-results`에 보존한다.
+- **외부 연동/남은 한도:** 인증된 서비스 목록 조회는 성공했다. 앞선 실제 PNG/영상 변환 검사는 원격 503 `platform_delivery_not_configured`로 접수 실패했다. 뇌대리 쪽 `NOEDAERI_PLATFORM_WEBHOOK_URL=https://platform.shnea.kr/api/webhooks/noedaeri` 설정·재시작과 운영 배포 후 실제 서명 수신·파생물 등록·재생 확인이 남아 있다. 원본 업로드 5GB는 유지하나 뇌대리 영상 기본 512MiB·이미지 32,000,000바이트를 넘으면 원본을 보존하고 변환 한도를 안내한다. 환경변수만 올려 원격 한도를 우회하지 않으며 5GB 전체 영상 변환 검수는 실제 서버 한도 확장이 필요하다.
+- **다음:** 사용자가 최신 메시지에서 배포를 승인했다. 관련 파일을 로컬 커밋하고 원격 이력 확인 후 푸시해 자동 verify·release·deploy를 진행한다. 운영 건강 상태와 실제 뇌대리 연결을 검수하고 결과를 후속 상태 기록에 남긴다. 임시 격리 테스트 DB·네트워크는 Compose down으로 종료했고 기존 개발 서비스와 캐시는 보존했다.
+
 ### 영상 화질 480p 기준·뇌대리 파일명 호환 (2026-10-05)
 
 - **사용자 결정/변경:** 새 플랫폼 영상 변환을 자동·480p·720p·1080p로 변경했다. 480p 미만 입력은 원본 이하의 짝수 크기 한 가지를 제공한다. 480p 영상 비트레이트는 1.2Mbps, 360p 이하 원본 크기는 기존 0.8Mbps를 사용한다. 기존 READY 변환본은 재변환·파일명 변경 없이 유지한다.

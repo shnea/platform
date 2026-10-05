@@ -24,8 +24,9 @@ class FileViews {
                  FileVideos.Status video,String streamUrl,Instant streamExpiresAt,String shareUrl) {}
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FilesService files;
     private final FileAccess access; private final FileStore store; private final FileVideos videos;
-    FileViews(JdbcTemplate db,TransactionTemplate tx,FilesService files,FileAccess access,FileStore store,FileVideos videos) {
-        this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;this.videos=videos;
+    private final MediaBackend backend;
+    FileViews(JdbcTemplate db,TransactionTemplate tx,FilesService files,FileAccess access,FileStore store,FileVideos videos,MediaBackend backend) {
+        this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;this.videos=videos;this.backend=backend;
     }
     View view(UUID id) {
         db.update("INSERT INTO file_views(file_id) VALUES (?) ON CONFLICT DO NOTHING",id);
@@ -91,10 +92,10 @@ class FileViews {
         db.update("DELETE FROM file_view_tokens WHERE greatest(expires_at,playback_expires_at)<=now()");
         // Discover completed files, including files uploaded before this feature was installed.
         db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
-        db.update("UPDATE file_views SET state=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,error_code='FILE_PREVIEW_INTERRUPTED' WHERE state='PROCESSING' AND started_at<now()-interval '2 minutes'");
+        db.update("UPDATE file_views SET state=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,error_code='FILE_PREVIEW_INTERRUPTED' WHERE state='PROCESSING' AND processing_backend='local' AND started_at<now()-interval '2 minutes'");
         UUID id=tx.execute(s->{
-            var ids=db.queryForList("SELECT v.file_id FROM file_views v JOIN files f ON f.id=v.file_id WHERE v.state='QUEUED' AND f.state='READY' ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF v SKIP LOCKED",UUID.class);
-            if(ids.isEmpty())return null;UUID next=ids.getFirst();db.update("UPDATE file_views SET state='PROCESSING',attempts=attempts+1,started_at=now(),error_code=NULL WHERE file_id=?",next);return next;
+            var ids=db.queryForList("SELECT v.file_id FROM file_views v JOIN files f ON f.id=v.file_id WHERE v.state='QUEUED' AND f.state='READY' AND (?=false OR lower(f.original_name) !~ '\\.(png|jpg|jpeg|jfif|gif|webp|bmp|ico|tif|tiff|heic|heif|avif|mp4|m4v|mov|mkv|webm)$') ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF v SKIP LOCKED",UUID.class,backend.remote());
+            if(ids.isEmpty())return null;UUID next=ids.getFirst();db.update("UPDATE file_views SET state='PROCESSING',processing_backend='local',attempts=attempts+1,started_at=now(),error_code=NULL WHERE file_id=?",next);return next;
         });
         if(id!=null)synchronized(store.mediaMonitor){process(id);}
     }
@@ -112,11 +113,11 @@ class FileViews {
             tx.executeWithoutResult(s->{
                 db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.downloadable(id);
                 try {
-                    if(result.thumbnail())Files.move(output,store.thumbnail(id),StandardCopyOption.REPLACE_EXISTING);
-                    if(previewOutput!=null)Files.move(previewOutput,store.preview(id),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+                    if(result.thumbnail())Files.move(output,store.localThumbnail(id),StandardCopyOption.REPLACE_EXISTING);
+                    if(previewOutput!=null)Files.move(previewOutput,store.localPreview(id),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
                 }
                 catch(IOException e){throw FileFailure.unavailable();}
-                db.update("UPDATE file_views SET state=?,kind=?,media_type=?,thumbnail=?,error_code=?,finished_at=now() WHERE file_id=?",result.state(),result.kind(),result.mediaType(),result.thumbnail(),result.errorCode(),id);
+                db.update("UPDATE file_views SET state=?,kind=?,media_type=?,thumbnail=?,media_generation=NULL,error_code=?,finished_at=now() WHERE file_id=?",result.state(),result.kind(),result.mediaType(),result.thumbnail(),result.errorCode(),id);
                 db.update("INSERT INTO file_audit(file_id,environment_id,actor,action) VALUES (?,?,'system:preview',?)",id,row.environment(),"file.preview."+result.state().toLowerCase(Locale.ROOT));
             });
         } catch(Exception e) {

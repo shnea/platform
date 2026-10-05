@@ -1,6 +1,6 @@
 {
   "name": "@shnea/editor",
-  "version": "0.1.0-alpha.11",
+  "version": "0.1.0-alpha.12",
   "private": true,
   "type": "module",
   "description": "SHNEA 공통 에디터의 문서 계약과 편집 코어",

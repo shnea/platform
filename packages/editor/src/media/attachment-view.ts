@@ -33,7 +33,7 @@ export function mountAttachmentView(element:HTMLElement,file:AttachmentRef,adapt
  function render(){
   if(!data)return;
   const waiting=['QUEUED','PROCESSING'].includes(data.state),videoWaiting=data.video&&['QUEUED','PROCESSING'].includes(data.video.state);
-  status.textContent=file.kind==='video'&&videoWaiting?`영상 변환 중 · ${data.video!.progress}%`:waiting?'미리보기를 준비하고 있습니다.':data.state==='FAILED'?'미리보기를 만들지 못했습니다. 원본을 내려받을 수 있습니다.':data.state==='UNSUPPORTED'?'미리보기를 지원하지 않는 형식입니다. 원본을 내려받아 주세요.':'';
+  status.textContent=file.kind==='video'&&videoWaiting?(data.video!.progress>0?`영상 변환 중 · ${data.video!.progress}%`:'영상 변환 중'):waiting?'미리보기를 준비하고 있습니다.':data.state==='FAILED'?'미리보기를 만들지 못했습니다. 원본을 내려받을 수 있습니다.':data.state==='UNSUPPORTED'?'미리보기를 지원하지 않는 형식입니다. 원본을 내려받아 주세요.':'';
   if(file.kind==='video'&&data.video&&['FAILED','UNSUPPORTED'].includes(data.video.state))status.textContent='스트리밍을 준비하지 못했습니다. 원본 다운로드를 이용해 주세요.';
   download.href=safeURL(data.downloadUrl,doc);original.href=safeURL(data.originalUrl,doc);download.hidden=original.hidden=false;
   const imageSrc=data.previewUrl??data.thumbnailUrl;

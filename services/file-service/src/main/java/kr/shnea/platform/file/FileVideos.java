@@ -24,9 +24,10 @@ class FileVideos {
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FileStore store;
     private final FilesService files; private final FileAccess access; private final long quota;
     private final JsonMapper json=new JsonMapper();
+    private final MediaBackend backend;
     FileVideos(JdbcTemplate db,TransactionTemplate tx,FileStore store,FilesService files,FileAccess access,
-               @Value("${platform.files.environment-quota:50000000000}") long quota) {
-        this.db=db;this.tx=tx;this.store=store;this.files=files;this.access=access;this.quota=quota;
+               @Value("${platform.files.environment-quota:50000000000}") long quota,MediaBackend backend) {
+        this.db=db;this.tx=tx;this.store=store;this.files=files;this.access=access;this.quota=quota;this.backend=backend;
     }
     static boolean candidate(String name) {return name.toLowerCase(Locale.ROOT).matches(".*\\.(mp4|m4v|mov|mkv|webm)$");}
     Status status(UUID id) {
@@ -46,6 +47,7 @@ class FileVideos {
     }
     @Scheduled(fixedDelay=5000,initialDelay=20000)
     void work() {
+        if(backend.remote())return;
         // ponytail: one conversion for this shared volume. A session lock also excludes a second service replica.
         synchronized(store.mediaMonitor) {
             try(Connection lock=Objects.requireNonNull(db.getDataSource()).getConnection()) {
@@ -67,7 +69,7 @@ class FileVideos {
                             ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF v SKIP LOCKED
                             """,UUID.class);
                         if(ids.isEmpty())return null;UUID next=ids.getFirst();
-                        db.update("UPDATE file_videos SET state='PROCESSING',generation=?,attempts=attempts+1,started_at=now(),heartbeat_at=now(),progress=0,error_code=NULL WHERE file_id=?",UUID.randomUUID(),next);
+                        db.update("UPDATE file_videos SET state='PROCESSING',processing_backend='local',generation=?,attempts=attempts+1,started_at=now(),heartbeat_at=now(),progress=0,error_code=NULL WHERE file_id=?",UUID.randomUUID(),next);
                         return next;
                     });
                     if(id!=null)process(id,lock);
@@ -76,7 +78,7 @@ class FileVideos {
         }
     }
     void recover() {
-        var stale=db.queryForList("SELECT file_id FROM file_videos WHERE state='PROCESSING' AND heartbeat_at<now()-interval '2 minutes'",UUID.class);
+        var stale=db.queryForList("SELECT file_id FROM file_videos WHERE state='PROCESSING' AND processing_backend='local' AND heartbeat_at<now()-interval '2 minutes'",UUID.class);
         for(UUID id:stale) {
             store.deleteVideo(id);
             tx.executeWithoutResult(s->{
@@ -123,8 +125,8 @@ class FileVideos {
             access.requireActive(row.environment());
             tx.executeWithoutResult(s->{
                 db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.downloadable(id);
-                try{Files.move(thumbnail,store.thumbnail(id),StandardCopyOption.REPLACE_EXISTING);}catch(IOException e){throw FileFailure.unavailable();}
-                db.update("UPDATE file_views SET thumbnail=true WHERE file_id=?",id);
+                try{Files.move(thumbnail,store.localThumbnail(id),StandardCopyOption.REPLACE_EXISTING);}catch(IOException e){throw FileFailure.unavailable();}
+                db.update("UPDATE file_views SET thumbnail=true,media_generation=NULL WHERE file_id=?",id);
                 if(db.update("UPDATE file_videos SET state='READY',progress=100,duration_seconds=?,variants=?::jsonb,finished_at=now() WHERE file_id=? AND generation=? AND state='PROCESSING'",source.duration(),json.writeValueAsString(variants),id,generation)!=1)throw FileFailure.missing();
                 db.update("UPDATE files SET video_bytes=?,video_reserved_bytes=0 WHERE id=?",bytes,id);
                 db.update("INSERT INTO file_audit(file_id,environment_id,actor,action) VALUES (?,?,'system:video','file.video.ready')",id,row.environment());
