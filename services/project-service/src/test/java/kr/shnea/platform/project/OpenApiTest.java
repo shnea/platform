@@ -52,8 +52,8 @@ class OpenApiTest {
             }
         }
         assertThat(documented).isEqualTo(actual);
-        assertThat(dev.path("paths").size()).isEqualTo(54);
-        assertThat(prod.path("paths").size()).isEqualTo(49);
+        assertThat(dev.path("paths").size()).isEqualTo(58);
+        assertThat(prod.path("paths").size()).isEqualTo(53);
         assertThat(prod.path("paths").has("/internal/v1/email/environments/{id}")).isFalse();
     }
 

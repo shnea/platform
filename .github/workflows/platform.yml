@@ -39,6 +39,7 @@ jobs:
             npm ci --prefix apps/admin-web
             npm test --prefix apps/admin-web
             npm run build --prefix apps/admin-web
+            node scripts/check-ai-integration.mjs
           '
       - name: Test backend with disposable database
         run: docker compose --env-file .env.example -p platform-ci -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check

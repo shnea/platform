@@ -3066,6 +3066,191 @@
           }
         ]
       }
+    },
+    "/api/v1/ai/services": {
+      "get": {
+        "operationId": "get_api_v1_ai_services",
+        "summary": "AI 지원 기능 조회",
+        "description": "로그인 없이 서버 키로 호출. n8n 실행·usage·인덱싱의 미제공 상태를 구분한다.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiServices"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:read"
+        ]
+      }
+    },
+    "/api/v1/admin/ai/services": {
+      "get": {
+        "operationId": "get_api_v1_admin_ai_services",
+        "summary": "관리자 AI 연결 설정·지원 상태 조회",
+        "description": "설정 존재 여부와 구현 상태만 조회하며 키·주소·원문은 반환하지 않는다.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiServices"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/raya/route": {
+      "post": {
+        "operationId": "post_api_v1_ai_raya_route",
+        "summary": "Raya 난이도 판단",
+        "description": "본문 최대 64KiB. 동기 텍스트 판단이며 이미지 분석·AI 답변·웹훅·저장은 수행하지 않는다. 실패 시 자동 재시도·임의 등급 우회 없음.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiRouteResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:route"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiRouteInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/embeddings": {
+      "post": {
+        "operationId": "post_api_v1_ai_embeddings",
+        "summary": "공통 단일·배치 텍스트 임베딩",
+        "description": "플랫폼 본문 최대 1MiB, 텍스트당 16000자, 1~100건. index로 입력에 매핑. 모델·차원을 검색/인덱싱에 동일 적용하고 기존 벡터를 혼합하지 않는다. 서버가 원문·벡터를 저장하지 않으며 usage는 공급자 보고값이다.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiEmbeddingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:embed"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiEmbeddingInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3416,12 +3601,15 @@
                     "jobs:write",
                     "jobs:work",
                     "logs:read",
-                    "logs:write"
+                    "logs:write",
+                    "ai:read",
+                    "ai:route",
+                    "ai:embed"
                   ]
                 },
                 "uniqueItems": true,
                 "minItems": 1,
-                "maxItems": 11
+                "maxItems": 14
               },
               {
                 "type": "null"
@@ -3468,12 +3656,15 @@
                 "jobs:write",
                 "jobs:work",
                 "logs:read",
-                "logs:write"
+                "logs:write",
+                "ai:read",
+                "ai:route",
+                "ai:embed"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 11
+            "maxItems": 14
           }
         },
         "required": [
@@ -3531,12 +3722,15 @@
                 "jobs:write",
                 "jobs:work",
                 "logs:read",
-                "logs:write"
+                "logs:write",
+                "ai:read",
+                "ai:route",
+                "ai:embed"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 11
+            "maxItems": 14
           }
         },
         "required": [
@@ -3563,7 +3757,10 @@
               "jobs:write",
               "jobs:work",
               "logs:read",
-              "logs:write"
+              "logs:write",
+              "ai:read",
+              "ai:route",
+              "ai:embed"
             ]
           },
           "label": {
@@ -3616,12 +3813,15 @@
                 "jobs:write",
                 "jobs:work",
                 "logs:read",
-                "logs:write"
+                "logs:write",
+                "ai:read",
+                "ai:route",
+                "ai:embed"
               ]
             },
             "uniqueItems": true,
             "minItems": 1,
-            "maxItems": 11
+            "maxItems": 14
           }
         },
         "required": [
@@ -5716,6 +5916,279 @@
           "to",
           "retentionDays",
           "dailyBytesLimit"
+        ]
+      },
+      "AiRouteInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9_.-]*$"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000,
+            "description": "공백만 있는 문자열 거부"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 8000,
+            "default": ""
+          },
+          "has_images": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "task_type",
+          "prompt"
+        ]
+      },
+      "AiRouteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task_type": {
+            "type": "string"
+          },
+          "model_tier": {
+            "type": "string",
+            "enum": [
+              "L1",
+              "L2",
+              "L3"
+            ]
+          },
+          "probabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "L1": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "L2": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "L3": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "L1",
+              "L2",
+              "L3"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "정답률 아님"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "input_truncated": {
+            "type": "boolean"
+          },
+          "inference_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "elapsed_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "cold_start": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_type",
+          "model_tier",
+          "probabilities",
+          "confidence",
+          "input_tokens",
+          "input_truncated",
+          "inference_ms",
+          "elapsed_ms",
+          "cold_start",
+          "model",
+          "revision",
+          "device",
+          "runtime"
+        ]
+      },
+      "AiEmbeddingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16000,
+                "description": "공백만 있는 문자열 거부"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16000,
+                  "description": "공백만 있는 문자열 거부"
+                }
+              }
+            ]
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "models/gemini-embedding-001"
+            ],
+            "default": "models/gemini-embedding-001"
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3072,
+            "default": 768
+          }
+        },
+        "required": [
+          "input"
+        ]
+      },
+      "AiEmbeddingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "models/gemini-embedding-001"
+            ]
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3072
+          },
+          "data": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 99
+                },
+                "embedding": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 3072,
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "유한 숫자만 허용. 길이는 dimensions와 일치"
+                }
+              },
+              "required": [
+                "index",
+                "embedding"
+              ]
+            }
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "prompt_tokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total_tokens": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "model",
+          "dimensions",
+          "data",
+          "usage"
+        ]
+      },
+      "AiServices": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "description": "서버 설정 존재 여부이며 실제 연결 성공을 보장하지 않음"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "implemented",
+                    "awaiting_upstream_api",
+                    "workflow_example_only"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "configured",
+          "features"
         ]
       }
     },

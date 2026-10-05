@@ -1,0 +1,133 @@
+{
+  "name": "뇌대리 공통 임베딩 · 내부 수동 검수",
+  "active": false,
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "수동 실행",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "input",
+      "name": "샘플 입력",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{json: {input: ['공통 임베딩 검수 문서', '검색과 인덱싱은 같은 모델·차원을 사용합니다.'], model: 'models/gemini-embedding-001', dimensions: 768}}];"
+      }
+    },
+    {
+      "id": "embedding",
+      "name": "뇌대리 공통 임베딩",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        0
+      ],
+      "retryOnFail": false,
+      "onError": "stopWorkflow",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOEDAERI_BASE_URL.replace(/\\/$/, '') + '/api/ai/v1/embeddings' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 100000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "validate",
+      "name": "결과 검증·문서별 벡터",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst request = $('샘플 입력').first().json;\nconst texts = typeof request.input === 'string' ? [request.input] : request.input;\nconst dimensions = request.dimensions ?? 768;\nif (response.model !== request.model || response.dimensions !== dimensions || !Array.isArray(response.data) || response.data.length !== texts.length) {\n  throw new Error('임베딩 모델·차원·결과 개수가 일치하지 않습니다.');\n}\nconst seen = new Set();\nconst result = response.data.map(item => {\n  if (!Number.isInteger(item.index) || item.index < 0 || item.index >= texts.length || seen.has(item.index) ||\n      !Array.isArray(item.embedding) || item.embedding.length !== dimensions ||\n      item.embedding.some(value => typeof value !== 'number' || !Number.isFinite(value))) {\n    throw new Error('임베딩 index·차원·좌표가 올바르지 않습니다.');\n  }\n  seen.add(item.index);\n  return {json: {index: item.index, text: texts[item.index], model: response.model, dimensions, embedding: item.embedding}};\n});\nreturn result.sort((a,b) => a.json.index - b.json.index);"
+      }
+    },
+    {
+      "id": "note",
+      "name": "내부 실행 키·보존 설정 필요",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -300
+      ],
+      "parameters": {
+        "content": "## 비활성 수동 검수 예제\n외부 앱은 플랫폼 API를 사용합니다.\n운영자가 NOEDAERI_BASE_URL과 Header Auth Credential을 설정하세요. 헤더는 X-Noedaeri-Raya-Key(실행 전용 키)입니다.\nJSON에 주소·키·Credential ID를 넣지 않습니다.\n실패 시 중단·자동 재시도 없음. n8n 실행 데이터 보존 정책을 검토하세요.\nQdrant·기존 인덱스·공개 웹훅은 연결하지 않습니다.",
+        "height": 260,
+        "width": 620
+      }
+    }
+  ],
+  "connections": {
+    "수동 실행": {
+      "main": [
+        [
+          {
+            "node": "샘플 입력",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "샘플 입력": {
+      "main": [
+        [
+          {
+            "node": "뇌대리 공통 임베딩",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "뇌대리 공통 임베딩": {
+      "main": [
+        [
+          {
+            "node": "결과 검증·문서별 벡터",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none"
+  },
+  "pinData": {}
+}

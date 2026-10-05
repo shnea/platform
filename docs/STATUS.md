@@ -2,6 +2,17 @@
 
 ## 현재 단계
 
+### 공통 AI·임베딩·뇌대리/n8n 지침 적용 (2026-10-05)
+
+- **최신 결정:** 공통 임베딩이 추가된 뇌대리 지침 v11의 AI 관련 기준 전체를 적용한다. 8개 AI 작업·공급자 순환·필수 모델 기능·캐시·usage·포트폴리오 RAG/인덱싱·기존 입출력 유지·보존/오류 경계를 요약/상세 요구사항과 공개 AI 연결 지침에 반영했다. 사용자가 뇌대리의 n8n 작업 접수·실행·결과 연결 API를 현재 개발 중이라고 확인했다. n8n 자체의 웹훅 실행 기능 부재와 혼동하지 않도록 안내를 정리했다.
+- **구현:** 프로젝트 서비스에 `GET /api/v1/ai/services`, `POST /api/v1/ai/raya/route`, `POST /api/v1/ai/embeddings`, 관리자 지원 상태 조회를 추가했다. `ai:read`·`ai:route`·`ai:embed`를 별도 발급하며 기존 키에 자동 부여하지 않는다. 환경 READY·프로젝트 활성·키 만료/폐기를 확인한 뒤 기존 뇌대리 전용 요청 키로 동기 호출한다. 플랫폼 로그인 기능을 사용하지 않거나 다른 OIDC를 사용하는 호스트도 서버 키로 이용하며 최종 이용자 인증·인가·익명 허용은 호스트 책임이다.
+- **제한/보호:** Raya 64KiB·prompt 16000자·instruction 8000자, 임베딩 1MiB·텍스트당 16000자·단일/배치 100건·gemini-embedding-001 기본 768/최대 3072차원이다. 알 수 없는/중복 필드·추가 JSON·잘못된 index/차원/좌표/모델/사용량을 거부한다. HTTPS·TLS 검증·리다이렉트 금지·응답 상한·동시 2개·연결 5초/요청 100초/전체 대기 105초·no-store·고정 한국어 오류/요청 ID를 적용한다. 자동 재호출·임의 등급 우회·플랫폼 원문/벡터 저장은 하지 않는다. Compose의 project-service에 기존 암호화 설정의 주소·요청 키 두 값만 추가 주입하며 환경파일·기존 키는 변경하지 않았다.
+- **연동 자료/화면:** 개발자 센터의 AI·임베딩 탭에 지원/대기 상태, 다른 OIDC 호스트 연결, OpenAPI·Python 서버 클라이언트·비활성 n8n 내부 임베딩 수동 예제를 연결했다. 공개 빌드는 AI 명세에서 관리자/내부 API를 제외하며 n8n JSON에는 실제 키·주소·Credential ID를 넣지 않는다. 기존 text-embedding-004와 새 모델의 검색/인덱싱 벡터를 혼합하지 않도록 명시했다. CI에 공개 계약·n8n 예제 결과 검증을 추가했다.
+- **로컬 검증:** `docker compose --env-file .env.example -p platform-ai-checks -f compose.test.yml -f output/ai/test.yml --profile jobs run --rm job-check`에서 프로젝트 JUnit 73개 중 71개 통과·실패/오류 0·실제 서버 선택 검사 2개 건너뜀. 실제 Spring 보안 필터에서 이용자 로그인 없는 키 호출·관리자 JWT의 키 대체 금지·권한 차단을 검수했고 격리 DB의 전체 권한 발급·기존 키 자동 확대 금지·폐기 차단을 확인했다. 최초 실행의 기존 MDC 검사 실패는 새 보안 검사에 요청 추적 필터를 함께 적용해 수정한 뒤 통과했다. Docker 관리자 TypeScript/Vite·공개 자료 빌드, 관리자 Node 검사 5개, `scripts/check-ai-integration.mjs`의 공개 경로/참조/권한·n8n 벡터 순서/차원/오류 검사, 격리 `nginx -t`, Python 서버 예제 구문/도움말, check-ci.py·check-admin-security.py·git diff --check 통과. 첫 공개 자료 검사는 읽기 전용 소스 아래 출력 생성으로 실패했고 임시 출력 경로를 사용해 통과했다.
+- **실제 뇌대리 검증:** 별도 `output/ai/live.yml`에서 `AI_LIVE_CHECK=true`와 기존 개발 암호화 설정의 뇌대리 주소·요청 키 두 값만 출력 없이 전달했다. `AiLiveTest` 2개가 실제 단일/2건 배치 768차원 임베딩과 Raya 응답 검증에 모두 통과했다. 생성한 짧은 검수 문장만 전송했으며 운영 DB·사용자 파일·플랫폼 운영 복호화 키를 검사 컨테이너에 제공하지 않았다. 내부 n8n 실행 키·실제 n8n import/실행·Qdrant 검색·100건/3072차원 실제 호출·모든 원격 오류 조건은 미검증이다. 보고서는 Git 제외 `output/ai/project-results`, `output/ai/live-results`에 보존한다.
+- **반영/정리:** 로컬 구현·검증을 마쳤으며 커밋·푸시/자동 배포 결과는 다음 확인 대상이다. 임시 테스트 DB·네트워크는 `docker compose --env-file .env.example -p platform-ai-checks -f compose.test.yml --profile jobs down`으로 종료했다. 기존 개발 프로세스·데이터를 유지했고 장기 실행 프로세스를 추가하지 않았다.
+- **다음:** 뇌대리에서 개발 중인 AI 작업 접수·실행·상태/결과 API와 인증·입출력·중복 방지·usage 계약을 받으면 8종 작업 실행을 연결한다. 현재 미제공 경로·usage·공통 캐시·실제 공급자 한도/순환·TTS/고자원 관리·학습 기능은 완료로 표시하지 않는다. 기존 포트폴리오·블로그·댓글·UI 운영 워크플로와 벡터 컬렉션은 변경하지 않았다.
+
 ### 뇌대리 이미지·영상 처리 위임 (2026-10-05)
 
 - **구현:** 기본 이미지 썸네일·WebP 생성은 `image.package`, 영상 썸네일·HLS는 `video.package` 전용 서버 API로 위임했다. 원본 업로드·보관·파일 ID·권한·URL·파생물 저장·보존·삭제와 PDF/TXT/MD·오디오 메타데이터는 플랫폼에 유지한다. 기존 READY 결과는 재변환하지 않고 두 HLS 파일명 규칙을 함께 제공한다. 명시적 `FILE_PROCESSING_BACKEND=local`도 유지한다.

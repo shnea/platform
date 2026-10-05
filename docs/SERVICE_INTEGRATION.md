@@ -22,6 +22,9 @@
 | Job API · Python 워커 | https://platform.shnea.kr/integrations/jobs.openapi.json · https://platform.shnea.kr/examples/jobs-client.py |
 | 공통 로그 · 비동기 전송 | https://platform.shnea.kr/integrations/logs.md |
 | 로그 API · Python 전송기 | https://platform.shnea.kr/integrations/logs.openapi.json · https://platform.shnea.kr/examples/logs-client.py |
+| 공통 AI · 단일/배치 임베딩·Raya·n8n 전체 기준 | https://platform.shnea.kr/integrations/ai.md |
+| AI API · Python 서버 클라이언트 | https://platform.shnea.kr/integrations/ai.openapi.json · https://platform.shnea.kr/examples/ai-client.py |
+| n8n 내부 공통 임베딩 수동 검수 예제 | https://platform.shnea.kr/integrations/n8n-embeddings.sample.json |
 | React·Vue·JS·JSP 에디터/뷰어·첨부 연결 | https://platform.shnea.kr/integrations/editor.md |
 | 에디터 설치 패키지 | https://platform.shnea.kr/integrations/shnea-editor-0.1.0-alpha.12.tgz |
 | 패키지 SHA-256 | https://platform.shnea.kr/integrations/checksums.json |
@@ -43,6 +46,9 @@
 | 에디터 | 패키지 자체는 인증 불필요. 본문 JSON 저장·사용자 권한·첨부 전송은 호스트 책임 |
 | Job | 호스트 서버 키 `jobs:write/read/work`. 플랫폼이 큐 관리, 프로젝트 워커가 실행. 업무는 job.id로 멱등 처리 |
 | 로그 | 호스트 서버 키 `logs:write/read`. 비동기·제한된 전송, 민감값 제외. 7일 보존·환경별 한도 |
+| AI | 호스트 서버 키 `ai:read/route/embed`. Raya·임베딩 동기 API, n8n 외부 실행·usage는 뇌대리 API 제공 대기 |
+
+플랫폼 로그인 기능을 쓰지 않거나 다른 OIDC로 로그인하는 프로젝트도 서버 키로 파일·Job·로그·AI 서비스를 독립 이용한다. 최종 이용자의 인증·인가·익명 이용은 호스트 서버가 판단하고 플랫폼 Keycloak으로 이전하지 않는다. 관리자 등록·환경 설정·키 발급에는 관리자 로그인이 필요하다. 기존 키는 AI 권한을 자동으로 받지 않는다.
 
 ## 구현 규칙
 
@@ -52,6 +58,7 @@
 4. 보존 코드 `default`는 영구가 아니다. 장기 첨부의 정책을 명시한다. 본문 제거와 원본 삭제를 분리한다.
 5. 오류는 HTTP 상태 + `code`로 판단하고 `detail`·응답 `X-Request-ID`를 처리한다. 통신 실패 후 변경 요청을 무조건 재실행하지 않는다.
 6. Job 점유 만료 시 실행·보고를 중지한다. 로그 장애가 사용자 요청을 막지 않게 한다. 일반 알림 발송·외부 웹훅 API는 아직 미제공.
+7. AI는 원문·벡터를 플랫폼에 저장하지 않는다. 검색/인덱싱은 같은 임베딩 모델·차원을 사용하고 기존 다른 모델 벡터를 섞지 않는다. Raya는 이미지 분석·답변 생성이 아니다. n8n 수동 예제를 외부 실행 API로 안내하지 않는다.
 
 ## 실행 순서
 

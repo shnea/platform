@@ -37,6 +37,7 @@ class SecurityConfig {
                 .requestMatchers("/actuator/health/**", "/error", "/api/v1/config").permitAll()
                 .requestMatchers("/api/v1/integration/context", "/api/v1/dev/login").permitAll() // Controllers validate scoped key.
                 .requestMatchers("/api/v1/jobs", "/api/v1/jobs/**", "/api/v1/logs", "/api/v1/logs/**").permitAll() // Every controller operation validates a feature-scoped server key.
+                .requestMatchers("/api/v1/ai/services", "/api/v1/ai/raya/route", "/api/v1/ai/embeddings").permitAll() // AI controller validates separate server-key scopes before reading input.
                 .requestMatchers("/internal/v1/email/environments/*").permitAll() // Dedicated internal secret, never routed by Nginx.
                 .requestMatchers("/internal/v1/files/**").permitAll() // Dedicated file-service secret checked by controller.
                 .requestMatchers("/internal/v1/monitoring").permitAll() // ServiceTelemetry checks its own dedicated secret.

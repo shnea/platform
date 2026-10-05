@@ -5,6 +5,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 // Public machine codes: keep meanings stable even when Korean wording changes.
 enum ApiCode {
+    AI_INVALID_REQUEST(422, "AI 요청의 필드·텍스트·모델·차원·배치 개수를 확인해 주세요."),
+    AI_NOT_CONFIGURED(503, "뇌대리 AI 서버 연결 설정이 필요합니다. 관리자에게 문의해 주세요."),
+    AI_UPSTREAM_AUTH_FAILED(502, "뇌대리 서버 인증 설정을 확인해야 합니다. 관리자에게 문의해 주세요."),
+    AI_BUSY(429, "AI 처리 또는 공급자 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."),
+    AI_UNAVAILABLE(503, "뇌대리 AI 처리를 확인하지 못했습니다. 연결·지원 기능·자원 상태를 확인해 주세요."),
+    AI_TIMEOUT(504, "AI 처리 제한시간을 초과했습니다. 자동으로 재실행하지 않습니다."),
+    AI_INVALID_RESPONSE(502, "AI 응답이 요청한 결과 계약과 일치하지 않습니다. 관리자에게 문의해 주세요."),
     EXTERNAL_JOB_REQUEST_CONFLICT(409, "같은 요청 ID로 다른 작업을 등록할 수 없습니다."),
     EXTERNAL_JOB_LEASE_LOST(409, "작업 점유가 만료되거나 다른 워커로 변경되었습니다. 실행 결과를 다시 반영하지 마세요."),
     EXTERNAL_JOB_CAPACITY(429, "이 환경의 작업 보관 또는 활성 작업 한도에 도달했습니다."),
