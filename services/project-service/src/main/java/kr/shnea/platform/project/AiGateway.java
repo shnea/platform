@@ -26,6 +26,7 @@ class AiGateway {
         .enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
         .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
+    @org.springframework.beans.factory.annotation.Autowired
     AiGateway(@Value("${platform.noedaeri.url:}") String url,
               @Value("${platform.noedaeri.key:}") String key) {
         this(url.isBlank() ? null : URI.create(url), key);
