@@ -16,6 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class FileVideos {
+    static final String HLS_CHILD_PATTERN="q[0-9]{1,4}(?:\\.m3u8|-[0-9]{5}\\.ts)|[0-9]{1,4}p(?:\\.m3u8|-[0-9]{5}\\.ts)";
     record Variant(int quality,int width,int height,int bandwidth,String playlist) {}
     record Status(String state,int progress,Double durationSeconds,List<Variant> variants,String errorCode) {}
     record Source(int width,int height,double duration,boolean audio) {}
@@ -172,12 +173,12 @@ class FileVideos {
     }
     static List<Variant> variants(Source s) {
         int shorter=Math.min(s.width(),s.height());var levels=new ArrayList<Integer>();
-        for(int q:List.of(360,720,1080))if(q<=shorter)levels.add(q);
+        for(int q:List.of(480,720,1080))if(q<=shorter)levels.add(q);
         if(levels.isEmpty())levels.add(shorter/2*2);
         return levels.stream().map(q->{double scale=(double)q/shorter;int w=Math.max(2,(int)(s.width()*scale)/2*2),h=Math.max(2,(int)(s.height()*scale)/2*2);
             return new Variant(q,w,h,(videoBitrate(q)*12/10+(s.audio()?128000:0))*12/10,"q"+q+".m3u8");}).toList();
     }
-    private static int videoBitrate(int quality){return quality<=360?800000:quality<=720?2500000:4500000;}
+    private static int videoBitrate(int quality){return quality<=360?800000:quality<=480?1200000:quality<=720?2500000:4500000;}
     private static FileFailure unsupported(){return new FileFailure("FILE_VIDEO_UNSUPPORTED",422,"지원하지 않는 영상 코덱 또는 픽셀 비율입니다.");}
     private void convert(UUID id,UUID generation,UUID environment,Connection lock,List<String> command,Path output,long limit,double duration,int index,int total) throws Exception {
         var argv=new ArrayList<>(List.of("sh","-c","ulimit -v 524288; ulimit -f 32768; exec \"$@\"","video"));argv.addAll(command);
@@ -200,7 +201,7 @@ class FileVideos {
         try(var paths=Files.walk(directory)){long sum=0;for(Path p:paths.filter(Files::isRegularFile).toList())sum+=Files.size(p);return sum;}
     }
     Path asset(UUID id,String name) {
-        if(!name.matches("master\\.m3u8|q[0-9]{1,4}\\.m3u8|q[0-9]{1,4}-[0-9]{5}\\.ts"))throw FileFailure.missing();
+        if(!name.matches("master\\.m3u8|"+HLS_CHILD_PATTERN))throw FileFailure.missing();
         UUID generation=db.query("SELECT generation FROM file_videos WHERE file_id=? AND state='READY'",(r,n)->r.getObject(1,UUID.class),id).stream().findFirst().orElseThrow(FileFailure::missing);
         Path path=store.video(id).resolve(generation.toString()).resolve(name);
         if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS))throw FileFailure.missing();return path;
@@ -210,7 +211,7 @@ class FileVideos {
         StringBuilder result=new StringBuilder();
         for(String line:Files.readAllLines(path,StandardCharsets.UTF_8)) {
             if(!line.isBlank()&&!line.startsWith("#")) {
-                if(!line.matches("q[0-9]{1,4}(\\.m3u8|-[0-9]{5}\\.ts)"))throw FileFailure.unavailable();
+                if(!line.matches(HLS_CHILD_PATTERN))throw FileFailure.unavailable();
                 line="/api/v1/files/"+id+"/hls/"+line+(token==null?"":"?token="+token);
             }
             result.append(line).append('\n');

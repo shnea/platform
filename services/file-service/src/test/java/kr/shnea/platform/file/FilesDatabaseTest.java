@@ -233,10 +233,13 @@ class FilesDatabaseTest {
     }
     @Test void videoQualityPreservesPortraitAndNeverUpscales() {
         var landscape=FileVideos.variants(new FileVideos.Source(1920,1080,12,true));
-        assertThat(landscape).extracting(FileVideos.Variant::quality).containsExactly(360,720,1080);
+        assertThat(landscape).extracting(FileVideos.Variant::quality).containsExactly(480,720,1080);
         var portrait=FileVideos.variants(new FileVideos.Source(720,1280,12,false));
-        assertThat(portrait).extracting(FileVideos.Variant::quality).containsExactly(360,720);
-        assertThat(portrait.getFirst().width()).isEqualTo(360);assertThat(portrait.getFirst().height()).isEqualTo(640);
+        assertThat(portrait).extracting(FileVideos.Variant::quality).containsExactly(480,720);
+        assertThat(portrait.getFirst().width()).isEqualTo(480);assertThat(portrait.getFirst().height()).isEqualTo(852);
+        var below480=FileVideos.variants(new FileVideos.Source(640,360,12,true));
+        assertThat(below480).extracting(FileVideos.Variant::quality).containsExactly(360);
+        assertThat(below480.getFirst().width()).isEqualTo(640);assertThat(below480.getFirst().height()).isEqualTo(360);
         var small=FileVideos.variants(new FileVideos.Source(321,241,12,false)).getFirst();
         assertThat(small.quality()).isEqualTo(240);assertThat(small.width()).isLessThanOrEqualTo(321);assertThat(small.height()).isLessThanOrEqualTo(241);
     }
@@ -264,6 +267,29 @@ class FilesDatabaseTest {
         code("FILE_NOT_FOUND",()->videos().asset(id,"../secret"));code("FILE_NOT_FOUND",()->videos().asset(id,"q720.m3u8"));
         Files.writeString(directory.resolve("q360.m3u8"),"#EXTM3U\nhttps://evil.invalid/segment.ts\n");
         assertThatThrownBy(()->videos().playlist(id,"q360.m3u8",null)).isInstanceOf(FileFailure.class);
+    }
+    @Test void noedaeriAndLegacyPlaylistsCoexistAndRejectUntrustedNames() throws Exception {
+        UUID id=videoFile(),generation=UUID.randomUUID();Path directory=store.video(id).resolve(generation.toString());Files.createDirectories(directory);
+        db.update("INSERT INTO file_videos(file_id,state,generation) VALUES (?,'READY',?)",id,generation);
+        var videos=videos();
+        Files.writeString(directory.resolve("master.m3u8"),"#EXTM3U\nq360.m3u8\n480p.m3u8\n720p.m3u8\n1080p.m3u8\n");
+        assertThat(videos.playlist(id,"master.m3u8","capability")).contains("/hls/q360.m3u8?token=capability");
+        for(String label:List.of("480p","720p","1080p")) {
+            Files.writeString(directory.resolve(label+".m3u8"),"#EXTM3U\n#EXTINF:6,\n"+label+"-00000.ts\n#EXT-X-ENDLIST\n");
+            Files.writeString(directory.resolve(label+"-00000.ts"),"segment");
+            assertThat(videos.playlist(id,"master.m3u8","capability")).contains("/hls/"+label+".m3u8?token=capability");
+            assertThat(videos.playlist(id,label+".m3u8","capability")).contains("/hls/"+label+"-00000.ts?token=capability");
+            assertThat(videos.playlist(id,label+".m3u8",null)).contains("/hls/"+label+"-00000.ts\n").doesNotContain("?token=");
+            assertThat(videos.asset(id,label+"-00000.ts")).isEqualTo(directory.resolve(label+"-00000.ts"));
+        }
+        code("FILE_NOT_FOUND",()->videos.asset(id,"240p.m3u8"));
+        for(String name:List.of("../480p-00000.ts","sub/480p-00000.ts","sub\\480p-00000.ts","%2e%2e%2f480p-00000.ts",
+            "https://evil.invalid/480p-00000.ts","//evil.invalid/480p-00000.ts","480p-00000.ts?token=x","480p-00000.ts#x",
+            "480p-0000.ts","480p-000000.ts","480p.m3u8.exe","thumbnail.jpg")) {
+            code("FILE_NOT_FOUND",()->videos.asset(id,name));
+            Files.writeString(directory.resolve("480p.m3u8"),"#EXTM3U\n"+name+"\n");
+            assertThatThrownBy(()->videos.playlist(id,"480p.m3u8",null)).isInstanceOf(FileFailure.class);
+        }
     }
     @Test void derivativeReservationsCountAgainstUploadsAndSurviveUntilRecoveryCleanup() throws Exception {
         UUID id=videoFile();videos().reserve(service.downloadable(id),9_999_900);
