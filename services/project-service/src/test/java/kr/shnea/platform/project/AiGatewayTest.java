@@ -118,6 +118,6 @@ class AiGatewayTest {
             assertThatThrownBy(() -> new AiGateway(url, "key")).isInstanceOf(IllegalArgumentException.class);
         var disabled = new AiGateway("", ""); assertThat(disabled.configured()).isFalse();
         fails(() -> disabled.embeddings(bytes("{\"input\":\"x\"}")), ApiCode.AI_NOT_CONFIGURED);
-        assertThat(disabled.services().toString()).contains("/api/v1/ai/jobs", "upstream_reported_unverified", "workflow_example_only").doesNotContain("server-secret");
+        assertThat(disabled.services().toString()).contains("/api/v1/ai/jobs", "upstream_reported_unverified", "/api/v1/ai/indexing").doesNotContain("server-secret");
     }
 }

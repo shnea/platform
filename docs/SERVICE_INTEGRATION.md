@@ -1,6 +1,6 @@
 # SHNEA Platform · AI 연결 지침
 
-기준: 2026-10-05 · API `/api/v1` · 에디터 `0.1.0-alpha.12` / 문서 version 3.
+기준: 2026-10-06 · API `/api/v1` · 에디터 `0.1.0-alpha.12` / 문서 version 4.
 이 파일은 AI용 진입점이다. 필요한 항목의 URL만 읽는다. 플랫폼 저장소·관리자 로그인 없이 자료를 조회할 수 있다. 실제 API 호출에는 아래 인증이 필요하다.
 
 ## 입력받을 값
@@ -46,7 +46,7 @@
 | 에디터 | 패키지 자체는 인증 불필요. 본문 JSON 저장·사용자 권한·첨부 전송은 호스트 책임 |
 | Job | 호스트 서버 키 `jobs:write/read/work`. 플랫폼이 큐 관리, 프로젝트 워커가 실행. 업무는 job.id로 멱등 처리 |
 | 로그 | 호스트 서버 키 `logs:write/read`. 비동기·제한된 전송, 민감값 제외. 7일 보존·환경별 한도 |
-| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage`. Raya·임베딩, v12 동기/비동기 AI·RAG 실행·상태·취소·usage, 환경별 격리·요청 무재실행 |
+| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage/index:write/index:read/index:search`. Raya·임베딩, AI·RAG 실행·usage, v13 PostgreSQL 문서 색인 전체 교체·검색. Qdrant 예제와 별도 |
 
 플랫폼 로그인 기능을 쓰지 않거나 다른 OIDC로 로그인하는 프로젝트도 서버 키로 파일·Job·로그·AI 서비스를 독립 이용한다. 최종 이용자의 인증·인가·익명 이용은 호스트 서버가 판단하고 플랫폼 Keycloak으로 이전하지 않는다. 관리자 등록·환경 설정·키 발급에는 관리자 로그인이 필요하다. 기존 키는 AI 권한을 자동으로 받지 않는다.
 

@@ -1,12 +1,12 @@
 # 공통 AI·임베딩 연결 지침
 
-기준: 2026-10-05에 받은 뇌대리 연동 지침 v12(AI 실행·상태·취소·usage·공통 RAG 추가본). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
+기준: 2026-10-06에 받은 뇌대리 연동 지침 v13(공통 PostgreSQL 색인·검색과 `replace_all` 포함). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
 
 ## 로그인 없이 서버에서 연결
 
 플랫폼 로그인 기능을 사용하지 않거나 다른 OIDC로 로그인하는 프로젝트도 이용할 수 있다. 호스트 서버가 자신의 이용자 인증·인가·익명 이용 허용을 확인한 뒤 프로젝트·환경별 플랫폼 키로 호출한다. 플랫폼 Keycloak으로 이용자를 이전할 필요가 없다. 프로젝트 등록·환경 설정·키 발급에는 플랫폼 관리자 로그인이 필요하다.
 
-관리자 **프로젝트 → API 키**에서 필요한 `ai:read`·`ai:route`·`ai:embed`·`ai:execute`·`ai:jobs:read`·`ai:cancel`·`ai:usage` 중 필요한 권한만 선택한다. 기존 키는 새 권한을 자동으로 받지 않으므로 필요한 권한의 새 키를 발급한다. 환경 READY·프로젝트 활성·키 만료/폐기를 매 호출 확인한다. 키는 브라우저·모바일 앱·URL·모델 입력에 넣지 않는다.
+관리자 **프로젝트 → API 키**에서 필요한 `ai:read`·`ai:route`·`ai:embed`·`ai:execute`·`ai:jobs:read`·`ai:cancel`·`ai:usage`·`ai:index:write`·`ai:index:read`·`ai:index:search` 중 필요한 권한만 선택한다. 기존 키는 새 권한을 자동으로 받지 않으므로 필요한 권한의 새 키를 발급한다. 환경 READY·프로젝트 활성·키 만료/폐기를 매 호출 확인한다. 키는 브라우저·모바일 앱·URL·모델 입력에 넣지 않는다.
 
 AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 실행한다. 임베딩·Raya 동기 호출도 플랫폼을 거쳐 뇌대리에 연결한다. 뇌대리 키·n8n 관리/실행 키·공급자 키는 호스트에 배포하지 않는다.
 
@@ -22,10 +22,37 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 | `GET /api/v1/ai/jobs/{id}` | `ai:jobs:read` | 현재 환경의 상태·결과 |
 | `POST /api/v1/ai/jobs/{id}/cancel` | `ai:cancel` | 소유 범위 확인 뒤 취소 요청 |
 | `GET /api/v1/ai/usage` | `ai:usage` | 현재 환경의 공급자·모델·작업별 집계/상세 |
+| `POST /api/v1/ai/indexing` | `ai:index:write` | 문서 추가·전체 교체·삭제 접수 |
+| `GET /api/v1/ai/indexing`, `GET /api/v1/ai/indexing/{id}` | `ai:index:read` | 색인 작업 목록·상태·결과 요약 |
+| `POST /api/v1/ai/indexing/{id}/cancel` | `ai:index:write` | 대기 중 작업 취소 |
+| `GET /api/v1/ai/indexing/collections` | `ai:index:read` | 현재 환경 컬렉션 통계 |
+| `POST /api/v1/ai/indexing/search` | `ai:index:search` | 현재 환경 컬렉션 유사도 검색 |
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에 연결한다. `vector.index`의 `workflow_example_only`는 운영자용 공통 인덱싱 예제만 제공한다는 뜻이며 플랫폼 공개 인덱싱 API는 없다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에, `vector.index`는 v13의 PostgreSQL 색인 API에 연결한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+
+## PostgreSQL 문서 색인·전체 교체
+
+호스트 서버가 문서 소유권을 확인하고 긴 문서를 청크로 나눈 뒤 `POST /api/v1/ai/indexing`에 보낸다. 플랫폼은 `project`·`environment`를 서버 키의 UUID로 고정하고 `collection`은 소문자 논리 이름으로 제한한다. 뇌대리의 저장·검색 범위는 `(owner_id, project, environment, collection)`이다. 이 색인은 기존 n8n Qdrant 컬렉션과 별도이며 한쪽에 넣은 문서가 다른 쪽 검색에 나타나지 않는다. n8n이 PostgreSQL 색인을 쓸 때는 뇌대리 검색 API의 결과를 작업 문맥으로 전달하도록 워크플로를 연결해야 한다.
+
+```json
+{
+  "request_id": "portfolio-full-index-20261006-001",
+  "collection": "portfolio",
+  "mode": "replace_all",
+  "sync": false,
+  "documents": [
+    {"id": "project-1-chunk-1", "title": "프로젝트 1", "content": "검색할 문서 내용", "metadata": {"source_id": "project-1"}}
+  ]
+}
+```
+
+`replace_all`은 지정 범위의 문서 전체를 **이 요청의 문서 목록으로 원자적으로 교체**한다. `documents: []`이면 지정 컬렉션의 문서를 모두 삭제한다. `delete_ids`는 이 모드에 넣지 않는다. 여러 요청으로 나눈 100건 초과 자료를 하나의 전체 교체로 처리할 수 없으므로 이 경우 현재 계약으로 기존 색인을 비우지 않는다. 추가·일부 교체는 `upsert`와 안정된 문서 ID를 쓰고, 특정 ID 삭제는 `delete`를 쓴다.
+
+본문은 1MiB 이하, 문서와 삭제 ID는 각각 최대 100건이다. 문서 ID는 256자, 제목은 512자, 제목+본문 임베딩 텍스트는 16000자 이하다. 서버가 자동으로 청크를 나누지 않는다. `request_id`는 같은 업무 시도에서 고정하고 전송 실패 후 같은 내용으로만 재확인한다. 다른 내용은 409이며 실패·취소 후 새 실행에는 새 ID를 쓴다. `sync:false`는 접수 202, `sync:true`도 같은 컬렉션이 사용 중이면 202를 받을 수 있다. 상태 `pending → running → succeeded/failed`를 단건 GET으로 확인하고 대기 중 작업만 취소한다. 결과 요약은 플랫폼 접수 기준 뇌대리 기본 7일 뒤 만료되어도 실제 색인 문서는 `delete` 또는 `replace_all`까지 보존된다.
+
+`POST /api/v1/ai/indexing/search`에는 `collection`, `query`, `limit`(1~50), `min_similarity`(-1~1)를 보낸다. 빈 컬렉션은 빈 결과다. `GET /api/v1/ai/indexing/collections`는 현재 프로젝트·환경의 컬렉션별 문서 수와 추정 토큰을 보여준다. 검색은 최대 10000문서 정확 검색이고 초과 범위는 뇌대리에서 422다. 토큰 수는 공백 단위 추정치이므로 공급자 청구량으로 취급하지 않는다. 색인 사용량은 뇌대리 usage에 별도 기록된다. 플랫폼은 문서 원문·벡터·검색 결과를 DB에 저장하지 않는다.
 
 ## AI 작업 실행·상태·취소
 

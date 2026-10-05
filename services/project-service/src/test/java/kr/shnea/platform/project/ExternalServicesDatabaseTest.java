@@ -46,7 +46,7 @@ class ExternalServicesDatabaseTest {
     db.update("UPDATE environments SET kind=? WHERE id=?",mode.equals("dev")?"DEV":"PROD",env);
     var service=new ProjectService(db,new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())),mock(IdentityClient.class),mode);
     var scopes=service.credentialScopes(env).stream().map(ProjectService.Scope::code).toList();
-    assertThat(scopes).hasSize(mode.equals("dev")?18:17);
+    assertThat(scopes).hasSize(mode.equals("dev")?21:20);
     assertThat(validator.validate(new ProjectController.NewCredential(null,scopes))).isEmpty();
     var key=service.issueCredential(env,null,scopes,"test");
     assertThat(key.scopes()).containsExactlyElementsOf(scopes);

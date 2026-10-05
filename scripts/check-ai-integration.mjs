@@ -31,13 +31,16 @@ for(const invalid of [
 const output=process.argv[2]??'output/ai-integration-check';
 execFileSync(process.execPath,['scripts/build-integration.mjs',output],{stdio:'inherit'});
 const spec=JSON.parse(readFileSync(`${output}/ai.openapi.json`,'utf8'));
-assert.deepEqual(Object.keys(spec.paths).sort(),['/api/v1/ai/embeddings','/api/v1/ai/jobs','/api/v1/ai/jobs/{id}','/api/v1/ai/jobs/{id}/cancel','/api/v1/ai/raya/route','/api/v1/ai/services','/api/v1/ai/usage']);
+assert.deepEqual(Object.keys(spec.paths).sort(),['/api/v1/ai/embeddings','/api/v1/ai/indexing','/api/v1/ai/indexing/collections','/api/v1/ai/indexing/search','/api/v1/ai/indexing/{id}','/api/v1/ai/indexing/{id}/cancel','/api/v1/ai/jobs','/api/v1/ai/jobs/{id}','/api/v1/ai/jobs/{id}/cancel','/api/v1/ai/raya/route','/api/v1/ai/services','/api/v1/ai/usage']);
 assert.deepEqual(spec.paths['/api/v1/ai/embeddings'].post['x-required-scopes'],['ai:embed']);
 assert.deepEqual(spec.paths['/api/v1/ai/raya/route'].post['x-required-scopes'],['ai:route']);
 assert.deepEqual(spec.paths['/api/v1/ai/services'].get['x-required-scopes'],['ai:read']);
 for(const [path,verb,scope] of [
  ['/api/v1/ai/jobs','post','ai:execute'],['/api/v1/ai/jobs','get','ai:jobs:read'],
  ['/api/v1/ai/jobs/{id}','get','ai:jobs:read'],['/api/v1/ai/jobs/{id}/cancel','post','ai:cancel'],['/api/v1/ai/usage','get','ai:usage'],
+ ['/api/v1/ai/indexing','post','ai:index:write'],['/api/v1/ai/indexing','get','ai:index:read'],
+ ['/api/v1/ai/indexing/collections','get','ai:index:read'],['/api/v1/ai/indexing/search','post','ai:index:search'],
+ ['/api/v1/ai/indexing/{id}','get','ai:index:read'],['/api/v1/ai/indexing/{id}/cancel','post','ai:index:write'],
 ])assert.deepEqual(spec.paths[path][verb]['x-required-scopes'],[scope]);
 assert.equal(spec.components.schemas.AiJobInput.properties.prompt.maxLength,200000);
 assert.equal(spec.components.schemas.AiJobInput.properties.request_id.maxLength,128);

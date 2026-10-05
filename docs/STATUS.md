@@ -2,6 +2,35 @@
 
 ## 현재 단계
 
+### 뇌대리 v13 PostgreSQL 문서 색인 전체 교체·검색 연결 (2026-10-06)
+
+- **최신 요청/범위:** 전체 색인 전체 교체(`replace_all`) 추가 요청에 따라 뇌대리 v13 PostgreSQL 문서 색인 및 유사도 검색 API를 플랫폼에 연결했다. 기존 n8n Qdrant 예제와 별개로 호스트 서버가 서버 API 키로 직접 문서를 색인하고 검색할 수 있도록 했다.
+- **구현:**
+  - `POST /api/v1/ai/indexing`: 문서 추가(`upsert`), 전체 교체(`replace_all`), 삭제(`delete`) 접수. 비동기/동기(202/200). `replace_all`은 요청 문서로 한 컬렉션 전체를 원자적으로 교체하며, `documents: []`일 경우 전체 삭제.
+  - `GET /api/v1/ai/indexing`: 현재 키의 프로젝트·환경의 색인 작업 목록 조회 (limit 1~100, collection/status 필터).
+  - `GET /api/v1/ai/indexing/{id}`: 특정 색인 작업 단건 상태/결과 조회.
+  - `POST /api/v1/ai/indexing/{id}/cancel`: 대기 중(`pending`)인 색인 작업 취소 요청.
+  - `GET /api/v1/ai/indexing/collections`: 현재 환경의 컬렉션 통계(문서 수, 추정 토큰 등) 조회.
+  - `POST /api/v1/ai/indexing/search`: 현재 환경의 컬렉션 대상 유사도 검색(1~50건, min_similarity).
+- **보안 및 권한 격리:**
+  - `ai:index:write`(색인 추가/교체/삭제/취소), `ai:index:read`(색인 작업 목록/상태/통계), `ai:index:search`(문서 유사도 검색) 스코프를 분리하고 기존 키에 자동 부여되지 않도록 격리.
+  - `project`, `environment`는 API 키의 UUID로 강제 고정하여 타 환경 간 접근을 원천 차단. 문서 원문·벡터·검색 결과는 플랫폼 DB에 저장하지 않음.
+  - 요청 본문 1MiB 상한, 단일 요청당 최대 100건 문서/삭제 ID 제한, ID 256자/제목 512자/제목+내용 합산 16,000자 상한 적용.
+- **연동 명세 및 안내 갱신:**
+  - `REQUIREMENTS.md`, `docs/REQUIREMENTS.md`, `docs/SERVICE_INTEGRATION.md`, `docs/integration/AI.md` 동기화.
+  - 개발자 센터 `apps/admin-web/src/features/developer/AiGuide.tsx`, OpenAPI 명세 `services/project-service/src/main/resources/openapi.json`.
+  - 검증 스크립트 `scripts/check-ai-integration.mjs`에 신규 경로 및 스코프 검증 반영.
+- **로컬 검증:**
+  - `docker compose --env-file .env.example -p platform-ai-checks -f compose.test.yml -f output/ai/test.yml --profile jobs run --rm job-check`에서 JUnit 87개 중 85개 통과, 2개 선택적 실제 서버 검사 건너뜀, 실패/오류 0.
+  - `AiIndexingTest` 5개에서 빈 문서 배열 전체 교체, 유효하지 않은 요청 차단, 타 환경 응답 격리, upsert/list/get/cancel 흐름, search 및 collections 조회 검증 완료.
+  - `AiGatewayTest`, `ExternalServicesDatabaseTest`(21/20개 스코프), `OpenApiTest`(dev 67개, prod 62개), `AiSecurityTest`, `AiConfigurationTest` 모두 통과.
+  - `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:check .` 관리자 웹 빌드 통과.
+  - `docker run --rm registry.shnea.kr/platform-admin-web:check npm test` 관리자 웹 5개 테스트 통과.
+  - `node scripts/check-ai-integration.mjs`, `python -X utf8 scripts/check-ci.py`, `python -X utf8 scripts/check-admin-security.py`, `git diff --check`, `docker build infra/nginx` Nginx 설정 검사 모두 통과.
+  - 일회용 테스트 DB 및 네트워크 down 완료.
+- **미검증:**
+  - 실제 호스트 서버 키를 통한 운영 환경 뇌대리 PostgreSQL 색인 및 검색 실제 엔드투엔드 호출.
+
 ### 뇌대리 v12 AI 실행·사용량·공통 RAG 연결 (2026-10-05)
 
 - **최신 요청/범위:** 사용자 제공 v12 지침과 실제 공개 OpenAPI·뇌대리 AI 작업 소스·공식 n8n 노드를 확인했다. 기존 임베딩/Raya에 8종 작업 동기/비동기 접수·상태/목록·취소·usage를 추가하며 공통 RAG/벡터 인덱싱으로 범위를 갱신했다. root/detail 요구사항 버전 0.16·개발자 센터·공개 AI 명세·Python 클라이언트·수동 n8n 예제를 함께 맞췄다.

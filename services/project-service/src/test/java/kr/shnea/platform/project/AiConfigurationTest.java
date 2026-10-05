@@ -16,6 +16,7 @@ class AiConfigurationTest {
             assertThat(context.getBean(AiGateway.class).configured()).isTrue();
             assertThat(context.getBean(AiJobs.class)).isNotNull();
             assertThat(context.getBean(AiJobController.class)).isNotNull();
+            assertThat(context.getBean(AiIndexingController.class)).isNotNull();
         }
     }
     @Test void missingAiSettingsDoNotPreventOtherPlatformFeaturesFromStarting() {
@@ -32,6 +33,6 @@ class AiConfigurationTest {
         context.registerBean(org.springframework.jdbc.core.JdbcTemplate.class, () -> mock(org.springframework.jdbc.core.JdbcTemplate.class));
         context.registerBean(org.springframework.transaction.support.TransactionTemplate.class, () -> mock(org.springframework.transaction.support.TransactionTemplate.class));
         context.registerBean(ProjectService.class, () -> mock(ProjectService.class));
-        context.register(AiGateway.class, AiJobs.class, AiJobController.class, AiController.class);
+        context.register(AiGateway.class, AiJobs.class, AiJobController.class, AiController.class, AiIndexing.class, AiIndexingController.class);
     }
 }

@@ -18,6 +18,7 @@ class AiGateway {
     static final String EMBEDDING_MODEL = "models/gemini-embedding-001";
     static final int ROUTE_LIMIT = 64 * 1024, EMBEDDING_LIMIT = 1024 * 1024;
     static final int JOB_LIMIT = 2 * 1024 * 1024;
+    static final int INDEX_LIMIT = 1024 * 1024;
     static final Set<String> TASKS = Set.of("blog.tags", "blog.summary", "portfolio.search", "ui.render",
         "comment.generate", "document.analyze", "code.analyze", "chat.general");
     private final URI base;
@@ -54,7 +55,8 @@ class AiGateway {
                 "model", EMBEDDING_MODEL, "defaultDimensions", 768, "maxDimensions", 3072, "maxBatch", 100),
             Map.of("id", "n8n.execute", "status", "implemented", "path", "/api/v1/ai/jobs", "scope", "ai:execute", "taskTypes", TASKS.stream().sorted().toList()),
             Map.of("id", "usage", "status", "implemented", "path", "/api/v1/ai/usage", "scope", "ai:usage", "measurement", "upstream_reported_unverified"),
-            Map.of("id", "vector.index", "status", "workflow_example_only")));
+            Map.of("id", "vector.index", "status", "implemented", "path", "/api/v1/ai/indexing", "scope", "ai:index:write",
+                "modes", List.of("upsert", "replace_all", "delete"))));
     }
 
     JsonNode parse(byte[] bytes, int limit) {
@@ -150,7 +152,7 @@ class AiGateway {
             future = http.sendAsync(request, info -> new LimitedBody(limit));
             var response = future.get(105, TimeUnit.SECONDS);
             int status = response.statusCode();
-            if (status != 200) throw switch (status) {
+            if (status != 200 && status != 202) throw switch (status) {
                 case 400, 413, 422 -> ApiCode.AI_INVALID_REQUEST.failure();
                 case 401, 403 -> ApiCode.AI_UPSTREAM_AUTH_FAILED.failure();
                 case 404 -> ApiCode.AI_JOB_NOT_FOUND.failure();
