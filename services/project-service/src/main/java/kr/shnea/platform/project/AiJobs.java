@@ -76,8 +76,8 @@ class AiJobs {
         JsonNode taskInput = input.path("input");
         String prompt;
         if (task.equals("article.draft")) {
-            JsonNode context = taskInput.path("context");
-            String topic = AiGateway.text(context.path("topic"), 2000, true);
+            JsonNode taskContext = taskInput.path("context");
+            String topic = AiGateway.text(taskContext.path("topic"), 2000, true);
             prompt = input.has("prompt") ? AiGateway.text(input.get("prompt"), 200000, true) : "실험글 초안 주제: " + topic;
         } else {
             prompt = AiGateway.text(input.get("prompt"), 200000, true);

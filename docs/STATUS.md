@@ -5,6 +5,7 @@
 ### 뇌대리 v14 블로그 AI 작업 연결 (2026-10-06)
 
 - **최신 요청/범위:** 태그·요약·댓글 자동생성·실험글 초안을 블로그가 기존 흐름을 유지하며 호출할 수 있는지 확인했다. 태그·요약·댓글은 이미 공통 AI 작업 허용 목록에 있어 그대로 연결 가능했으며, 신규 `article.draft`만 플랫폼 허용 목록/OpenAPI에서 빠져 있었다.
+- **CI 후속 수정:** 사용자가 전달한 verify 로그에서 `AiJobs.prepare`의 매개변수 `Context context`와 같은 이름으로 `JsonNode context`를 선언해 Java 컴파일이 실패한 것을 확인했다. 새 지역변수를 `taskContext`로 변경했다. 수정 후 `git diff --check`는 통과했으나 로컬 Docker 데몬이 실행 중이지 않아 동일 Compose 검증 재실행은 시작되지 않았다.
 - **구현:** `article.draft`를 9번째 AI 작업으로 허용하고, 기존 입력을 그대로 넘긴다. 초안은 `input.context.topic` 필수이며 top-level `prompt`가 생략될 때만 주제로 기본 prompt를 구성한다. API 명세·검증 스크립트·수동 n8n 예제·개발자 가이드·AI 연동 지침·요구사항을 v14에 맞췄다. 태그/요약/댓글의 기존 hash 캐시, 블로그 결과 저장, 스레드/말투 등 문맥은 플랫폼 코드에서 대체하지 않고 호스트 블로그 책임으로 유지한다고 문서화했다.
 - **검증:** 변경 파일 diff와 `git status`를 확인했다. 테스트·빌드·외부 블로그 서버 연결 검수는 수행하지 않았다.
 - **미검증/다음:** AI jobs API를 통해 실제 블로그 요청을 보내고 결과 형태·기존 저장/캐시/실패 처리가 유지되는지 블로그 호스트에서 종단 검수해야 한다. 특히 `article.draft`의 뉴스 출처와 `{title, paragraphs, sources}`/`{skip:true}` 결과를 확인한다. 기존 사용자 변경 `scripts/admin_security.py`는 작업에 포함하지 않는다.
