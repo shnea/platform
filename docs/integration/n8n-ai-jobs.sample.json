@@ -1,5 +1,5 @@
 {
-  "name": "플랫폼 v12 · 8종 AI 작업 호출 수동 예제",
+  "name": "플랫폼 v14 · AI 작업 호출 수동 예제",
   "active": false,
   "nodes": [
     {
@@ -23,7 +23,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Keep this ID when retransmitting the same operation. Use a new ID only for a new operation.\nconst request = {request_id: 'replace-with-stable-host-operation-id', task_type: 'chat.general',\n  prompt: '한 문장으로 인사해 주세요.', sync: true, input: {}};\nconst tasks = ['blog.tags','blog.summary','portfolio.search','ui.render','comment.generate','document.analyze','code.analyze','chat.general'];\nif (!tasks.includes(request.task_type) || !request.request_id || !request.prompt) throw new Error('AI 요청을 확인하세요.');\n// For RAG, input.collection is a logical name such as document. Platform namespaces it from the key.\nreturn [{json:request}];"
+        "jsCode": "// Keep this ID when retransmitting the same operation. Use a new ID only for a new operation.\nconst request = {request_id: 'replace-with-stable-host-operation-id', task_type: 'article.draft',\n  prompt: '양자 컴퓨팅 주제로 최근 동향을 반영한 실험글 초안을 작성해 주세요.', sync: true,\n  input: {context: {topic: '양자 컴퓨팅'}}};\nconst tasks = ['blog.tags','blog.summary','portfolio.search','ui.render','comment.generate','document.analyze','code.analyze','chat.general','article.draft'];\nif (!tasks.includes(request.task_type) || !request.request_id || !request.prompt) throw new Error('AI 요청을 확인하세요.');\n// For RAG, input.collection is a logical name such as document. Platform namespaces it from the key.\nreturn [{json:request}];"
       }
     },
     {
@@ -78,7 +78,7 @@
         240
       ],
       "parameters": {
-        "content": "## 비활성 수동 예제\nPLATFORM_URL과 Header Auth X-Platform-Key(ai:execute)를 설정합니다.\n8종 task_type 중 하나를 선택합니다. sync=false는 접수 후 GET /api/v1/ai/jobs/{id}로 조회합니다.\n조회 ai:jobs:read · 취소 ai:cancel · 사용량 ai:usage는 별도 권한입니다.\n같은 ID·내용은 기존 조회. 실패/취소/타임아웃 후 자동 재실행 없음.\n결과는 호스트가 검증하며 사용자 검토 없이 UI 변경을 적용하지 않습니다.\nCredential ID·주소·키·자동 웹훅 없음. 실행 데이터 보존을 검토합니다.",
+        "content": "## 비활성 수동 예제\nPLATFORM_URL과 Header Auth X-Platform-Key(ai:execute)를 설정합니다.\n블로그 태그/요약, 댓글, 실험글 초안 및 기존 AI 작업을 선택할 수 있습니다.\n초안은 input.context.topic을 전달하고 prompt는 생략해도 주제로 구성됩니다.\nsync=false는 접수 후 GET /api/v1/ai/jobs/{id}로 조회합니다.\n조회 ai:jobs:read · 취소 ai:cancel · 사용량 ai:usage는 별도 권한입니다.\n같은 ID·내용은 기존 조회. 실패/취소/타임아웃 후 자동 재실행 없음.\n결과는 호스트가 검증하며 사용자 검토 없이 UI 변경을 적용하지 않습니다.\nCredential ID·주소·키·자동 웹훅 없음. 실행 데이터 보존을 검토합니다.",
         "height": 300,
         "width": 680
       }

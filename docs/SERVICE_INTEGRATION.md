@@ -46,7 +46,7 @@
 | 에디터 | 패키지 자체는 인증 불필요. 본문 JSON 저장·사용자 권한·첨부 전송은 호스트 책임 |
 | Job | 호스트 서버 키 `jobs:write/read/work`. 플랫폼이 큐 관리, 프로젝트 워커가 실행. 업무는 job.id로 멱등 처리 |
 | 로그 | 호스트 서버 키 `logs:write/read`. 비동기·제한된 전송, 민감값 제외. 7일 보존·환경별 한도 |
-| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage/index:write/index:read/index:search`. Raya·임베딩, AI·RAG 실행·usage, v13 PostgreSQL 문서 색인 전체 교체·검색. Qdrant 예제와 별도 |
+| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage/index:write/index:read/index:search`. Raya·임베딩, v14 블로그 태그·요약·댓글·실험글 초안 포함 9종 AI·RAG 실행·usage, v13 PostgreSQL 문서 색인 전체 교체·검색. Qdrant 예제와 별도 |
 
 플랫폼 로그인 기능을 쓰지 않거나 다른 OIDC로 로그인하는 프로젝트도 서버 키로 파일·Job·로그·AI 서비스를 독립 이용한다. 최종 이용자의 인증·인가·익명 이용은 호스트 서버가 판단하고 플랫폼 Keycloak으로 이전하지 않는다. 관리자 등록·환경 설정·키 발급에는 관리자 로그인이 필요하다. 기존 키는 AI 권한을 자동으로 받지 않는다.
 

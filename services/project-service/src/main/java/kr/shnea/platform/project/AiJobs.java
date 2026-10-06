@@ -73,7 +73,15 @@ class AiJobs {
         if (id.codePoints().anyMatch(Character::isISOControl)) throw ApiCode.AI_INVALID_REQUEST.failure();
         String task = AiGateway.text(input.get("task_type"), 64, true);
         if (!AiGateway.TASKS.contains(task)) throw ApiCode.AI_INVALID_REQUEST.failure();
-        AiGateway.text(input.get("prompt"), 200000, true);
+        JsonNode taskInput = input.path("input");
+        String prompt;
+        if (task.equals("article.draft")) {
+            JsonNode context = taskInput.path("context");
+            String topic = AiGateway.text(context.path("topic"), 2000, true);
+            prompt = input.has("prompt") ? AiGateway.text(input.get("prompt"), 200000, true) : "실험글 초안 주제: " + topic;
+        } else {
+            prompt = AiGateway.text(input.get("prompt"), 200000, true);
+        }
         for (String field : List.of("project", "environment")) {
             String expected = field.equals("project") ? context.projectId().toString() : context.environmentId().toString();
             if (input.has(field) && !expected.equals(AiGateway.text(input.get(field), 64, true))) throw ApiCode.AI_INVALID_REQUEST.failure();
@@ -87,7 +95,7 @@ class AiJobs {
         String logical = options.has("collection") ? AiGateway.text(options.get("collection"), 64, true) : task.split("\\.")[0];
         options.put("collection", collection(context, logical));
         ObjectNode request = json.createObjectNode();
-        request.put("request_id", id); request.put("task_type", task); request.set("prompt", input.get("prompt"));
+        request.put("request_id", id); request.put("task_type", task); request.put("prompt", prompt);
         request.put("project", context.projectId().toString()); request.put("environment", context.environmentId().toString());
         request.set("input", options); request.put("sync", input.path("sync").asBoolean(true));
         if (json.writeValueAsBytes(request).length > AiGateway.JOB_LIMIT) throw ApiCode.PAYLOAD_TOO_LARGE.failure();

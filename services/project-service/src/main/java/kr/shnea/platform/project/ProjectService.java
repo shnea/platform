@@ -143,7 +143,7 @@ class ProjectService {
             new Scope("ai:index:write","AI 문서 색인 변경","현재 환경의 문서를 추가·전체 교체·삭제합니다."),
             new Scope("ai:index:read","AI 문서 색인 조회","현재 환경의 색인 작업과 컬렉션 통계를 조회합니다."),
             new Scope("ai:index:search","AI 문서 유사도 검색","현재 환경의 색인 문서를 유사도로 검색합니다."),
-            new Scope("ai:execute","AI 작업 실행","8종 AI·RAG 작업을 동기 또는 비동기로 접수합니다."),
+            new Scope("ai:execute","AI 작업 실행","블로그·댓글·초안 및 RAG AI 작업을 동기 또는 비동기로 접수합니다."),
             new Scope("ai:jobs:read","AI 작업 조회","이 환경의 AI 작업 상태·결과·목록을 조회합니다."),
             new Scope("ai:cancel","AI 작업 취소 요청","이 환경의 AI 작업 취소를 요청합니다. 실행 종료 보장과 구분합니다."),
             new Scope("ai:usage","AI 사용량 조회","이 환경의 뇌대리 보고 사용량을 조회합니다. 실제 측정 여부는 별도 확인합니다.")));

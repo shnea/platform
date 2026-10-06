@@ -20,7 +20,7 @@ class AiGateway {
     static final int JOB_LIMIT = 2 * 1024 * 1024;
     static final int INDEX_LIMIT = 1024 * 1024;
     static final Set<String> TASKS = Set.of("blog.tags", "blog.summary", "portfolio.search", "ui.render",
-        "comment.generate", "document.analyze", "code.analyze", "chat.general");
+        "comment.generate", "document.analyze", "code.analyze", "chat.general", "article.draft");
     private final URI base;
     private final String key;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))

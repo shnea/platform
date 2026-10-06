@@ -1,6 +1,6 @@
 # 공통 AI·임베딩 연결 지침
 
-기준: 2026-10-06에 받은 뇌대리 연동 지침 v13(공통 PostgreSQL 색인·검색과 `replace_all` 포함). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
+기준: 2026-10-06에 받은 뇌대리 연동 지침 v14(블로그 태그·요약·댓글 생성·실험글 초안 포함). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
 
 ## 로그인 없이 서버에서 연결
 
@@ -17,7 +17,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 | `GET /api/v1/ai/services` | `ai:read` | 지원 목록·설정 존재 여부·미제공 상태 |
 | `POST /api/v1/ai/raya/route` | `ai:route` | 동기 텍스트 난이도 판단, 답변 생성 없음 |
 | `POST /api/v1/ai/embeddings` | `ai:embed` | 동기 단일/배치 텍스트 벡터 생성 |
-| `POST /api/v1/ai/jobs` | `ai:execute` | 8종 AI·RAG 작업 동기/비동기 접수 |
+| `POST /api/v1/ai/jobs` | `ai:execute` | 9종 AI·RAG 작업 동기/비동기 접수 |
 | `GET /api/v1/ai/jobs` | `ai:jobs:read` | 현재 환경의 최근 작업 목록·status/limit 필터 |
 | `GET /api/v1/ai/jobs/{id}` | `ai:jobs:read` | 현재 환경의 상태·결과 |
 | `POST /api/v1/ai/jobs/{id}/cancel` | `ai:cancel` | 소유 범위 확인 뒤 취소 요청 |
@@ -30,7 +30,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에, `vector.index`는 v13의 PostgreSQL 색인 API에 연결한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에, `vector.index`는 v13의 PostgreSQL 색인 API에 연결한다. 뇌대리 v14의 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`를 기존 AI 작업 API로 전달할 수 있다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
 
 ## PostgreSQL 문서 색인·전체 교체
 
@@ -72,7 +72,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 }
 ```
 
-request_id는 비민감 업무 식별자로 공백만이 아닌 1~128자이며 제어문자를 거부한다. 원문·개인정보·키를 식별자에 넣지 않는다. 8종 task_type만 실행하고 미등록 작업을 chat.general로 대체하지 않는다. prompt는 공백 제외 1~200000자, 전체 본문은 2MiB다. input 객체에 기존 messages·이미지 참조·thread/memory·hash·context/system 등 작업별 데이터를 유지한다. 뇌대리는 prompt/input을 보관하고 n8n에 전달하므로 인증키·토큰·불필요한 개인정보를 넣지 않는다. 신뢰된 지침은 호스트 서버가 관리하며 최종 결과·태그/요약/댓글/UI 계약도 호스트가 검증한다.
+request_id는 비민감 업무 식별자로 공백만이 아닌 1~128자이며 제어문자를 거부한다. 원문·개인정보·키를 식별자에 넣지 않는다. 지원 task_type만 실행하고 미등록 작업을 chat.general로 대체하지 않는다. prompt는 공백 제외 1~200000자(단, `article.draft`는 `input.context.topic`이 있으면 생략 가능), 전체 본문은 2MiB다. input 객체에 기존 messages·이미지 참조·thread/memory·hash·context/system 등 작업별 데이터를 유지한다. 뇌대리는 prompt/input을 보관하고 n8n에 전달하므로 인증키·토큰·불필요한 개인정보를 넣지 않는다. 신뢰된 지침은 호스트 서버가 관리하며 최종 결과·태그/요약/댓글/UI 계약도 호스트가 검증한다.
 
 project/environment는 **서버 키의 프로젝트 UUID·환경 UUID로 고정**한다. 생략을 권장하며 명시한 값은 키 범위와 같아야 한다. 목록/usage 쿼리에서 외부 project/environment 필터는 거부한다. 부가 input의 project/environment/owner_id/request_id/task_type/prompt/body/routing/provider_plan/cache 주장 필드도 거부한다. 서버가 확인한 모델 경로·소유권·cache hit를 요청자가 덮어쓰지 못하게 한다.
 
@@ -92,7 +92,7 @@ python ai-client.py cancel --id <응답-id>
 python ai-client.py usage --task-type portfolio.search --limit 50
 ```
 
-[n8n AI 작업 호출 수동 예제](https://platform.shnea.kr/integrations/n8n-ai-jobs.sample.json)는 PLATFORM_URL과 Header Auth `X-Platform-Key`를 운영자가 선택한다. 실제 주소·키·Credential ID·자동 웹훅을 포함하지 않는다. 8종 중 하나와 고정 업무 request_id를 설정하며 기본 sync=true, 오류 시 중단·자동 재시도 없음이다. 내부 공급자 분기는 뇌대리의 [v12 라우팅 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_ai_routing_sample.json)를 참조하되 기존 운영 워크플로를 자동 교체하지 않는다.
+[n8n AI 작업 호출 수동 예제](https://platform.shnea.kr/integrations/n8n-ai-jobs.sample.json)는 PLATFORM_URL과 Header Auth `X-Platform-Key`를 운영자가 선택한다. 실제 주소·키·Credential ID·자동 웹훅을 포함하지 않는다. 지원 작업 중 하나와 고정 업무 request_id를 설정하며 기본 sync=true, 오류 시 중단·자동 재시도 없음이다. 내부 공급자 분기는 뇌대리의 [v12 라우팅 예제](https://github.com/shnea/noedaeri/blob/main/examples/n8n_ai_routing_sample.json)를 참조하되 기존 운영 워크플로를 자동 교체하지 않는다.
 
 ## 공통 임베딩
 
@@ -148,11 +148,12 @@ n8n 내부 Raya는 `/api/ai/v1/raya/route`와 같은 실행 전용 키를 사용
 
 | 작업 | 유지할 입력·출력·처리 |
 | --- | --- |
-| `blog.tags` | hash 점유/캐시 → context/system → Raya·모델 → 1~8개 태그·각 1~30자 검증 → `{hash,result}` 저장. 실패 기록 유지 |
-| `blog.summary` | 같은 점유·캐시·저장, 비어 있지 않은 summary·최대 500자 |
+| `blog.tags` | `input`의 기존 context/system을 유지해 실행하고 1~8개 태그·각 1~30자를 호스트에서 검증한다. 기존 hash 점유/캐시·`{hash,result}` 저장 및 실패 기록을 유지한다. |
+| `blog.summary` | 기존 context/system, hash 점유/캐시·저장 흐름을 유지한다. 한국어 구어체 2~4문장, summary 최대 500자를 호스트에서 검증한다. |
 | `portfolio.search` | 공통 임베딩 → Qdrant 검색 → retrieved_context/instruction → Raya → 모델. 검색 근거 없이 추측하지 않음 |
 | `ui.render` | messages·이미지 → 실제 Agent/MCP의 컴포넌트·템플릿·디자인 문맥 → `{reply,imageFileId}`. 읽기 전용 권한·revision 충돌·사용자 검토 후 적용 제안 유지 |
-| `comment.generate` | target/thread/memory/말투 유지. comment·추가 필드·길이 계약은 연결 전에 확정, JSON 객체 검사만으로 완료 아님 |
+| `comment.generate` | target/thread/memory/말투·페르소나를 `input`에 유지한다. 호스트에서 `{comment}` 계약과 추가 필드·길이를 검증하며 JSON 객체 검사만으로 완료로 간주하지 않는다. |
+| `article.draft` | `input.context.topic`을 필수로 전달한다. 상위 `prompt`가 생략되면 플랫폼이 topic 기반 기본 요청문을 만든다. 최근 7일 Google News RSS 근거의 실험글 초안 `{title, paragraphs, sources}` 또는 자료 부족 시 `{skip:true}`를 호스트 계약에 맞게 처리한다. |
 | `document.analyze`·`code.analyze`·`chat.general` | 각각의 지침·결과 계약 후속 제공 필요. 다른 기능의 지침 자동 복제 금지 |
 
 미등록 작업은 `unsupported_task`로 종료하며 chat.general로 자동 대체하지 않는다. 지침 미설정은 `awaiting_instructions`다. 원래 blog hash는 공통 request_id와 다르다. UI의 쓰이지 않는 별도 HTTP 노드를 실제 호출 경로로 오인하지 않는다.

@@ -45,6 +45,8 @@ for(const [path,verb,scope] of [
 assert.equal(spec.components.schemas.AiJobInput.properties.prompt.maxLength,200000);
 assert.equal(spec.components.schemas.AiJobInput.properties.request_id.maxLength,128);
 assert.equal(spec.components.schemas.AiJobInput.properties.sync.default,true);
+assert.ok(spec.components.schemas.AiJobInput.properties.task_type.enum.includes('article.draft'));
+assert.ok(spec.components.schemas.AiJobInput.allOf.some(rule=>rule.if?.properties?.task_type?.const==='article.draft'));
 assert.deepEqual(spec.components.schemas.AiUsage.properties.measurement.enum,['upstream_reported_unverified']);
 assert.equal(JSON.stringify(spec).includes('/admin/'),false);
 assert.equal(JSON.stringify(spec).includes('/internal/'),false);
@@ -79,6 +81,7 @@ for(const sample of [execution,indexing]){
 }
 const runRequest=Function(execution.nodes.find(node=>node.name==='고정 요청 ID·작업 선택').parameters.jsCode)()[0].json;
 assert.equal(runRequest.sync,true);
+assert.ok(['blog.tags','blog.summary','portfolio.search','ui.render','comment.generate','document.analyze','code.analyze','chat.general','article.draft'].includes(runRequest.task_type));
 const validateJob=execution.nodes.find(node=>node.name==='작업 결과·접수 상태 검증').parameters.jsCode;
 const checkJob=response=>Function('$input','$',validateJob)({first:()=>({json:response})},()=>({first:()=>({json:runRequest})}));
 assert.equal(checkJob({...runRequest,id:'job-id',status:'running'})[0].json.status,'running');
