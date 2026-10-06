@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
-from identity_admin import connect 
+from identity_admin import connect
 
 LEGACY_FLOWS = ('platform-admin-mfa-v1', 'platform-admin-mfa-v2')
 FLOW = 'platform-admin-mfa-v3-optional'
