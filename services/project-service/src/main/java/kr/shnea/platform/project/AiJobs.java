@@ -12,7 +12,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** Project-scoped bridge. Only identity/fingerprint metadata is stored locally. */
 @Service
 class AiJobs {
-    private static final Set<String> STATES = Set.of("running", "succeeded", "failed", "cancelled");
+    private static final Set<String> STATES = Set.of("pending", "running", "succeeded", "failed", "cancelled");
+    private static final Set<String> LANGUAGES = Set.of("ko", "en", "ja", "zh", "es", "fr", "de");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final AiGateway ai;
@@ -20,7 +21,23 @@ class AiJobs {
     AiJobs(JdbcTemplate db, TransactionTemplate tx, AiGateway ai) { this.db = db; this.tx = tx; this.ai = ai; }
 
     JsonNode submit(ProjectService.Context context, byte[] bytes) {
-        ObjectNode request = prepare(context, bytes);
+        return submit(context, prepare(context, bytes), false);
+    }
+
+    JsonNode translate(ProjectService.Context context, byte[] bytes) {
+        JsonNode input = ai.parse(bytes, AiGateway.ROUTE_LIMIT);
+        AiGateway.fields(input, Set.of("request_id", "text", "source_language", "target_language", "project", "environment", "notify"));
+        ObjectNode request = json.createObjectNode().put("task_type", "text.translate").put("sync", false);
+        for (String field : List.of("request_id", "project", "environment", "notify"))
+            if (input.has(field)) request.set(field, input.get(field));
+        request.set("prompt", input.path("text"));
+        ObjectNode options = request.putObject("input");
+        for (String field : List.of("source_language", "target_language"))
+            if (input.has(field)) options.set(field, input.get(field));
+        return submit(context, prepare(context, json.writeValueAsBytes(request)), true);
+    }
+
+    private JsonNode submit(ProjectService.Context context, ObjectNode request, boolean translation) {
         String requestId = request.path("request_id").asText();
         ObjectNode semantic = request.deepCopy(); semantic.remove("sync");
         String fingerprint = ProjectService.hash(json.writeValueAsString(canonical(semantic)));
@@ -34,7 +51,8 @@ class AiJobs {
             }
             if (db.queryForObject("SELECT count(*) FROM ai_request_ledger WHERE environment_id=?", Long.class, context.environmentId()) >= 10000)
                 throw ApiCode.AI_REQUEST_CAPACITY.failure();
-            db.update("INSERT INTO ai_request_ledger(environment_id,request_id,fingerprint) VALUES (?,?,?)", context.environmentId(), requestId, fingerprint);
+            db.update("INSERT INTO ai_request_ledger(environment_id,request_id,fingerprint,task_type,notify) VALUES (?,?,?,?,?)",
+                context.environmentId(), requestId, fingerprint, request.path("task_type").asText(), request.path("notify").asBoolean(false));
             return true;
         }));
         if (!first) {
@@ -54,7 +72,15 @@ class AiJobs {
         }
         // Once reserved, any timeout/error is uncertain; callers inspect status rather than rerun.
         JsonNode raw;
-        try { raw = ai.exchange("POST", "/api/v1/ai/jobs", request, AiGateway.JOB_LIMIT); }
+        try {
+            if (translation) {
+                ObjectNode upstream = (ObjectNode) ai.select(request, Set.of("request_id", "project", "environment", "notify"));
+                upstream.set("text", request.get("prompt"));
+                upstream.set("source_language", request.path("input").get("source_language"));
+                upstream.set("target_language", request.path("input").get("target_language"));
+                raw = ai.exchange("POST", "/api/v1/translations", upstream, AiGateway.JOB_LIMIT);
+            } else raw = ai.exchange("POST", "/api/v1/ai/jobs", request, AiGateway.JOB_LIMIT);
+        }
         catch (ApiCode.Failure failure) {
             // Only positively known local rejection may release the ID; upstream errors/timeouts remain uncertain.
             if (!failure.dispatched) db.update("DELETE FROM ai_request_ledger WHERE environment_id=? AND request_id=? AND remote_id IS NULL AND fingerprint=?", context.environmentId(), requestId, fingerprint);
@@ -68,7 +94,7 @@ class AiJobs {
 
     ObjectNode prepare(ProjectService.Context context, byte[] bytes) {
         JsonNode input = ai.parse(bytes, AiGateway.JOB_LIMIT);
-        AiGateway.fields(input, Set.of("request_id", "task_type", "prompt", "input", "sync", "project", "environment"));
+        AiGateway.fields(input, Set.of("request_id", "task_type", "prompt", "input", "sync", "project", "environment", "notify"));
         String id = AiGateway.text(input.get("request_id"), 128, true);
         if (id.codePoints().anyMatch(Character::isISOControl)) throw ApiCode.AI_INVALID_REQUEST.failure();
         String task = AiGateway.text(input.get("task_type"), 64, true);
@@ -87,17 +113,30 @@ class AiJobs {
             if (input.has(field) && !expected.equals(AiGateway.text(input.get(field), 64, true))) throw ApiCode.AI_INVALID_REQUEST.failure();
         }
         if (input.has("sync") && !input.get("sync").isBoolean()) throw ApiCode.AI_INVALID_REQUEST.failure();
+        if (input.has("notify") && !input.get("notify").isBoolean()) throw ApiCode.AI_INVALID_REQUEST.failure();
+        if (input.path("notify").asBoolean(false) && !ai.completionReceiverConfigured()) throw ApiCode.AI_DELIVERY_NOT_CONFIGURED.beforeDispatch();
         if (input.has("input") && !input.get("input").isObject()) throw ApiCode.AI_INVALID_REQUEST.failure();
         ObjectNode options = input.has("input") ? ((ObjectNode) input.get("input")).deepCopy() : json.createObjectNode();
         // n8n spreads input into routing data. Never permit forged scope or provider/cache claims.
         for (String name : List.of("project", "environment", "owner_id", "request_id", "task_type", "prompt", "body", "routing", "provider_plan", "cache"))
             if (options.has(name)) throw ApiCode.AI_INVALID_REQUEST.failure();
-        String logical = options.has("collection") ? AiGateway.text(options.get("collection"), 64, true) : task.split("\\.")[0];
-        options.put("collection", collection(context, logical));
+        if (task.equals("text.translate")) {
+            AiGateway.fields(options, Set.of("source_language", "target_language"));
+            prompt = AiGateway.text(input.get("prompt"), 4000, true);
+            if (prompt.codePoints().anyMatch(Character::isISOControl)) throw ApiCode.AI_INVALID_REQUEST.failure();
+            String source = options.has("source_language") ? AiGateway.text(options.get("source_language"), 8, true) : "auto";
+            String target = AiGateway.text(options.get("target_language"), 8, true);
+            if ((!source.equals("auto") && !LANGUAGES.contains(source)) || !LANGUAGES.contains(target)) throw ApiCode.AI_INVALID_REQUEST.failure();
+            options.put("source_language", source); options.put("target_language", target);
+        } else {
+            String logical = options.has("collection") ? AiGateway.text(options.get("collection"), 64, true) : task.split("\\.")[0];
+            options.put("collection", collection(context, logical));
+        }
         ObjectNode request = json.createObjectNode();
         request.put("request_id", id); request.put("task_type", task); request.put("prompt", prompt);
         request.put("project", context.projectId().toString()); request.put("environment", context.environmentId().toString());
         request.set("input", options); request.put("sync", input.path("sync").asBoolean(true));
+        if (input.path("notify").asBoolean(false)) request.put("notify", true);
         if (json.writeValueAsBytes(request).length > AiGateway.JOB_LIMIT) throw ApiCode.PAYLOAD_TOO_LARGE.failure();
         return request;
     }
@@ -161,6 +200,30 @@ class AiJobs {
         return result;
     }
 
+    JsonNode receipt(ProjectService.Context context, UUID id, byte[] bytes) {
+        JsonNode input = ai.parse(bytes, AiGateway.ROUTE_LIMIT);
+        AiGateway.fields(input, Set.of("event_id")); validUuid(input.path("event_id"));
+        JsonNode current = get(context, id);
+        if (!current.path("status").asText().equals("succeeded") || !current.path("notify").asBoolean(false)
+                || !input.path("event_id").equals(current.path("terminal_event_id"))) throw ApiCode.AI_REQUEST_CONFLICT.failure();
+        if (current.path("result_expired").asBoolean() && !current.path("result_received").asBoolean()) throw ApiCode.AI_RESULT_EXPIRED.failure();
+        JsonNode reply = ai.exchange("POST", "/api/v1/ai/jobs/" + id + "/receipt", input, AiGateway.ROUTE_LIMIT);
+        if (!reply.path("accepted").isBoolean() || !reply.path("accepted").asBoolean()) invalid();
+        validText(reply.path("cleanup"), 64);
+        db.update("UPDATE ai_completion_inbox SET received_at=coalesce(received_at,now()) WHERE environment_id=? AND job_id=? AND event_id=?",
+            context.environmentId(), id, UUID.fromString(input.path("event_id").asText()));
+        return ai.select(reply, Set.of("accepted", "cleanup"));
+    }
+
+    byte[] translationText(ProjectService.Context context, UUID id) {
+        JsonNode current = get(context, id);
+        if (!current.path("task_type").asText().equals("text.translate")) throw ApiCode.AI_JOB_NOT_FOUND.failure();
+        if (current.path("result_received").asBoolean()) throw ApiCode.AI_RESULT_RECEIVED.failure();
+        if (current.path("result_expired").asBoolean()) throw ApiCode.AI_RESULT_EXPIRED.failure();
+        if (!current.path("status").asText().equals("succeeded") || !current.path("result").isObject()) throw ApiCode.AI_REQUEST_CONFLICT.failure();
+        return current.path("result").path("translated_text").asText().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private ObjectNode job(ProjectService.Context context, JsonNode raw) {
         requireScope(context, raw);
         validUuid(raw.path("id")); validText(raw.path("request_id"), 128);
@@ -170,13 +233,36 @@ class AiJobs {
         if (!raw.path("result").isNull() && !raw.path("result").isObject()) invalid();
         ObjectNode result = (ObjectNode) ai.select(raw, Set.of("id", "request_id", "task_type", "project", "environment", "status", "result",
             "created_at", "updated_at", "finished_at", "expires_at"));
+        if (raw.has("notify")) { if (!raw.path("notify").isBoolean()) invalid(); result.set("notify", raw.get("notify")); }
+        if (raw.hasNonNull("terminal_event_id")) validUuid(raw.path("terminal_event_id"));
+        timestamp(raw.path("received_at"), true);
+        for (String field : List.of("terminal_event_id", "received_at")) if (raw.has(field)) result.set(field, raw.get(field));
+        if (raw.hasNonNull("delivery")) {
+            JsonNode delivery = raw.path("delivery"); validText(delivery.path("state"), 64);
+            if (!delivery.path("configured").isBoolean() || !AiGateway.nonnegativeInteger(delivery.path("attempts"))) invalid();
+            JsonNode httpStatus = delivery.path("last_http_status");
+            if (!httpStatus.isNull() && !httpStatus.isMissingNode() && (!httpStatus.isIntegralNumber() || !httpStatus.canConvertToInt()
+                    || httpStatus.asInt() < 100 || httpStatus.asInt() > 599)) invalid();
+            timestamp(delivery.path("next_attempt_at"), true);
+            result.set("delivery", ai.select(delivery, Set.of("state", "configured", "attempts", "last_http_status", "next_attempt_at")));
+        }
         if (raw.has("reused")) { if (!raw.path("reused").isBoolean()) invalid(); result.set("reused", raw.get("reused")); }
         String error = raw.path("error_code").asText("");
         result.put("error_code", error.matches("[a-z0-9_.]{1,80}") ? error : null);
         result.put("error_message", error.isBlank() ? null : "AI 작업이 완료되지 않았습니다. 상태와 오류 코드를 확인해 주세요.");
         boolean expired = !raw.path("expires_at").isNull() && !raw.path("expires_at").isMissingNode()
             && !Instant.parse(raw.path("expires_at").asText()).isAfter(Instant.now());
-        result.put("result_expired", expired); if (expired) result.putNull("result");
+        boolean received = raw.hasNonNull("received_at");
+        result.put("result_expired", expired); result.put("result_received", received);
+        if (expired || received) result.putNull("result");
+        if (raw.path("task_type").asText().equals("text.translate") && raw.path("status").asText().equals("succeeded") && result.path("result").isObject()) {
+            JsonNode translated = result.path("result");
+            if (!translated.path("type").asText().equals("text_translate")) invalid();
+            validText(translated.path("translated_text"), 200000);
+            if (!LANGUAGES.contains(translated.path("target_language").asText())
+                    || (!translated.path("source_language").asText().equals("auto") && !LANGUAGES.contains(translated.path("source_language").asText()))) invalid();
+            result.set("result", ai.select(translated, Set.of("type", "translated_text", "source_language", "target_language", "provider", "model", "usage")));
+        }
         result.put("usage_measurement", "upstream_reported_unverified");
         return result;
     }
@@ -213,7 +299,8 @@ class AiJobs {
         return rows.isEmpty() ? null : rows.getFirst();
     }
     private void remember(ProjectService.Context context, String request, UUID id) {
-        db.update("UPDATE ai_request_ledger SET remote_id=? WHERE environment_id=? AND request_id=? AND (remote_id IS NULL OR remote_id=?)", id, context.environmentId(), request, id);
+        if (db.update("UPDATE ai_request_ledger SET remote_id=? WHERE environment_id=? AND request_id=? AND (remote_id IS NULL OR remote_id=?)", id, context.environmentId(), request, id) != 1)
+            invalid();
     }
     private static void invalid() { throw ApiCode.AI_INVALID_RESPONSE.failure(); }
 }

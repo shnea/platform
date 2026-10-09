@@ -2,6 +2,18 @@
 
 ## 현재 단계
 
+### 뇌대리 v26 1차: 문장 번역·AI 완료 알림 연결 (2026-10-10)
+
+- **사용자 확정:** TTS·목소리 관리·STT·이미지 OCR·PDF 추출·영상 자막·문장 번역의 플랫폼 지원을 시작한다. 목소리 API는 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`다. 영상에 자막을 입히는 기능은 뇌대리 후속 지침 예정이며 이번 자막 연결 범위는 SRT/VTT·플레이어 표시까지다. 이 첫 완료 단위로 전체 신규 범위를 완료했다고 표시하지 않는다.
+- **이번 구현:** `text.translate`를 10번째 AI 작업으로 허용하고 `POST /api/v1/translations`(202), 번역 TXT 다운로드, `pending`·`notify`·전달/수령 메타데이터, `POST /api/v1/ai/jobs/{id}/receipt`를 추가했다. 전용 번역과 일반 jobs는 동일 원장을 사용하고 번역에는 RAG 컬렉션을 넣지 않는다. source auto·7개 언어·text4000자·제어문자 차단을 적용한다. notify 생략/false는 동일하며 true 변경은 요청 내용 충돌이다. 공유 서명 비밀 미설정은 접수 전 거절하고 요청 ID를 소비하지 않는다.
+- **완료 알림:** 별도 `/api/webhooks/noedaeri/ai`에서 원문 HMAC·5분 허용치·128KiB·헤더/본문 ID·버전/source/종류·프로젝트/환경/요청/작업/notify 범위를 검증한다. V14 inbox에 이벤트 ID·작업 유일성·본문 해시·종료/수령 메타데이터만 영속 저장하고 빠르게 2xx를 반환한다. 원문·input·결과 전문을 DB에 저장하지 않는다. 응답 유실/알림 선도착 시 원격 ID를 복구하며 같은 이벤트의 다른 본문은409다. 기존 V13 데이터는 보존하고 기존 작업에 notify를 자동 적용하지 않는다.
+- **호스트 연결 경계:** `GET /api/v1/ai/events`는 키의 환경별 최근 최대100건 inbox 조회이며 호스트로 자동 푸시하지 않는다. 호스트는 자신이 보관한 작업 ID로 결과를 받아 업무 존재·세대·권한을 확인하고 영속 저장 후 receipt를 호출한다. 플랫폼은 결과를 자동 저장하거나 receipt를 자동 보내지 않는다. 성공·notify·이벤트 일치만 확인 가능하며 수령 즉시 결과를 숨긴다. 같은 확인은 만료 후에도 멱등이다. 파일 job.* 수신과 AI ai.job.*를 혼용하지 않는다.
+- **자료:** 핵심/상세 요구사항·AI 지침·공개 OpenAPI·개발자 센터·Python 서버 예제·공개 계약 검사를 갱신했다. Compose 프로젝트 서비스에 기존 공유 서명 비밀의 환경변수 바인딩만 추가했고 실제 키·URL·암호화 환경값은 변경하지 않았다. 뇌대리의 `NOEDAERI_PLATFORM_AI_WEBHOOK_URL` 설정·실제 서버 권한 검수는 운영자 후속 범위다.
+- **검증:** 일회용 PostgreSQL에서 `docker compose --env-file .env.example -p platform-ai-v26-checks -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check`로 소스를 임시 폴더에 복사한 뒤 `gradle --no-daemon :services:project-service:test --rerun-tasks`를 실행했다. JUnit94개 중92통과·실패/오류0·기존 선택 실제 서버 검사2개 건너뜀. 최초 AI 집중 검사31개 중29통과·2개 건너뜀. 요청 재사용·언어/제어문자·RAG 미주입·scope/취소/receipt·원격 ID 복구·서명/중복/충돌·실제 Spring 초기화·전체 공개 API 문서 일치를 확인했다. XML은 Git 제외 `output/job-checks/ai-v26-final`에 보존한다.
+- **기타 검증:** `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:ai-v26-check .`의 TypeScript/Vite/공개 자료 빌드와 같은 이미지의 `npm test` 5개 통과. Windows 로컬 npm 빌드는 기존 Linux용 설치에서 tsc 실행 파일을 찾지 못해 Docker로 검증했다. `node scripts/check-ai-integration.mjs`, `python -X utf8 scripts/check-ci.py`, `python -X utf8 scripts/check-admin-security.py`, Python 예제 `--help`, 네트워크 없는 일회용 `nginx -t`, `git diff --check` 통과. 기존 잠금 파일 기반 npm ci의 high 취약점1개·기존 큰 번들 경고는 기록만 했으며 의존성을 임의 변경하지 않았다.
+- **최종 집중/정리:** 서명 설정의 실제 Spring 바인딩·inbox 타 환경 조회 차단·receipt의 영속 수령 시각까지 보강한 뒤 동일 격리 명령에 `--tests "*Ai*" --tests "*OpenApiTest"`를 적용했다. 최종34개 중32통과·실패/오류0·선택 실제서버 검사2개 건너뜀. XML은 `output/job-checks/ai-v26-focused-final`이다. `docker compose --env-file .env.example -p platform-ai-v26-checks -f compose.test.yml --profile jobs down`으로 이번 일회용 DB·네트워크만 종료했다. 기존 서비스·데이터·볼륨을 건드리지 않았고 새 장기 프로세스는 없다.
+- **미검증/다음:** 실제 뇌대리 AI 수신 URL·공유 비밀·호스트 키로 번역 실행→완료 알림→호스트 영속 반영→receipt 종단 검수, 개발자 가이드 실제 브라우저 확인, 관리자 실행/작업 상세 화면과 호스트 알림 자동 전달은 미완료다. 다음 완료 단위는 원본 없는 연산 작업 구조·결과 파일 허용 목록과 STT/OCR/PDF/영상 자막 연결이며 목소리 CRUD/등록/샘플·TTS가 이어진다. V26 services의 실제 가용/한도와 원본 권한·generation·보존을 연결한다. 기존 이미지·영상 파생물과 블로그/색인 운영 흐름을 유지한다.
+
 ### 뇌대리 v14 블로그 AI 작업 연결 (2026-10-06)
 
 - **최신 요청/범위:** 태그·요약·댓글 자동생성·실험글 초안을 블로그가 기존 흐름을 유지하며 호출할 수 있는지 확인했다. 태그·요약·댓글은 이미 공통 AI 작업 허용 목록에 있어 그대로 연결 가능했으며, 신규 `article.draft`만 플랫폼 허용 목록/OpenAPI에서 빠져 있었다.

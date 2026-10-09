@@ -12,7 +12,7 @@ for(const [source,name] of [['docs/SERVICE_INTEGRATION.md','SERVICE_INTEGRATION.
 }
 for(const service of ['project','file','jobs','logs','ai']){
  const source=JSON.parse(await readFile(resolve(root,`services/${service==='file'?'file':'project'}-service/src/main/resources/openapi.json`),'utf8'));
- const paths=Object.fromEntries(Object.entries(source.paths).filter(([path])=>service==='project'?['/api/v1/integration/context','/api/v1/dev/login'].includes(path):service==='jobs'?path.startsWith('/api/v1/jobs'):service==='logs'?path==='/api/v1/logs':service==='ai'?path.startsWith('/api/v1/ai/'):path.startsWith('/api/v1/files')&&!path.includes('/admin/')&&!path.startsWith('/api/v1/files/downloads/')));
+ const paths=Object.fromEntries(Object.entries(source.paths).filter(([path])=>service==='project'?['/api/v1/integration/context','/api/v1/dev/login'].includes(path):service==='jobs'?path.startsWith('/api/v1/jobs'):service==='logs'?path==='/api/v1/logs':service==='ai'?path.startsWith('/api/v1/ai/')||path==='/api/v1/translations':path.startsWith('/api/v1/files')&&!path.includes('/admin/')&&!path.startsWith('/api/v1/files/downloads/')));
  const components={};
  function include(group,name){
   if(components[group]?.[name])return;

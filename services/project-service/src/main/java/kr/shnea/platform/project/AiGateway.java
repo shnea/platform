@@ -20,9 +20,10 @@ class AiGateway {
     static final int JOB_LIMIT = 2 * 1024 * 1024;
     static final int INDEX_LIMIT = 1024 * 1024;
     static final Set<String> TASKS = Set.of("blog.tags", "blog.summary", "portfolio.search", "ui.render",
-        "comment.generate", "document.analyze", "code.analyze", "chat.general", "article.draft");
+        "comment.generate", "document.analyze", "code.analyze", "chat.general", "article.draft", "text.translate");
     private final URI base;
     private final String key;
+    private boolean completionReceiverConfigured;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
         .followRedirects(HttpClient.Redirect.NEVER).build();
     private final Semaphore slots = new Semaphore(2);
@@ -32,7 +33,13 @@ class AiGateway {
 
     @org.springframework.beans.factory.annotation.Autowired
     AiGateway(@Value("${platform.noedaeri.url:}") String url,
-              @Value("${platform.noedaeri.key:}") String key) {
+              @Value("${platform.noedaeri.key:}") String key,
+              @Value("${platform.noedaeri.webhook-secret:}") String webhookSecret) {
+        this(url, key);
+        completionReceiverConfigured = !webhookSecret.isBlank();
+    }
+
+    AiGateway(String url, String key) {
         this(url.isBlank() ? null : URI.create(url), key);
         if (base != null && !"https".equals(base.getScheme())) throw new IllegalArgumentException("AI origin requires HTTPS");
     }
@@ -47,13 +54,16 @@ class AiGateway {
     }
 
     boolean configured() { return base != null && key != null && !key.isBlank(); }
+    boolean completionReceiverConfigured() { return completionReceiverConfigured; }
 
     Map<String, Object> services() {
-        return Map.of("configured", configured(), "features", List.of(
+        return Map.of("configured", configured(), "completionReceiverConfigured", completionReceiverConfigured(), "features", List.of(
             Map.of("id", "raya.route", "status", "implemented", "path", "/api/v1/ai/raya/route", "scope", "ai:route"),
             Map.of("id", "embeddings", "status", "implemented", "path", "/api/v1/ai/embeddings", "scope", "ai:embed",
                 "model", EMBEDDING_MODEL, "defaultDimensions", 768, "maxDimensions", 3072, "maxBatch", 100),
             Map.of("id", "n8n.execute", "status", "implemented", "path", "/api/v1/ai/jobs", "scope", "ai:execute", "taskTypes", TASKS.stream().sorted().toList()),
+            Map.of("id", "text.translate", "status", "implemented", "path", "/api/v1/translations", "scope", "ai:execute",
+                "languages", List.of("ko", "en", "ja", "zh", "es", "fr", "de"), "maxCharacters", 4000),
             Map.of("id", "usage", "status", "implemented", "path", "/api/v1/ai/usage", "scope", "ai:usage", "measurement", "upstream_reported_unverified"),
             Map.of("id", "vector.index", "status", "implemented", "path", "/api/v1/ai/indexing", "scope", "ai:index:write",
                 "modes", List.of("upsert", "replace_all", "delete"))));

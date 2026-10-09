@@ -31,6 +31,7 @@ class AiJobsDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema(schema).locations("classpath:db/migration").load().migrate(); db = new JdbcTemplate(ds);
         own = scope("one"); other = scope("two");
         ai = spy(new AiGateway((java.net.URI) null, ""));
+        doReturn(true).when(ai).completionReceiverConfigured();
         jobs = new AiJobs(db, new TransactionTemplate(new DataSourceTransactionManager(ds)), ai);
         doAnswer(call -> {
             String method = call.getArgument(0), path = call.getArgument(1); JsonNode request = call.getArgument(2);
@@ -66,7 +67,7 @@ class AiJobsDatabaseTest {
         fails(() -> jobs.submit(own, request("changed")), ApiCode.AI_REQUEST_CONFLICT);
         assertThat(first.toString()).doesNotContain("private provider", "must not leak");
         var row = db.queryForMap("SELECT * FROM ai_request_ledger");
-        assertThat(row.keySet()).containsExactlyInAnyOrder("environment_id", "request_id", "fingerprint", "remote_id", "created_at");
+        assertThat(row.keySet()).containsExactlyInAnyOrder("environment_id", "request_id", "fingerprint", "remote_id", "created_at", "task_type", "notify");
         assertThat(row.get("fingerprint").toString()).hasSize(64); assertThat(row.get("remote_id")).isEqualTo(remote);
     }
     @Test void failuresAndCancellationNeverExecuteAgainAndLostResponsesRecoverByList() {
@@ -141,5 +142,132 @@ class AiJobsDatabaseTest {
         assertThat(jobs.usage(own, null, 50).path("measurement").asText()).isEqualTo("upstream_reported_unverified");
         row.put("environment", other.environmentId().toString()); fails(() -> jobs.usage(own, null, 50), ApiCode.AI_JOB_NOT_FOUND);
         row.put("environment", own.environmentId().toString()).put("total_tokens", -1); fails(() -> jobs.usage(own, null, 50), ApiCode.AI_INVALID_RESPONSE);
+    }
+
+    @Test void translationPathsShareOneIdentityWithoutAddingRagAndPendingIsAccepted() {
+        var translated = (tools.jackson.databind.node.ObjectNode) reply(own);
+        translated.put("task_type", "text.translate").put("status", "pending").putNull("result");
+        doAnswer(call -> { posts.incrementAndGet(); accepted.set(call.getArgument(2)); return translated; })
+            .when(ai).exchange(eq("POST"), eq("/api/v1/translations"), any(), anyInt());
+        doReturn(translated).when(ai).exchange(eq("GET"), eq("/api/v1/ai/jobs/" + remote), isNull(), anyInt());
+        byte[] direct = json.writeValueAsBytes(Map.of("request_id", "stable-id", "text", "안녕하세요", "target_language", "en"));
+        assertThat(jobs.translate(own, direct).path("status").asText()).isEqualTo("pending");
+        assertThat(accepted.get().path("source_language").asText()).isEqualTo("auto");
+        assertThat(accepted.get().has("collection")).isFalse(); assertThat(accepted.get().has("input")).isFalse();
+        assertThat(accepted.get().path("project").asText()).isEqualTo(own.projectId().toString());
+        var generic = Map.of("request_id", "stable-id", "task_type", "text.translate", "prompt", "안녕하세요",
+            "sync", true, "notify", false, "input", Map.of("source_language", "auto", "target_language", "en"));
+        assertThat(jobs.submit(own, json.writeValueAsBytes(generic)).path("reused").asBoolean()).isTrue();
+        assertThat(posts.get()).isEqualTo(1);
+        fails(() -> jobs.translate(own, json.writeValueAsBytes(Map.of("request_id", "stable-id", "text", "안녕하세요", "target_language", "en", "notify", true))), ApiCode.AI_REQUEST_CONFLICT);
+        translated.put("status", "succeeded");
+        translated.putObject("result").put("type", "text_translate").put("translated_text", "Hello").put("source_language", "auto").put("target_language", "en");
+        assertThat(new String(jobs.translationText(own, remote), StandardCharsets.UTF_8)).isEqualTo("Hello");
+        ((tools.jackson.databind.node.ObjectNode) translated.path("result")).put("translated_text", " ");
+        fails(() -> jobs.get(own, remote), ApiCode.AI_INVALID_RESPONSE);
+    }
+
+    @Test void translationRejectsControlsUnsupportedLanguagesAndRagBeforeDispatch() {
+        for (var input : List.of(
+            Map.of("text", "hello", "target_language", "auto"), Map.of("text", "hello", "target_language", "xx"),
+            Map.of("text", "hello", "target_language", "ko", "source_language", "xx"),
+            Map.of("text", "hello\nworld", "target_language", "ko"), Map.of("text", "x".repeat(4001), "target_language", "ko"),
+            Map.of("text", "hello", "target_language", "ko", "collection", "portfolio"),
+            Map.of("text", "hello", "target_language", "ko", "project", other.projectId().toString()),
+            Map.of("text", "hello", "target_language", "ko", "notify", "true"))) {
+            var request = new HashMap<String,Object>(input); request.put("request_id", "stable-id");
+            fails(() -> jobs.translate(own, json.writeValueAsBytes(request)), ApiCode.AI_INVALID_REQUEST);
+        }
+        fails(() -> jobs.submit(own, json.writeValueAsBytes(Map.of("request_id", "r", "task_type", "text.translate", "prompt", "hello",
+            "input", Map.of("collection", "portfolio", "target_language", "ko")))), ApiCode.AI_INVALID_REQUEST);
+        verify(ai, never()).exchange(anyString(), anyString(), any(), anyInt());
+    }
+
+    @Test void signedCompletionIsDurableDeduplicatedScopedAndCanRecoverLostSubmission() throws Exception {
+        jobs.submit(own, notifiedRequest());
+        db.update("UPDATE ai_request_ledger SET remote_id=NULL");
+        var projects = mock(ProjectService.class);
+        when(projects.context("own-key", "ai:jobs:read")).thenReturn(own);
+        when(projects.context("other-key", "ai:jobs:read")).thenReturn(other);
+        var receiver = new AiCompletion(db, new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())), projects, "test-secret");
+        var event = event(UUID.randomUUID());
+        assertThat(receiver.receive(signed(event)).getBody().toString()).contains("duplicate=false");
+        assertThat(receiver.receive(signed(event)).getBody().toString()).contains("duplicate=true");
+        assertThat(db.queryForObject("SELECT remote_id FROM ai_request_ledger", UUID.class)).isEqualTo(remote);
+        var saved = db.queryForMap("SELECT * FROM ai_completion_inbox");
+        assertThat(saved.keySet()).doesNotContain("payload", "prompt", "input", "result");
+        assertThat(saved.get("body_hash").toString()).hasSize(64);
+        var ownEvents = (JsonNode) receiver.events("own-key", 50, new org.springframework.mock.web.MockHttpServletRequest()).getBody();
+        var otherEvents = (JsonNode) receiver.events("other-key", 50, new org.springframework.mock.web.MockHttpServletRequest()).getBody();
+        assertThat(ownEvents.size()).isEqualTo(1); assertThat(otherEvents.isEmpty()).isTrue();
+        assertThat(ownEvents.toString()).doesNotContain("body_hash", "fingerprint", "prompt", "input", "result");
+        event.put("occurred_at", Instant.now().minusSeconds(1).toString());
+        var conflicting = event;
+        assertThatThrownBy(() -> receiver.receive(signed(conflicting))).isInstanceOfSatisfying(ApiCode.Failure.class, error -> assertThat(error.code).isEqualTo(ApiCode.AI_EVENT_CONFLICT));
+        event = event(UUID.randomUUID()); event.put("environment", other.environmentId().toString());
+        var foreign = event;
+        assertThatThrownBy(() -> receiver.receive(signed(foreign))).isInstanceOfSatisfying(ApiCode.Failure.class, error -> assertThat(error.code).isEqualTo(ApiCode.AI_JOB_NOT_FOUND));
+        assertThat(db.queryForObject("SELECT count(*) FROM ai_completion_inbox", Integer.class)).isEqualTo(1);
+    }
+
+    @Test void notifyChangesIdentityAndDefaultsPreserveOldRequests() {
+        jobs.submit(own, request("hello"));
+        fails(() -> jobs.submit(own, notifiedRequest()), ApiCode.AI_REQUEST_CONFLICT);
+        assertThat(jobs.submit(own, json.writeValueAsBytes(((tools.jackson.databind.node.ObjectNode) json.readTree(request("hello"))).put("notify", false))).path("reused").asBoolean()).isTrue();
+        assertThat(posts.get()).isEqualTo(1);
+    }
+
+    @Test void missingReceiverSecretRejectsNotificationBeforeReservingOrDispatching() {
+        doReturn(false).when(ai).completionReceiverConfigured();
+        fails(() -> jobs.submit(own, notifiedRequest()), ApiCode.AI_DELIVERY_NOT_CONFIGURED);
+        assertThat(db.queryForObject("SELECT count(*) FROM ai_request_ledger", Integer.class)).isZero();
+        verify(ai, never()).exchange(anyString(), anyString(), any(), anyInt());
+    }
+
+    @Test void receiptRequiresMatchingSuccessfulScopedEventAndSuppressesReceivedResults() throws Exception {
+        var current = (tools.jackson.databind.node.ObjectNode) reply(own);
+        UUID eventId = UUID.randomUUID();
+        current.put("notify", true).put("terminal_event_id", eventId.toString());
+        current.putObject("delivery").put("state", "delivered").put("configured", true).put("attempts", 1)
+            .put("last_http_status", 200).putNull("next_attempt_at").put("secret", "hidden");
+        jobs.submit(own, notifiedRequest());
+        var receiver = new AiCompletion(db, new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())), mock(ProjectService.class), "test-secret");
+        receiver.receive(signed(event(eventId)));
+        doReturn(current).when(ai).exchange(eq("GET"), eq("/api/v1/ai/jobs/" + remote), isNull(), anyInt());
+        doReturn(json.readTree("{\"accepted\":true,\"cleanup\":\"scheduled\",\"secret\":\"hidden\"}"))
+            .when(ai).exchange(eq("POST"), eq("/api/v1/ai/jobs/" + remote + "/receipt"), any(), anyInt());
+        assertThat(jobs.get(own, remote).toString()).doesNotContain("hidden");
+        fails(() -> jobs.receipt(other, remote, json.writeValueAsBytes(Map.of("event_id", eventId.toString()))), ApiCode.AI_JOB_NOT_FOUND);
+        fails(() -> jobs.receipt(own, remote, json.writeValueAsBytes(Map.of("event_id", UUID.randomUUID().toString()))), ApiCode.AI_REQUEST_CONFLICT);
+        verify(ai, never()).exchange(eq("POST"), contains("/receipt"), any(), anyInt());
+        assertThat(jobs.receipt(own, remote, json.writeValueAsBytes(Map.of("event_id", eventId.toString()))).toString()).doesNotContain("hidden");
+        assertThat(db.queryForObject("SELECT received_at FROM ai_completion_inbox", java.sql.Timestamp.class)).isNotNull();
+        current.put("expires_at", Instant.now().minusSeconds(1).toString());
+        fails(() -> jobs.receipt(own, remote, json.writeValueAsBytes(Map.of("event_id", eventId.toString()))), ApiCode.AI_RESULT_EXPIRED);
+        current.put("received_at", Instant.now().toString());
+        assertThat(jobs.get(own, remote).path("result").isNull()).isTrue();
+        assertThat(jobs.receipt(own, remote, json.writeValueAsBytes(Map.of("event_id", eventId.toString()))).path("accepted").asBoolean()).isTrue();
+        current.put("status", "failed");
+        fails(() -> jobs.receipt(own, remote, json.writeValueAsBytes(Map.of("event_id", eventId.toString()))), ApiCode.AI_REQUEST_CONFLICT);
+    }
+
+    byte[] notifiedRequest() { return json.writeValueAsBytes(((tools.jackson.databind.node.ObjectNode) json.readTree(request("hello"))).put("notify", true)); }
+    tools.jackson.databind.node.ObjectNode event(UUID eventId) {
+        var event = json.createObjectNode().put("version", 1).put("source", "ai").put("type", "ai.job.succeeded")
+            .put("event_id", eventId.toString()).put("job_id", remote.toString()).put("request_id", "stable-id")
+            .put("project", own.projectId().toString()).put("environment", own.environmentId().toString()).put("occurred_at", "2026-10-10T00:00:00Z");
+        event.putObject("job").put("task_type", "chat.general").put("status", "succeeded").putNull("error_code").putNull("expires_at");
+        String path = "/api/v1/ai/jobs/" + remote;
+        return event.put("job_path", path).put("result_path", path).put("receipt_path", path + "/receipt");
+    }
+    org.springframework.mock.web.MockHttpServletRequest signed(JsonNode event) throws Exception {
+        byte[] bytes = json.writeValueAsBytes(event); String timestamp = Long.toString(Instant.now().getEpochSecond());
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        mac.update((timestamp + ".").getBytes(StandardCharsets.US_ASCII));
+        var request = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/webhooks/noedaeri/ai");
+        request.setContent(bytes); request.addHeader("X-Noedaeri-Timestamp", timestamp);
+        request.addHeader("X-Noedaeri-Event-ID", event.path("event_id").asText());
+        request.addHeader("X-Noedaeri-Signature", "sha256=" + HexFormat.of().formatHex(mac.doFinal(bytes))); return request;
     }
 }

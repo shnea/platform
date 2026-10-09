@@ -1,6 +1,6 @@
 # 공통 AI·임베딩 연결 지침
 
-기준: 2026-10-06에 받은 뇌대리 연동 지침 v14(블로그 태그·요약·댓글 생성·실험글 초안 포함). 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
+기준: 2026-10-10에 받은 뇌대리 연동 지침 v26. 이번 완료 단위는 문장 번역·AI 완료 알림이며 기존 블로그 작업을 유지한다. TTS·목소리 관리·STT·이미지 OCR·PDF 추출·영상 자막은 플랫폼 후속 연결 범위다. 플랫폼 주소는 `PLATFORM_URL`, 환경별 서버 키는 `PLATFORM_API_KEY`로 주입한다. 실제 키·내부 주소를 문서·프롬프트·로그에 넣지 않는다.
 
 ## 로그인 없이 서버에서 연결
 
@@ -17,7 +17,11 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 | `GET /api/v1/ai/services` | `ai:read` | 지원 목록·설정 존재 여부·미제공 상태 |
 | `POST /api/v1/ai/raya/route` | `ai:route` | 동기 텍스트 난이도 판단, 답변 생성 없음 |
 | `POST /api/v1/ai/embeddings` | `ai:embed` | 동기 단일/배치 텍스트 벡터 생성 |
-| `POST /api/v1/ai/jobs` | `ai:execute` | 9종 AI·RAG 작업 동기/비동기 접수 |
+| `POST /api/v1/ai/jobs` | `ai:execute` | 번역 포함 10종 AI·RAG 작업 동기/비동기 접수 |
+| `POST /api/v1/translations` | `ai:execute` | 문장 번역 비동기 접수, HTTP 202 |
+| `GET /api/v1/ai/events` | `ai:jobs:read` | 현재 환경에 영속 접수된 완료 알림, 최근 최대 100건 |
+| `GET /api/v1/ai/jobs/{id}/translation.txt` | `ai:jobs:read` | 성공한 번역 결과의 UTF-8 TXT 다운로드 |
+| `POST /api/v1/ai/jobs/{id}/receipt` | `ai:execute` | 호스트 영속 저장·업무 반영 후 수령 확인 |
 | `GET /api/v1/ai/jobs` | `ai:jobs:read` | 현재 환경의 최근 작업 목록·status/limit 필터 |
 | `GET /api/v1/ai/jobs/{id}` | `ai:jobs:read` | 현재 환경의 상태·결과 |
 | `POST /api/v1/ai/jobs/{id}/cancel` | `ai:cancel` | 소유 범위 확인 뒤 취소 요청 |
@@ -30,7 +34,41 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`는 뇌대리 v12의 실제 서버 API에, `vector.index`는 v13의 PostgreSQL 색인 API에 연결한다. 뇌대리 v14의 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`를 기존 AI 작업 API로 전달할 수 있다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 여전히 미구현이다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+`n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. 뇌대리가 제공하는 TTS·목소리·STT·OCR·PDF·영상 자막의 플랫폼 연결과 관리자 실행 화면은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+
+## 문장 번역
+
+`POST /api/v1/translations`는 항상 HTTP 202로 접수 상태를 반환한다. 원문은 공백 제외 1~4000자, 본문은 64KiB 이하이며 제어문자는 거부한다. 출발 언어는 기본 `auto` 또는 `ko/en/ja/zh/es/fr/de`, 도착 언어는 이 7개 중 하나다. `auto`는 실제 감지 언어를 뜻하지 않는다.
+
+```json
+{"request_id":"translation-operation-001","text":"번역할 문장","source_language":"ko","target_language":"en","notify":true}
+```
+
+일반 AI jobs에서도 `task_type: text.translate`, `prompt`에 원문, `input`에 `source_language/target_language`만 전달할 수 있다. 번역에는 RAG 컬렉션을 자동 추가하지 않는다. 두 접수 경로는 하나의 요청 원장을 사용하므로 같은 ID·내용을 경로만 바꿔 재전송해도 모델을 다시 호출하지 않는다. `sync` 변경은 실행 내용 변경이 아니지만 `notify` 변경은 409다. 생략한 notify와 false는 같다.
+
+`pending → running → succeeded/failed/cancelled` 상태를 처리한다. 성공 결과는 `type: text_translate`, `translated_text`, 요청 언어·공급자·모델·usage다. 작업 JSON 또는 `/translation.txt`로 받는다. TXT는 동일 결과를 읽어 생성하며 모델을 새로 호출하지 않는다. 결과 만료 후 또는 수령 확인 후에는 다운로드가 410이다. 원문은 뇌대리·n8n·외부 공급자에 전달되며 플랫폼 DB에는 저장하지 않는다. 실제 번역의 의미·고유명사·숫자 검수는 호스트 책임이다.
+
+## AI 완료 알림과 수령 확인
+
+기존 `notify:false` 호출은 그대로 유지한다. 백그라운드 완료 알림은 `notify:true`, 일반 jobs에서는 `sync:false`를 선택한다. 플랫폼에 공유 서명 비밀이 없으면 접수 전 503이며 요청 ID를 소비하지 않는다. 지원 응답의 `completionReceiverConfigured`는 플랫폼 서명 설정 존재 여부일 뿐 뇌대리의 URL 설정이나 실제 전송 성공을 보장하지 않는다.
+
+운영자가 뇌대리의 `NOEDAERI_PLATFORM_AI_WEBHOOK_URL`을 플랫폼 `/api/webhooks/noedaeri/ai`의 고정 HTTPS 주소로 설정하고 `NOEDAERI_PLATFORM_WEBHOOK_SECRET`을 양쪽 암호화 설정에 공유한다. 파일 수신 `/api/webhooks/noedaeri`와 혼용하지 않는다. 실제 URL·비밀값은 문서·브라우저·소스에 넣지 않는다. 뇌대리의 수신 URL/비밀 누락도 503이며 실제 연결 준비 상태는 뇌대리 `/api/v1/services`에서 확인한다.
+
+수신기는 128KiB 상한·원문 body HMAC-SHA256·5분 시각 허용치·헤더/본문 event ID·버전·source·종류·업무 범위를 확인한다. `(프로젝트, 환경, request_id, 작업 종류, notify)`의 기존 접수 원장에 연결된 알림만 받는다. event_id와 작업별 유일성·본문 SHA-256으로 중복 제거한 메타데이터를 영속 접수한 뒤 2xx를 반환한다. 동일 ID·다른 본문은 409다. 접수 HTTP 응답보다 알림이 먼저 도착해도 원장에 원격 ID를 복구한다. 원문·입력·모델 결과·키를 inbox에 저장하지 않는다.
+
+호스트는 `/api/v1/ai/events?limit=50`에서 현재 환경의 최근 완료 알림을 확인하거나 자신이 보관한 작업 ID로 조회한다. 목록은 최대 100건·페이지네이션 없음이며 플랫폼이 호스트로 자동 푸시하는 API가 아니다. 호스트로의 완료 알림 재전달·자동 결과 저장은 후속 연결 범위다. 성공이면 작업 JSON/번역 TXT를 받고, 원본 업무 존재·세대·권한을 확인해 영속 저장 또는 업무 반영을 끝낸 뒤 아래 수령 확인을 보낸다. 다운로드 재시도와 모델 재실행을 구분한다.
+
+```json
+{"event_id":"00000000-0000-4000-8000-000000000001"}
+```
+
+확인 경로는 `POST /api/v1/ai/jobs/{id}/receipt`다. 현재 환경의 성공·notify 작업에 일치하는 `terminal_event_id`만 허용한다. 실패/취소·다른 ID는 409, 확인 전 만료는 410이다. 같은 수령 확인은 만료 후에도 멱등이며 `accepted:true`는 정리 예약이지 삭제 완료가 아니다. 확인 즉시 결과를 숨기고 `received_at`, `result_received`를 표시한다. 전달 2xx와 호스트 영속 저장을 동일하게 간주하지 않으며 플랫폼은 자동 receipt를 보내지 않는다.
+
+작업 응답은 `notify`, `terminal_event_id`, `received_at`, `delivery`의 상태·설정·시도 수·마지막 HTTP 상태·다음 시각을 전달한다. upstream 관리자 재전송 API는 관리자 세션이 필요하므로 플랫폼 서버 키로 대신 호출하지 않는다.
+
+## 후속 파일 연산·목소리 연결
+
+확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, `video.subtitles`의 파생 결과와 원본 없는 TTS용 작업 구조·관리 화면·권한은 별도 완료 단위로 구현한다. 영상 자막은 이번 범위에서 SRT/VTT 저장·플레이어 표시까지이며 영상에 자막을 입히는 기능은 뇌대리 후속 지침을 기다린다.
 
 ## PostgreSQL 문서 색인·전체 교체
 
@@ -76,13 +114,13 @@ request_id는 비민감 업무 식별자로 공백만이 아닌 1~128자이며 �
 
 project/environment는 **서버 키의 프로젝트 UUID·환경 UUID로 고정**한다. 생략을 권장하며 명시한 값은 키 범위와 같아야 한다. 목록/usage 쿼리에서 외부 project/environment 필터는 거부한다. 부가 input의 project/environment/owner_id/request_id/task_type/prompt/body/routing/provider_plan/cache 주장 필드도 거부한다. 서버가 확인한 모델 경로·소유권·cache hit를 요청자가 덮어쓰지 못하게 한다.
 
-sync 기본 true는 같은 응답에서 상태/결과를 받는다. sync=false는 비동기 running 접수 후 GET 상태로 확인한다. 상태는 running/succeeded/failed/cancelled이고 result의 작업별 계약은 그대로 전달한다. 상태 조회·목록·usage는 현재 환경만 반환한다. 다른 환경의 UUID 조회·취소는 404이며 공유 upstream 키가 다른 소유자를 관리할 수 있어도 플랫폼은 권한을 먼저 확인한다. 취소는 `cancellation_requested:true,execution_stopped:null`이다. 뇌대리 v12는 상태 변경을 접수하며 실행 중 n8n HTTP/모델 프로세스 종료를 보장하지 않는다. 실제 종료 확인 전 같은 작업을 새 ID로 재실행하지 않는다.
+sync 기본 true는 같은 응답에서 상태/결과를 받는다. sync=false는 비동기 pending/running 접수 후 GET 상태 또는 완료 알림으로 확인한다. 상태는 pending/running/succeeded/failed/cancelled이고 result의 작업별 계약은 유지한다. 상태 조회·목록·usage는 현재 환경만 반환한다. 다른 환경의 UUID 조회·취소는 404이며 공유 upstream 키가 다른 소유자를 관리할 수 있어도 플랫폼은 권한을 먼저 확인한다. 취소는 `cancellation_requested:true,execution_stopped:null`이다. 실행 중 n8n HTTP/모델 프로세스 종료를 보장하지 않는다. 실제 종료 확인 전 같은 작업을 새 ID로 재실행하지 않는다.
 
 호스트는 **새 업무 작업마다 하나의 request_id를 영속 보관**한다. 통신 재전송은 같은 ID·내용을 유지한다. 플랫폼은 환경별 ID·정규화 내용 SHA-256·원격 UUID·생성 시각만 저장하고 원문/벡터/결과는 저장하지 않는다. JSON 필드 순서와 sync 변경은 실행 내용 변경으로 보지 않는다. 같은 ID·다른 내용은 409 `AI_REQUEST_CONFLICT`, 같은 내용은 GET으로 기존 작업을 반환하며 reused=true다. 실패/취소 작업에도 실행 POST를 다시 보내지 않는다. 이는 뇌대리 v12의 실패 요청 재접수 시 재실행될 수 있는 동작을 제한한다. 서버 설정 없음·로컬 동시 한도 초과처럼 뇌대리에 전송하지 않았음이 확인된 거절만 원장 예약을 해제한다. request_id 중복 처리는 내용 캐시와 별개이며 공통 cache hit로 표시하지 않는다.
 
 POST 응답이 유실되면 현재 환경의 최근 100건 목록에서 request_id를 찾아 연결한다. 찾지 못하면 409 `AI_REQUEST_UNCONFIRMED`다. 새 ID로 무조건 다시 실행하지 말고 접수·실행 상태를 운영자가 확인한다. 목록은 limit 1~100(기본50), 페이지네이션이 없으므로 이 복구 범위를 넘는 오래된 불명확 접수는 수동 확인이 필요하다. 플랫폼 원장은 환경당 10000건을 상한으로 두며 초과는 `AI_REQUEST_CAPACITY`다. 원격 작업 이력이 남아 있는 동안 식별자를 무작정 삭제해 다시 실행 가능하게 만들지 않는다.
 
-결과 보관은 뇌대리 v12의 24시간 계약과 실제 expires_at을 따른다. 만료 시 플랫폼도 result=null·result_expired=true로 결과 노출/재사용을 막는다. 작업 이력·사용량과 플랫폼 식별 원장은 결과 만료와 구분한다. AI에는 파일 완료 웹훅/receipt가 없으며 비동기 상태는 요청한 작업 ID로 조회한다. 임의 완료 웹훅을 만들지 않는다.
+결과 보관은 v26의 플랫폼 기본 7일·웹 24시간과 실제 expires_at을 따른다. 만료 시 플랫폼도 result=null·result_expired=true로 결과 노출/재사용을 막는다. 수령 확인 뒤에도 result=null·result_received=true로 숨긴다. 작업 이력·사용량·플랫폼 식별 원장·완료 알림 메타데이터는 결과 보관과 구분한다. AI는 별도의 ai.job.* 알림과 AI receipt를 사용하며 파일 job.* 계약과 혼용하지 않는다.
 
 ```sh
 python ai-client.py submit --input ./ai-job.json
@@ -186,7 +224,7 @@ summary에는 provider/model/task_type별 call_count·total_prompt_tokens·total
 
 관리자는 전체, 연결 서비스는 플랫폼을 통해 자기 요청만 조회한다. 원문·지침·응답 전문·인증 토큰·임의 콜백 URL을 usage에 저장하지 않는다. Raya CPU 추론/입력 토큰은 운영 지표이며 공급자 토큰/비용에 합산하지 않는다. 무료 모델도 기록하되 비용·잔여 무료 한도를 토큰 수만으로 단정하지 않는다. 수집 실패와 AI 실패는 구분하고 보고 재시도로 모델을 재호출하지 않는다. 학습 원문·결과 검토·접근·보존·내보내기·파인튜닝은 별도 미구현이다.
 
-플랫폼 동기 API는 연결 5초·요청 100초·전체 대기 105초, 인스턴스당 동시 2개다. 원격 응답은 Raya 64KiB·임베딩 16MiB 상한이며 HTTPS/TLS 검증과 리다이렉트 금지를 적용한다. 파일 작업 큐·웹훅·receipt는 사용하지 않는다. AI 비동기 실행과 24시간 결과는 뇌대리가 관리한다. AI 단건 응답 2MiB·목록 16MiB·usage 1MiB를 제한한다. 자동 재시도·등급/모델 대체를 하지 않는다.
+플랫폼 동기 API는 연결 5초·요청 100초·전체 대기 105초, 인스턴스당 동시 2개다. 원격 응답은 Raya 64KiB·임베딩 16MiB 상한이며 HTTPS/TLS 검증과 리다이렉트 금지를 적용한다. Raya·임베딩은 큐·완료 웹훅·receipt를 사용하지 않으며 AI 작업/번역은 별도 AI 계약을 따른다. AI 실행·결과 보관은 뇌대리가 관리하며 실제 expires_at을 확인한다. AI 단건 응답 2MiB·목록 16MiB·usage 1MiB를 제한한다. 자동 재시도·등급/모델 대체를 하지 않는다.
 
 | HTTP / code | 처리 |
 | --- | --- |

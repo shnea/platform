@@ -71,6 +71,16 @@ class Client:
     def cancel(self, job_id):
         return self.call('/api/v1/ai/jobs/' + str(uuid.UUID(job_id)) + '/cancel', {})
 
+    def translate(self, request_id, text, target_language, source_language='auto', notify=False):
+        return self.call('/api/v1/translations', {'request_id': request_id, 'text': text,
+            'source_language': source_language, 'target_language': target_language, 'notify': notify})
+
+    def events(self, limit=50):
+        return self.call('/api/v1/ai/events?' + urllib.parse.urlencode({'limit': limit}))
+
+    def receipt(self, job_id, event_id):
+        return self.call('/api/v1/ai/jobs/' + str(uuid.UUID(job_id)) + '/receipt', {'event_id': str(uuid.UUID(event_id))})
+
     def usage(self, task_type=None, limit=50):
         query = {'limit': limit}
         if task_type is not None:
@@ -101,10 +111,21 @@ def main():
     submit = commands.add_parser('submit')
     submit.add_argument('--input', required=True, help='고정 request_id·task_type·prompt·input·sync를 포함한 JSON 파일')
     listing = commands.add_parser('jobs')
-    listing.add_argument('--status', choices=['running', 'succeeded', 'failed', 'cancelled'])
+    listing.add_argument('--status', choices=['pending', 'running', 'succeeded', 'failed', 'cancelled'])
     listing.add_argument('--limit', type=int, default=50)
     for name in ['job', 'cancel']:
         commands.add_parser(name).add_argument('--id', required=True)
+    translate = commands.add_parser('translate')
+    translate.add_argument('--request-id', required=True)
+    translate.add_argument('--text', required=True, help='UTF-8 텍스트 파일, 최대 4000자')
+    translate.add_argument('--source-language', default='auto', choices=['auto', 'ko', 'en', 'ja', 'zh', 'es', 'fr', 'de'])
+    translate.add_argument('--target-language', required=True, choices=['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de'])
+    translate.add_argument('--notify', action='store_true')
+    events = commands.add_parser('events')
+    events.add_argument('--limit', type=int, default=50)
+    receipt = commands.add_parser('receipt', help='호스트의 영속 저장·업무 반영 완료 후에만 실행')
+    receipt.add_argument('--id', required=True)
+    receipt.add_argument('--event-id', required=True)
     usage = commands.add_parser('usage')
     usage.add_argument('--task-type')
     usage.add_argument('--limit', type=int, default=50)
@@ -129,6 +150,12 @@ def main():
             result = client.job(args.id)
         elif args.command == 'cancel':
             result = client.cancel(args.id)
+        elif args.command == 'translate':
+            result = client.translate(args.request_id, read(args.text, 64 * 1024), args.target_language, args.source_language, args.notify)
+        elif args.command == 'events':
+            result = client.events(args.limit)
+        elif args.command == 'receipt':
+            result = client.receipt(args.id, args.event_id)
         else:
             result = client.usage(args.task_type, args.limit)
         print(json.dumps(result, ensure_ascii=False))

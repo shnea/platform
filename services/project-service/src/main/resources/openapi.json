@@ -3296,11 +3296,10 @@
       "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "responses": {"200": {"description": "취소된 작업"}, "default": {"$ref": "#/components/responses/Problem"}}
     }},
-    "/api/v1/ai/jobs": {
+    "/api/v1/translations": {
       "post": {
-        "operationId": "post_api_v1_ai_jobs",
-        "summary": "블로그·댓글·초안 및 공통 RAG AI 작업 접수",
-        "description": "본문 2MiB. request_id 최대128자·prompt 200000자. 키의 프로젝트/환경 고정. 같은 ID·다른 내용은409; 같은 내용은 기존 상태 조회. 실패·취소·불명확 접수를 자동 재실행하지 않음. sync=false는running 접수 후 조회. 원문/결과는 뇌대리 보관; 플랫폼은 해시·식별자만 보관(환경당10000건).",
+        "operationId": "post__api_v1_translations",
+        "summary": "문장 번역 비동기 접수",
         "security": [
           {
             "projectApiKey": []
@@ -3310,7 +3309,7 @@
           "ai:execute"
         ],
         "responses": {
-          "200": {
+          "202": {
             "description": "성공 · Cache-Control: no-store",
             "content": {
               "application/json": {
@@ -3319,9 +3318,6 @@
                 }
               }
             }
-          },
-          "default": {
-            "$ref": "#/components/responses/Problem"
           },
           "401": {
             "$ref": "#/components/responses/Problem"
@@ -3357,21 +3353,23 @@
             "$ref": "#/components/responses/Problem"
           }
         },
+        "description": "본문64KiB·text4000자·7언어. 프로젝트/환경은 현재 서버 키로 고정. 같은 request_id는 일반 AI jobs와 동일한 원장을 사용하며 모델을 다시 호출하지 않음. notify 기본false.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiJobInput"
+                "$ref": "#/components/schemas/AiTranslationInput"
               }
             }
           }
         }
-      },
+      }
+    },
+    "/api/v1/ai/events": {
       "get": {
-        "operationId": "get_api_v1_ai_jobs",
-        "summary": "현재 환경의 AI 작업 목록",
-        "description": "project/environment 외부 필터 금지. 키의 현재 환경만 조회. 최근100건까지·페이지네이션 없음.",
+        "operationId": "get__api_v1_ai_events",
+        "summary": "현재 환경에 영속 접수된 AI 완료 알림",
         "security": [
           {
             "projectApiKey": []
@@ -3386,13 +3384,163 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AiJobList"
+                  "$ref": "#/components/schemas/AiCompletionList"
                 }
               }
             }
           },
-          "default": {
+          "401": {
             "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "최근100건까지·페이지네이션 없음. DB inbox 메타데이터만 조회하며 원문·결과·본문 해시는 노출하지 않음. 호스트는 자신이 보관한 작업 ID로 결과를 조회하고 영속 저장 후 receipt를 호출.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/jobs/{id}/receipt": {
+      "post": {
+        "operationId": "post__api_v1_ai_jobs_id_receipt",
+        "summary": "영속 저장 후 AI 결과 수령 확인",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:execute"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "성공한 notify 작업의 terminal_event_id만 허용. 호스트가 업무 반영·저장을 영속 완료한 뒤 호출. 수령 즉시 결과 접근 차단, 중복 확인은 멱등이며 실제 삭제 완료가 아님.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiReceiptInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/jobs/{id}/translation.txt": {
+      "get": {
+        "operationId": "get__api_v1_ai_jobs_id_translation_txt",
+        "summary": "현재 환경의 번역 결과 TXT 다운로드",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Problem"
@@ -3430,12 +3578,159 @@
         },
         "parameters": [
           {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "UTF-8 번역문. 진행 중409·만료/수령 후410. 이미 저장된 upstream 결과만 읽으며 모델을 다시 호출하지 않음."
+      }
+    },
+    "/api/v1/ai/jobs": {
+      "post": {
+        "operationId": "post_api_v1_ai_jobs",
+        "summary": "블로그·댓글·초안 및 공통 RAG AI 작업 접수",
+        "description": "본문2MiB. 10종 작업·번역4000자, 나머지prompt200000자. 키의 프로젝트/환경 고정. 동일 request_id·내용은 재조회, 다른 내용409. sync=false는pending/running이며 notify 변경은 새 내용으로 판단. 원문/결과는 플랫폼 DB에 저장하지 않음. 자동 재실행 없음.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:execute"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiJobInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_api_v1_ai_jobs",
+        "summary": "현재 환경의 AI 작업 목록",
+        "description": "project/environment 외부 필터 금지. 키의 현재 환경만 조회. 최근100건까지·페이지네이션 없음.",
+        "security": [
+          {
+            "projectApiKey": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJobList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
             "name": "status",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
               "enum": [
+                "pending",
                 "running",
                 "succeeded",
                 "failed",
@@ -6640,6 +6935,10 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "completionReceiverConfigured": {
+            "type": "boolean",
+            "description": "플랫폼 공유 서명 설정 존재 여부. 뇌대리의 AI 수신 URL·실제 전송 성공은 별도 확인"
+          },
           "configured": {
             "type": "boolean",
             "description": "서버 설정 존재 여부이며 실제 연결 성공을 보장하지 않음"
@@ -6674,6 +6973,251 @@
           "features"
         ]
       },
+      "AiTranslationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+          },
+          "source_language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ko",
+              "en",
+              "ja",
+              "zh",
+              "es",
+              "fr",
+              "de"
+            ],
+            "default": "auto"
+          },
+          "target_language": {
+            "type": "string",
+            "enum": [
+              "ko",
+              "en",
+              "ja",
+              "zh",
+              "es",
+              "fr",
+              "de"
+            ]
+          },
+          "project": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "notify": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "request_id",
+          "text",
+          "target_language"
+        ]
+      },
+      "AiReceiptInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "event_id"
+        ]
+      },
+      "AiReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          },
+          "cleanup": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "accepted",
+          "cleanup"
+        ]
+      },
+      "AiDelivery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_http_status": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 100,
+            "maximum": 599
+          },
+          "next_attempt_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "state",
+          "configured",
+          "attempts"
+        ]
+      },
+      "AiCompletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 1
+          },
+          "source": {
+            "type": "string",
+            "const": "ai"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "ai.job.succeeded",
+              "ai.job.failed",
+              "ai.job.cancelled"
+            ]
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "project": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "blog.tags",
+              "blog.summary",
+              "portfolio.search",
+              "ui.render",
+              "comment.generate",
+              "document.analyze",
+              "code.analyze",
+              "chat.general",
+              "article.draft",
+              "text.translate"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "source",
+          "type",
+          "event_id",
+          "job_id",
+          "request_id",
+          "project",
+          "environment",
+          "task_type",
+          "status",
+          "occurred_at",
+          "expires_at",
+          "created_at",
+          "received_at",
+          "error_code"
+        ]
+      },
+      "AiCompletionList": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "$ref": "#/components/schemas/AiCompletion"
+        }
+      },
       "AiJobInput": {
         "type": "object",
         "additionalProperties": false,
@@ -6694,7 +7238,8 @@
               "document.analyze",
               "code.analyze",
               "chat.general",
-              "article.draft"
+              "article.draft",
+              "text.translate"
             ]
           },
           "prompt": {
@@ -6705,7 +7250,7 @@
           "input": {
             "type": "object",
             "additionalProperties": true,
-            "description": "기존 messages·thread·hash·지침 등 유지. article.draft는 context.topic 필수. collection은 논리 이름이며 플랫폼이 프로젝트/환경별 물리 이름을 생성. 소유권·라우팅·cache 주장 필드 금지."
+            "description": "기존 messages·thread·hash·지침 등 유지. article.draft는 context.topic 필수. collection은 논리 이름이며 플랫폼이 프로젝트/환경별 물리 이름을 생성. 소유권·라우팅·cache 주장 필드 금지. text.translate는 source_language/target_language만 허용하며 RAG 컬렉션을 추가하지 않음."
           },
           "sync": {
             "type": "boolean",
@@ -6720,6 +7265,11 @@
             "type": "string",
             "format": "uuid",
             "description": "생략 권장. 키의 환경 UUID와 일치해야 함"
+          },
+          "notify": {
+            "type": "boolean",
+            "default": false,
+            "description": "AI 완료 알림 선택. notify 변경은 같은 request_id 내용 충돌. 뇌대리 전용 AI 수신 URL·공유 서명 비밀 필요."
           }
         },
         "required": [
@@ -6727,13 +7277,121 @@
           "task_type"
         ],
         "anyOf": [
-          {"required": ["prompt"]},
-          {"properties": {"task_type": {"const": "article.draft"}}, "required": ["task_type", "input"]}
+          {
+            "required": [
+              "prompt"
+            ]
+          },
+          {
+            "properties": {
+              "task_type": {
+                "const": "article.draft"
+              }
+            },
+            "required": [
+              "task_type",
+              "input"
+            ]
+          }
         ],
         "allOf": [
           {
-            "if": {"properties": {"task_type": {"const": "article.draft"}}, "required": ["task_type"]},
-            "then": {"properties": {"input": {"type": "object", "required": ["context"], "properties": {"context": {"type": "object", "required": ["topic"], "properties": {"topic": {"type": "string", "minLength": 1, "maxLength": 2000}}}}}}}
+            "if": {
+              "properties": {
+                "task_type": {
+                  "const": "article.draft"
+                }
+              },
+              "required": [
+                "task_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "input": {
+                  "type": "object",
+                  "required": [
+                    "context"
+                  ],
+                  "properties": {
+                    "context": {
+                      "type": "object",
+                      "required": [
+                        "topic"
+                      ],
+                      "properties": {
+                        "topic": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "task_type": {
+                  "const": "text.translate"
+                }
+              },
+              "required": [
+                "task_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source_language": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "ko",
+                        "en",
+                        "ja",
+                        "zh",
+                        "es",
+                        "fr",
+                        "de"
+                      ],
+                      "default": "auto"
+                    },
+                    "target_language": {
+                      "type": "string",
+                      "enum": [
+                        "ko",
+                        "en",
+                        "ja",
+                        "zh",
+                        "es",
+                        "fr",
+                        "de"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "target_language"
+                  ]
+                }
+              },
+              "required": [
+                "prompt",
+                "input"
+              ]
+            }
           }
         ]
       },
@@ -6768,12 +7426,14 @@
               "document.analyze",
               "code.analyze",
               "chat.general",
-              "article.draft"
+              "article.draft",
+              "text.translate"
             ]
           },
           "status": {
             "type": "string",
             "enum": [
+              "pending",
               "running",
               "succeeded",
               "failed",
@@ -6836,6 +7496,29 @@
             "enum": [
               "upstream_reported_unverified"
             ]
+          },
+          "notify": {
+            "type": "boolean"
+          },
+          "terminal_event_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "received_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "result_received": {
+            "type": "boolean"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/AiDelivery"
           }
         },
         "required": [
@@ -6850,7 +7533,8 @@
           "error_message",
           "created_at",
           "result_expired",
-          "usage_measurement"
+          "usage_measurement",
+          "result_received"
         ]
       },
       "AiJobList": {
@@ -6904,8 +7588,9 @@
               "comment.generate",
               "document.analyze",
               "code.analyze",
-                "chat.general",
-                "article.draft"
+              "chat.general",
+              "article.draft",
+              "text.translate"
             ]
           },
           "call_count": {
@@ -6957,8 +7642,9 @@
               "comment.generate",
               "document.analyze",
               "code.analyze",
-                "chat.general",
-                "article.draft"
+              "chat.general",
+              "article.draft",
+              "text.translate"
             ]
           },
           "id": {
