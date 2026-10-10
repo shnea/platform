@@ -16,7 +16,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 
 관리자 전용 기본 경로는 `/api/v1/admin/environments/{environmentId}/ai`이며 Bearer 관리자 JWT를 사용한다. 그 아래 `/raya/route`, `/embeddings`, `/jobs`, `/jobs/{id}`, `/jobs/{id}/cancel`, `/translations`, `/usage`, `/indexing`, `/indexing/{id}`, `/indexing/{id}/cancel`, `/indexing/collections`, `/indexing/search`를 제공한다. 키 발급·서버 키 우회는 없으며 프로젝트 활성/환경 READY를 확인하고 서버에서 범위를 고정한다. 일반 서비스 호출에는 기존 표의 서버 키·권한을 그대로 적용한다.
 
-AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유지하고 응답 유실 후 새 ID로 자동 재실행하지 않는다. 결과 조회는 모델 재호출·자동 receipt가 아니며 원문·벡터는 브라우저 화면에만 유지한다. PostgreSQL 색인은 Qdrant와 별도다. `replace_all`/`delete`는 UI 확인 뒤 대상 컬렉션 이름을 `X-Confirm-Collection`에 전달한다. 빈 문서 배열의 전체 교체는 실제 전체 삭제이며 한 요청 100문서/1MiB 제한을 유지한다.
+AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유지하고 응답 유실 후 새 ID로 자동 재실행하지 않는다. 결과 조회는 모델 재호출·자동 receipt가 아니다. 플랫폼은 화면 메모리 외 원문·벡터 저장소를 추가하지 않지만 뇌대리의 실제 색인 문서는 삭제·전체 교체까지 영속 보관되며 AI 결과는 기존 보존 계약을 따른다. PostgreSQL 색인은 Qdrant와 별도다. `replace_all`/`delete`는 UI 확인 뒤 대상 컬렉션 이름을 `X-Confirm-Collection`에 전달한다. 빈 문서 배열의 전체 교체는 실제 전체 삭제이며 한 요청 100문서/1MiB 제한을 유지한다.
 
 ## 서버 API와 권한
 
