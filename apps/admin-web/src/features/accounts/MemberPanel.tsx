@@ -142,9 +142,10 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
     {error && <p role="alert" className="alert">{error}</p>}
     {message && <p role="status" className="notice">{message}</p>}
     {user && <>
+      <details className="technical-details"><summary>회원 식별 정보</summary><p className="identifier">{user.id}</p></details>
       <dl>
         <div><dt>아이디</dt><dd>{user.username}</dd></div>
-        <div><dt>회원 ID</dt><dd className="identifier">{user.id}</dd></div>
+
         <div><dt>이름</dt><dd>{[user.firstName, user.lastName].filter(Boolean).join(" ") || "등록되지 않음"}</dd></div>
         <div><dt>이메일</dt><dd>{user.email || "등록되지 않음"}{user.email && <span className="small muted"> · {user.emailVerified ? "인증됨" : "미인증"}</span>}</dd></div>
         <div><dt>연결된 소셜 계정</dt><dd>{detail.providers.map(code => providers[code] || code).join(", ") || "없음"}</dd></div>
@@ -160,7 +161,7 @@ function MemberDetail({ path, suspended, back }: { path: string; suspended: bool
       <p className="small muted">목록에는 온라인 세션만 표시합니다. 전체 종료는 오프라인 세션도 포함합니다. 연동 서비스가 자체 검증하는 기존 접근 토큰은 만료 전까지 유효할 수 있습니다.</p>
       {sessions.length ? <ul className="key-list member-sessions">{sessions.map(session => <li key={session.id}>
         <div><strong>{session.clients.join(", ") || "연결 앱 정보 없음"}</strong>
-          <p className="identifier">{session.id}</p><p className="small muted">IP {session.ipAddress || "정보 없음"}</p>
+          <details className="technical-details"><summary>세션 상세 보기</summary><p className="identifier">{session.id}</p></details><p className="small muted">IP {session.ipAddress || "정보 없음"}</p>
           <p className="small">로그인 {date(session.start)}<br />마지막 접근 {date(session.lastAccess)}</p></div>
         <button className="secondary danger" disabled={busy} aria-label={`세션 종료 ${session.id}`}
           onClick={() => confirm({ type: "sessions", sessionId: session.id })}><Icon name="log-out"/>종료</button>

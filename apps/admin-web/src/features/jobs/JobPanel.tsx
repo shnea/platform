@@ -125,7 +125,7 @@ export function JobPanel({ environmentId, environmentLabel, ready, disabled, onB
       {error && <p role="alert" className="alert">{error}</p>}
       {rows && (rows.length ? <ul className="job-list">{rows.slice(0, 20).map(job => <li key={job.id}>
         <button className="job-row" onClick={() => setSelected(job.id)} disabled={disabled}>
-          <span className="job-summary"><strong>환경 설정 반영</strong><span className="small muted">접수 {date(job.createdAt)}</span><code>{job.id}</code></span>
+          <span className="job-summary"><strong>환경 설정 반영</strong><span className="small muted">접수 {date(job.createdAt)}</span></span>
           <span className="job-row-status"><State value={job.state} /><span className="small muted">시도 {job.attempts}/{job.maxAttempts} · 상세 보기</span></span>
         </button>
       </li>)}</ul> : <p className="empty">{query.state || query.from || query.to ? "조회 조건에 맞는 작업이 없습니다. 상태나 기간을 바꿔 보세요." : "아직 접수된 작업이 없습니다. 반영이 필요한 환경에서 작업을 접수할 수 있습니다."}</p>)}

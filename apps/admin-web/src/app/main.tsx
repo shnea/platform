@@ -524,7 +524,7 @@ function Workspace() {
         <div className="page-heading">
           <div>
             <p className="breadcrumb">
-              워크스페이스 / {view.label}{project && tab !== "audit" && !serviceView ? ` / ${project.code}` : ""}
+              워크스페이스 / {view.label}{project && tab !== "audit" && !serviceView ? ` / ${project.name}` : ""}
             </p>
             <h1 ref={pageTitle} tabIndex={-1}>
               {tab === "projects" && project ? project.name : view.label}
@@ -622,7 +622,7 @@ function Workspace() {
                     </span>
                     <span className="project-label">
                       <strong>{p.name}</strong>
-                      <span>{p.code}</span>
+
                     </span>
                     <State value={p.status} />
                     <span aria-hidden="true" className="row-arrow">

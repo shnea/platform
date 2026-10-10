@@ -55,12 +55,12 @@ export function ProjectIntegration({project, environment, disabled, issueDisable
   const entries = connectionEntries(values);
   return <section className="project-integration" aria-labelledby="integration-title">
     <div className="section-line"><h3 id="integration-title">서비스 연결</h3><span className="state">{environment.kind}</span></div>
-    <p className="muted">{project.name} · {environment.code} 환경의 연결 값을 서버 환경변수로 복사하세요. 프로젝트 코드는 <strong>{project.code}</strong>이며 아래 UUID와 다릅니다.</p>
-    <dl className="connection-values">
+    <p className="muted">{project.name} · {environment.code} 환경의 연결 값을 서버 환경변수로 복사하세요.</p>
+    <details className="technical-details"><summary>서버 연동 상세 보기</summary><dl className="connection-values">
       {entries.filter(([name]) => ['PLATFORM_PROJECT_ID', 'PLATFORM_ENVIRONMENT_ID', 'PLATFORM_OIDC_ISSUER', 'PLATFORM_OIDC_CLIENT_ID'].includes(name)).map(([name, value]) =>
         <div key={name}><dt>{name}</dt><dd><code>{value}</code><button type="button" className="secondary" onClick={() => void copy(value, name + '를')}
           aria-label={`${name} 복사`} title={`${name} 복사`}><Icon name="copy"/></button></dd></div>)}
-    </dl>
+    </dl></details>
     <fieldset disabled={disabled}>
       <legend>연결할 서비스 설정</legend>
       <label>서버 API 키 · PLATFORM_API_KEY
@@ -105,8 +105,9 @@ export function ProjectIntegration({project, environment, disabled, issueDisable
     <div className="section-line"><h4>환경변수 미리보기</h4><button type="button" disabled={disabled || !!invalid}
       onClick={() => void copy(connectionEnv(values), apiKey ? 'API 키를 포함한 환경변수를' : '환경변수 양식을')}><Icon name="copy"/>{apiKey ? 'API 키 포함 .env 복사' : '.env 양식 복사'}</button></div>
     {invalid && <p className="alert" role="alert">{invalid}</p>}
-    <label className="connection-preview">서버 .env 설정<textarea readOnly rows={9} value={preview} spellCheck={false} onFocus={e => e.target.select()}/></label>
+    <details className="technical-details"><summary>환경변수 내용 보기</summary><label className="connection-preview">서버 .env 설정<textarea readOnly rows={9} value={preview} spellCheck={false} onFocus={e => e.target.select()}/></label>
     <p className="small muted">빈 값은 아직 지정하지 않은 항목입니다. API 키가 포함된 내용은 서버에만 보관하고 Git에 올리지 마세요.</p>
+    </details>
     {notice && <p className="notice" role="status">{notice}</p>}
   </section>;
 }

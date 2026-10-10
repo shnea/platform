@@ -153,3 +153,18 @@ label { font-size: 13px; gap: 10px; }
  .welcome-services h2 { font-size: 15px; }
  .welcome-services p { font-size: 12px; }
 }
+
+/* Status and tags share a soft capsule shape; identifiers are opt-in detail. */
+.state,.job-state,.noedaeri-tags li { border: 1px solid color-mix(in srgb,currentColor 24%,transparent); border-radius: 999px; background: color-mix(in srgb,currentColor 7%,transparent); padding: 4px 10px; line-height: 1.5; font-size: 12px; }
+.section-tabs button,.env-tab { border-radius: 14px; }
+.noedaeri-tags li { padding: 6px 14px; }
+.environment-context .state { align-self: center; min-height: 0; }
+.technical-details { margin-block: 16px; font-size: 13px; color: var(--muted); }
+.technical-details > summary { width: fit-content; min-height: 44px; display: list-item; cursor: pointer; padding-block: 10px; text-underline-offset: 4px; }
+.technical-details[open] > summary { color: var(--text); }
+.technical-details p { overflow-wrap: anywhere; }
+.technical-details label { color: var(--text); }
+.technical-details .connection-values { color: var(--text); }
+.technical-details .connection-values > div:first-child { border-top: 0; }
+.noedaeri-form .technical-details { margin-top: 0; }
+.noedaeri-form .technical-details label { margin-top: 12px; }
