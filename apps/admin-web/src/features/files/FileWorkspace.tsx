@@ -7,9 +7,10 @@ import { RetentionPanel, type RetentionPolicy } from "./RetentionPanel";
 import { FileDetails } from "./FileDetails";
 import { chunkHash, fileApi, fileHash, fileSize, type FileInfo, type Resumable, type Upload } from "./file-api";
 import "./files.css";
+import type {SubtitleOptions,VideoOptions} from "../../shared/media/video-subtitles";
 
 type Stage = "queued" | "hashing" | "uploading" | "verifying" | "paused" | "needs-file" | "done" | "error" | "cancelled";
-type Item = { id: string; name: string; size: number; visibility: "PUBLIC" | "PRIVATE"; retention: string; file?: File; hash?: string; uploadId?: string; expires?: string; received: number; stage: Stage; hashProgress: number; error?: string };
+type Item = { id: string; name: string; size: number; visibility: "PUBLIC" | "PRIVATE"; retention: string; videoOptions?:VideoOptions|null; file?: File; hash?: string; uploadId?: string; expires?: string; received: number; stage: Stage; hashProgress: number; error?: string };
 const stages: Record<Stage, string> = { queued: "대기", hashing: "원본 확인 중", uploading: "전송 중", verifying: "서버 검증 중", paused: "일시정지", "needs-file": "원본 선택 필요", done: "완료", error: "실패", cancelled: "취소됨" };
 const date = (value: string) => new Date(value).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 const message = (error: unknown) => error instanceof TypeError ? "서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."
@@ -33,6 +34,9 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [visibility, setVisibility] = useState<"PUBLIC" | "PRIVATE">("PUBLIC");
+  const [subtitleMode,setSubtitleMode]=useState<"none"|"sidecar"|"burned">("none");
+  const [subtitleLanguage,setSubtitleLanguage]=useState<SubtitleOptions["language"]>("auto");
+  const [subtitleItn,setSubtitleItn]=useState(true);
   const [dragging, setDragging] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
@@ -77,12 +81,12 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         // Creation may commit even when its response is lost. Reconcile by the original request as well as session ID.
         const merged = old.map(item => {
           const match = pending.find(remote => remote.requestId === item.id || remote.upload.uploadId === item.uploadId);
-          return match ? { ...item, uploadId: match.upload.uploadId, received: match.upload.receivedBytes, expires: match.upload.expiresAt } : item;
+          return match ? { ...item, uploadId: match.upload.uploadId, received: match.upload.receivedBytes, expires: match.upload.expiresAt,videoOptions:match.videoOptions } : item;
         });
         const known = new Set(merged.map(item => item.uploadId));
         return [...merged, ...pending.filter(item => !known.has(item.upload.uploadId)).map(item => ({
           id: item.requestId, name: item.originalName, size: item.upload.size, visibility: item.visibility,
-          retention: item.retentionCode, hash: item.sha256, uploadId: item.upload.uploadId, expires: item.upload.expiresAt,
+          retention: item.retentionCode, hash: item.sha256, uploadId: item.upload.uploadId, expires: item.upload.expiresAt,videoOptions:item.videoOptions,
           received: item.upload.receivedBytes, stage: "needs-file" as Stage, hashProgress: 0,
         }))];
       });
@@ -96,7 +100,8 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     if (waiting + candidates.length > 20) { setError("한 번에 대기할 수 있는 파일은 최대 20개입니다. 기존 업로드를 완료하거나 취소한 뒤 추가해 주세요."); return; }
     const accepted = candidates.filter(file => file.size <= 5_000_000_000);
     setError(accepted.length !== candidates.length ? "5GB를 초과한 파일은 제외했습니다. 나머지 파일은 업로드할 수 있습니다." : "");
-    updateItems(old => [...old, ...accepted.map(file => ({ id: crypto.randomUUID(), name: file.name, size: file.size, visibility, retention, file, received: 0, stage: "queued" as Stage, hashProgress: 0 }))]);
+    const videoOptions:VideoOptions|null=subtitleMode==='none'?null:{seconds:0,subtitles:{mode:subtitleMode,language:subtitleLanguage,useItn:subtitleItn}};
+    updateItems(old => [...old, ...accepted.map(file => ({ id: crypto.randomUUID(), name: file.name, size: file.size, visibility, retention,videoOptions:/\.(mp4|m4v|mov|mkv|webm)$/i.test(file.name)?videoOptions:null, file, received: 0, stage: "queued" as Stage, hashProgress: 0 }))]);
     setTab("uploads");
     if (input.current) input.current.value = "";
   }
@@ -109,7 +114,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     if (signal.aborted) throw new DOMException("Paused", "AbortError");
     let session = item.uploadId
       ? await fileApi<Upload>(environmentId, `/uploads/${item.uploadId}`, "GET", undefined, signal)
-      : await fileApi<Upload>(environmentId, "/uploads", "POST", { requestId: item.id, originalName: item.name, size: item.size, sha256: hash, visibility: item.visibility, retentionCode: item.retention }, signal);
+      : await fileApi<Upload>(environmentId, "/uploads", "POST", { requestId: item.id, originalName: item.name, size: item.size, sha256: hash, visibility: item.visibility, retentionCode: item.retention,videoOptions:item.videoOptions }, signal);
     patch(item.id, { uploadId: session.uploadId, received: session.receivedBytes, expires: session.expiresAt });
     if (session.state === "READY") { patch(item.id, { stage: "done", file: undefined }); return; }
     if (session.state !== "UPLOADING") throw new Error("이 업로드는 만료되었거나 종료되었습니다. 목록에서 제거한 뒤 새로 추가해 주세요.");
@@ -167,7 +172,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
       let id = item.uploadId;
       // A lost creation response can still have committed a session; resolve the same request before cancelling.
       if (!id && item.hash) {
-        const session = await fileApi<Upload>(environmentId, "/uploads", "POST", { requestId: item.id, originalName: item.name, size: item.size, sha256: item.hash, visibility: item.visibility, retentionCode: item.retention });
+        const session = await fileApi<Upload>(environmentId, "/uploads", "POST", { requestId: item.id, originalName: item.name, size: item.size, sha256: item.hash, visibility: item.visibility, retentionCode: item.retention,videoOptions:item.videoOptions });
         id = session.uploadId; patch(item.id, { uploadId: id });
       }
       if (id) await fileApi(environmentId, `/uploads/${id}`, "DELETE");
@@ -241,6 +246,9 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
           <option value="PUBLIC">공개 — 링크를 알면 다운로드 가능</option><option value="PRIVATE">비공개 — 인증된 접근만 허용</option></select></label>
         <label className="file-visibility">추가할 파일의 보존 코드<select value={retention} disabled={busy||loading} onChange={e=>setRetention(e.target.value)}>{policies.filter(p=>p.enabled).map(p=><option value={p.code} key={p.code}>{p.displayName} ({p.code})</option>)}</select></label>
         <p className="small muted file-guidance">일시정지 후 다른 화면으로 이동할 수 있습니다. 돌아오면 같은 원본 파일을 다시 선택해 이어 올리세요. 원본 확인 중인 파일은 새로 추가해야 합니다.</p>
+        <label>추가할 영상의 자동 자막<select value={subtitleMode} disabled={busy} onChange={event=>setSubtitleMode(event.target.value as typeof subtitleMode)}><option value="none">자막 없음</option><option value="sidecar">자막 파일 생성 · 켜기·끄기 가능</option><option value="burned">영상에 자막 입히기 · 끄기 불가</option></select></label>
+        {subtitleMode!=='none'&&<><label>음성 인식 언어<select value={subtitleLanguage} disabled={busy} onChange={event=>setSubtitleLanguage(event.target.value as SubtitleOptions['language'])}>{Object.entries({auto:'자동 감지',ko:'한국어',en:'영어',ja:'일본어',zh:'중국어',yue:'광둥어'}).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label><input type="checkbox" checked={subtitleItn} disabled={busy} onChange={event=>setSubtitleItn(event.target.checked)}/>숫자·문장 표기 정규화</label></>}
+        <p className="small muted">자막 옵션은 파일을 추가하기 전에 선택하세요. 이미 추가한 영상·재개 세션의 옵션은 유지됩니다. 자동 생성 자막의 시각은 근삿값이며 자막 번역·MP4 출력은 제공하지 않습니다.</p>
         <div className="section-line"><h3>업로드 현황 <span className="muted">{items.length}개</span></h3><div className="actions">
           {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}><Icon name="pause"/>일시정지</button>
             : <button disabled={mutating || !items.some(item => item.file && ["queued", "paused", "error"].includes(item.stage))}
@@ -252,6 +260,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         <ul className="file-upload-list" aria-label="업로드 현황">
           {items.map(item => <li key={item.id}>
             <div className="file-upload-heading"><strong>{item.name}</strong><span className={item.stage === "error" ? "danger" : "file-stage"}>{stages[item.stage]}</span></div>
+            {item.videoOptions?.subtitles&&<p className="small muted">{item.videoOptions.subtitles.mode==='burned'?'영상에 자막 입히기':'자막 파일 생성'} · {item.videoOptions.subtitles.language}</p>}
             <div className="file-progress-meta"><span>{fileSize(item.received)} / {fileSize(item.size)} · {item.visibility === "PUBLIC" ? "공개" : "비공개"} · {item.retention}</span>
               <span>{item.stage === "hashing" ? `원본 확인 ${item.hashProgress}%` : `${item.size ? Math.floor(item.received / item.size * 100) : item.stage === "done" ? 100 : 0}%`}</span></div>
             <progress aria-label={`${item.name} ${item.stage === "hashing" ? "원본 확인" : "전송"} 진행률`} max={100} value={item.stage === "hashing" ? item.hashProgress : item.size ? item.received / item.size * 100 : item.stage === "done" ? 100 : 0} />

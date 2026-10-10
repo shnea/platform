@@ -2133,7 +2133,7 @@
     "/api/v1/files/{id}/hls/{asset}": {
       "get": {
         "operationId": "getVideoHlsAsset",
-        "summary": "HLS 재생 목록 또는 영상 조각 — 매 요청 접근 검사",
+        "summary": "HLS 영상 또는 자동 자막·전사 — 매 요청 접근 검사",
         "tags": [
           "Files"
         ],
@@ -2157,8 +2157,38 @@
                   "type": "string",
                   "format": "binary"
                 }
+              },
+              "text/vtt": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 자막 또는 전사. VTT는 inline, 나머지는 attachment."
+                }
+              },
+              "application/x-subrip": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 자막 또는 전사. VTT는 inline, 나머지는 attachment."
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 자막 또는 전사. VTT는 inline, 나머지는 attachment."
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "description": "UTF-8 자막 또는 전사. VTT는 inline, 나머지는 attachment."
+                }
               }
             }
+          },
+          "206": {
+            "description": "부분 콘텐츠; Content-Range/Accept-Ranges 헤더 제공"
+          },
+          "416": {
+            "description": "범위가 잘못되었거나 다중 범위; Content-Range: bytes */크기"
           },
           "default": {
             "description": "한국어 오류. 충돌 시 다시 조회한 뒤 적용.",
@@ -2169,12 +2199,6 @@
                 }
               }
             }
-          },
-          "206": {
-            "description": "부분 콘텐츠; Content-Range/Accept-Ranges 헤더 제공"
-          },
-          "416": {
-            "description": "범위가 잘못되었거나 다중 범위; Content-Range: bytes */크기"
           }
         },
         "parameters": [
@@ -2193,7 +2217,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "master\\.m3u8|q[0-9]{1,4}(?:\\.m3u8|-[0-9]{5}\\.ts)|[0-9]{1,4}p(?:\\.m3u8|-[0-9]{5}\\.ts)"
+              "pattern": "master\\.m3u8|q[0-9]{1,4}(?:\\.m3u8|-[0-9]{5}\\.ts)|[0-9]{1,4}p(?:\\.m3u8|-[0-9]{5}\\.ts)|subtitles\\.(?:srt|vtt)|transcript\\.(?:json|txt)"
             }
           },
           {
@@ -3455,6 +3479,17 @@
             "minLength": 1,
             "maxLength": 60,
             "default": "default"
+          },
+          "videoOptions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "영상 업로드에만 허용. 생략/null은 기존 처리. 같은 requestId의 옵션 변경은 409. 옵션은 원격 Job에 스냅샷으로 저장한다."
           }
         },
         "required": [
@@ -3652,6 +3687,16 @@
           "requestId": {
             "type": "string",
             "format": "uuid"
+          },
+          "videoOptions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -3660,7 +3705,8 @@
           "sha256",
           "visibility",
           "retentionCode",
-          "requestId"
+          "requestId",
+          "videoOptions"
         ]
       },
       "DownloadTicket": {
@@ -4114,6 +4160,13 @@
               "null"
             ],
             "description": "공개 파일의 OG HTML 공유 URL. 비공개 파일은 null."
+          },
+          "subtitleUrls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "완료된 자막/전사 파일명 → 보호된 URL. HLS와 같은 최대 2시간 재생 토큰·권한 철회·삭제 검사. 자막 없는 결과는 빈 객체."
           }
         },
         "required": [
@@ -4131,7 +4184,8 @@
           "video",
           "streamUrl",
           "streamExpiresAt",
-          "shareUrl"
+          "shareUrl",
+          "subtitleUrls"
         ],
         "additionalProperties": false,
         "description": "일반 비공개 보기/원본 URL은 최대 5분. streamUrl은 HLS 전용 최대 2시간이며 원본 접근 연장 권한이 아니다. 모든 조각에서 현재 공개 범위/접근 버전/프로젝트 상태를 검사한다. 영상은 화질별 완료 비율을 표시하며 전체 완료 후 제공한다."
@@ -4164,6 +4218,117 @@
           "playlist"
         ],
         "additionalProperties": false
+      },
+      "VideoOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 3600,
+            "default": 0
+          },
+          "subtitles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubtitleOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SubtitleOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sidecar",
+              "burned"
+            ],
+            "description": "sidecar: SRT/VTT 생성·재생기 켜기/끄기. burned: 모든 HLS 화질에 입히며 끄기 불가."
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ko",
+              "en",
+              "ja",
+              "zh",
+              "yue"
+            ],
+            "default": "auto"
+          },
+          "useItn": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "뇌대리 options.subtitles.use_itn으로 변환. 별도 STT Job·MP4·자막 번역 없음."
+      },
+      "VideoSubtitles": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "language",
+          "timing",
+          "cueCount",
+          "srt",
+          "vtt",
+          "transcript"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sidecar",
+              "burned"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ko",
+              "en",
+              "ja",
+              "zh",
+              "yue"
+            ]
+          },
+          "timing": {
+            "type": "string",
+            "const": "vad_proportional"
+          },
+          "cueCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "srt": {
+            "type": "string",
+            "const": "subtitles.srt"
+          },
+          "vtt": {
+            "type": "string",
+            "const": "subtitles.vtt"
+          },
+          "transcript": {
+            "type": "string",
+            "const": "transcript.json"
+          }
+        },
+        "description": "자동 생성 자막. VAD 기반 근사 시각. cueCount 0은 무음 성공. 원본과 동일 보존·권한."
       },
       "VideoStatus": {
         "type": "object",
@@ -4200,6 +4365,16 @@
               "string",
               "null"
             ]
+          },
+          "subtitles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoSubtitles"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4207,7 +4382,8 @@
           "progress",
           "durationSeconds",
           "variants",
-          "errorCode"
+          "errorCode",
+          "subtitles"
         ],
         "additionalProperties": false
       },

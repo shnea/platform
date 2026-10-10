@@ -1,9 +1,10 @@
 import { auth } from "../../shared/auth";
 import { readApiError } from "../../shared/api-error";
+import type {VideoOptions} from "../../shared/media/video-subtitles";
 
 export type Upload = { uploadId: string; state: string; size: number; receivedBytes: number; maxChunkBytes: number; expiresAt: string; fileId: string | null };
 export type FileInfo = { fileId: string; originalName: string; size: number; sha256: string; visibility: "PUBLIC" | "PRIVATE"; retentionCode: string; createdAt: string; lastUsedAt: string; downloadUrl: string };
-export type Resumable = { upload: Upload; originalName: string; sha256: string; visibility: "PUBLIC" | "PRIVATE"; retentionCode: string; requestId: string };
+export type Resumable = { upload: Upload; originalName: string; sha256: string; visibility: "PUBLIC" | "PRIVATE"; retentionCode: string; requestId: string; videoOptions?:VideoOptions|null };
 export async function fileApi<T>(environment: string, suffix = "", method = "GET", body?: unknown, signal?: AbortSignal, headers: Record<string, string> = {}): Promise<T> {
   try { await auth.updateToken(30); }
   catch { throw new Error("로그인이 만료되었습니다. 다시 로그인한 뒤 원본 파일을 선택해 이어 올려 주세요."); }

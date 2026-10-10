@@ -20,7 +20,7 @@ class NoedaeriMedia {
         boolean video(){return kind.equals("video.package");}
     }
     record Artifact(String name,long bytes) {}
-    record Result(List<Artifact> artifacts,String mime,List<FileVideos.Variant> variants,double duration) {}
+    record Result(List<Artifact> artifacts,String mime,List<FileVideos.Variant> variants,double duration,FileVideos.Subtitles subtitles) {}
     private final JdbcTemplate db;private final TransactionTemplate tx;private final FileStore store;
     private final FilesService files;private final FileVideos videos;private final FileAccess access;
     private final NoedaeriClient client;private final MediaBackend backend;private final JsonMapper json=new JsonMapper();
@@ -82,7 +82,7 @@ class NoedaeriMedia {
                 db.update("UPDATE file_videos SET state='PROCESSING',processing_backend='noedaeri',generation=?,progress=0,attempts=attempts+1,started_at=now(),heartbeat_at=now(),error_code=NULL WHERE file_id=?",generation,id);
                 db.update("UPDATE file_views SET state='PROCESSING',processing_backend='noedaeri',processing_generation=?,kind='VIDEO',started_at=now(),error_code=NULL WHERE file_id=?",generation,id);
             }else db.update("UPDATE file_views SET state='PROCESSING',processing_backend='noedaeri',processing_generation=?,kind='IMAGE',attempts=attempts+1,started_at=now(),error_code=NULL WHERE file_id=?",generation,id);
-            db.update("INSERT INTO file_media_jobs(request_id,file_id,kind,generation) VALUES (?,?,?,?)",request,id,video?"video.package":"image.package",generation);
+            db.update("INSERT INTO file_media_jobs(request_id,file_id,kind,generation,options) SELECT ?,id,?,?,video_options FROM files WHERE id=?",request,video?"video.package":"image.package",generation,id);
         });
     }
     boolean current(Job job) {
@@ -102,7 +102,8 @@ class NoedaeriMedia {
         var row=files.downloadable(job.file());access.requireActive(row.environment());
         UUID remote=job.remote();
         if(remote==null) {
-            var accepted=client.create(job.request(),job.kind(),extension(row.name()));validateIdentity(job,accepted,null);
+            var options=VideoOptions.decode(db.queryForObject("SELECT options::text FROM file_media_jobs WHERE request_id=?",String.class,job.request()));
+            var accepted=client.create(job.request(),job.kind(),extension(row.name()),options==null?Map.of():options.upstream());validateIdentity(job,accepted,null);
             remote=uuid(accepted.path("id"));
             db.update("UPDATE file_media_jobs SET job_id=?,state='ACTIVE',updated_at=now() WHERE request_id=? AND job_id IS NULL",remote,job.request());
         }
@@ -136,12 +137,28 @@ class NoedaeriMedia {
     }
     Result manifest(Job job,JsonNode result) throws IOException {
         if(!result.path("type").asString().equals(job.video()?"video_package":"image_package"))throw new IOException("Invalid result type");
+        var options=VideoOptions.decode(db.queryForObject("SELECT options::text FROM file_media_jobs WHERE request_id=?",String.class,job.request()));
+        var requested=options==null?null:options.subtitles();
+        FileVideos.Subtitles subtitles=null;
+        var caption=result.path("subtitles");
+        if(caption.isObject()) {
+            if(!job.video()||requested==null||!caption.path("mode").asString().equals(requested.mode())
+                ||!VideoOptions.LANGUAGES.contains(caption.path("language").asString())
+                ||!requested.language().equals("auto")&&!caption.path("language").asString().equals(requested.language())
+                ||!caption.path("timing").asString().equals("vad_proportional")||!caption.path("cue_count").isIntegralNumber()
+                ||caption.path("cue_count").asLong()<0||caption.path("cue_count").asLong()>10000
+                ||!caption.path("srt").asString().equals("subtitles.srt")||!caption.path("vtt").asString().equals("subtitles.vtt")
+                ||!caption.path("transcript").asString().equals("transcript.json"))throw new IOException("Invalid subtitle manifest");
+            subtitles=new FileVideos.Subtitles(requested.mode(),caption.path("language").asString(),"vad_proportional",caption.path("cue_count").asInt(),"subtitles.srt","subtitles.vtt","transcript.json");
+        }else if(requested!=null||!caption.isMissingNode()&&!caption.isNull())throw new IOException("Missing subtitle result");
         var listed=new LinkedHashSet<String>();
         if(!result.path("files").isArray())throw new IOException("Missing manifest");
         for(var value:result.path("files")) {
             String name=value.asString();if(!listed.add(name)||listed.size()>20000)throw new IOException("Invalid manifest");
-            if(!name.matches("thumbnail\\.jpg|preview\\.webp|metadata\\.json|image\\.zip|video\\.zip|master\\.m3u8|"+FileVideos.HLS_CHILD_PATTERN))throw new IOException("Invalid manifest path");
+            if(VideoOptions.ARTIFACTS.contains(name)) {if(subtitles==null)throw new IOException("Unexpected subtitle artifact");}
+            else if(!name.matches("thumbnail\\.jpg|preview\\.webp|metadata\\.json|image\\.zip|video\\.zip|master\\.m3u8|"+FileVideos.HLS_CHILD_PATTERN))throw new IOException("Invalid manifest path");
         }
+        if(subtitles!=null&&!listed.containsAll(VideoOptions.ARTIFACTS))throw new IOException("Incomplete subtitle result");
         var artifacts=new ArrayList<Artifact>();var variants=new ArrayList<FileVideos.Variant>();String mime;
         double duration=0;
         if(job.video()) {
@@ -156,8 +173,10 @@ class NoedaeriMedia {
                 variants.add(new FileVideos.Variant(quality,w,h,bandwidth,playlist));
             }
             if(variants.isEmpty()||variants.size()>3||!listed.containsAll(List.of("master.m3u8","thumbnail.jpg")))throw new IOException("Incomplete video result");
-            for(String name:listed)if(name.equals("thumbnail.jpg")||name.equals("master.m3u8")||name.matches(FileVideos.HLS_CHILD_PATTERN))
+            for(String name:listed)if(name.equals("thumbnail.jpg")||name.equals("master.m3u8")||name.matches(FileVideos.HLS_CHILD_PATTERN)||VideoOptions.ARTIFACTS.contains(name)) {
+                if(!result.path("file_sizes").path(name).isIntegralNumber())throw new IOException("Missing artifact size");
                 artifacts.add(artifact(name,result.path("file_sizes").path(name).asLong()));
+            }
             mime="video/mp4";
         }else {
             var source=result.path("source");mime=source.path("media_type").asString();
@@ -173,11 +192,12 @@ class NoedaeriMedia {
                 artifacts.add(artifact(name,info.path("bytes").asLong()));
             }
         }
-        return new Result(List.copyOf(artifacts),mime,List.copyOf(variants),duration);
+        return new Result(List.copyOf(artifacts),mime,List.copyOf(variants),duration,subtitles);
     }
     private static Artifact artifact(String name,long bytes) throws IOException {
-        long cap=name.endsWith(".ts")?16*1024*1024:name.endsWith(".m3u8")?262144:2_000_000;
-        if(bytes<1||bytes>cap)throw new IOException("Invalid artifact size");return new Artifact(name,bytes);
+        long cap=VideoOptions.ARTIFACTS.contains(name)?16*1024*1024:name.endsWith(".ts")?16*1024*1024:name.endsWith(".m3u8")?262144:2_000_000;
+        long minimum=Set.of("subtitles.srt","transcript.txt").contains(name)?0:1;
+        if(bytes<minimum||bytes>cap)throw new IOException("Invalid artifact size");return new Artifact(name,bytes);
     }
     void importResult(Job job,UUID remote,UUID event,FilesService.Row row,Result result) throws Exception {
         long bytes=result.artifacts().stream().mapToLong(Artifact::bytes).sum();
@@ -199,7 +219,7 @@ class NoedaeriMedia {
                 try{Files.move(stage,destination,StandardCopyOption.ATOMIC_MOVE);}catch(IOException e){throw FileFailure.unavailable();}
                 String mime=job.video()?switch(extension(row.name())){case "webm"->"video/webm";case "mov"->"video/quicktime";case "mkv"->"video/x-matroska";default->"video/mp4";}:result.mime();
                 db.update("UPDATE file_views SET state='READY',kind=?,media_type=?,thumbnail=true,media_generation=?,error_code=NULL,finished_at=now() WHERE file_id=? AND processing_generation=?",job.video()?"VIDEO":"IMAGE",mime,job.generation(),job.file(),job.generation());
-                if(job.video())db.update("UPDATE file_videos SET state='READY',progress=100,duration_seconds=?,variants=?::jsonb,error_code=NULL,finished_at=now() WHERE file_id=? AND generation=?",result.duration(),json.writeValueAsString(result.variants()),job.file(),job.generation());
+                if(job.video())db.update("UPDATE file_videos SET state='READY',progress=100,duration_seconds=?,variants=?::jsonb,subtitles=?::jsonb,error_code=NULL,finished_at=now() WHERE file_id=? AND generation=?",result.duration(),json.writeValueAsString(result.variants()),result.subtitles()==null?null:json.writeValueAsString(result.subtitles()),job.file(),job.generation());
                 db.update("UPDATE files SET video_bytes=?,video_reserved_bytes=0 WHERE id=?",bytes,job.file());
                 db.update("UPDATE file_media_jobs SET state='IMPORTED',event_id=?,attempts=0,error_code=NULL,next_check_at=now(),updated_at=now() WHERE request_id=?",event,job.request());
                 db.update("INSERT INTO file_audit(file_id,environment_id,actor,action) VALUES (?,?,'system:noedaeri',?)",job.file(),row.environment(),job.video()?"file.video.ready":"file.preview.ready");
@@ -216,6 +236,13 @@ class NoedaeriMedia {
         if(!job.video()) {
             byte[] head;try(var in=Files.newInputStream(stage.resolve("preview.webp"))){head=in.readNBytes(12);}
             if(head.length<12||!new String(head,0,4,StandardCharsets.US_ASCII).equals("RIFF")||!new String(head,8,4,StandardCharsets.US_ASCII).equals("WEBP"))throw new IOException("Invalid WebP result");return;
+        }
+        if(result.subtitles()!=null) {
+            for(String name:VideoOptions.ARTIFACTS) {
+                String text=Files.readString(stage.resolve(name),StandardCharsets.UTF_8);
+                if(name.equals("subtitles.vtt")&&!text.matches("(?s)\\ufeff?WEBVTT(?:[ \\t].*)?(?:\\r?\\n.*)?"))throw new IOException("Invalid WebVTT result");
+                if(name.equals("transcript.json")&&!json.readTree(text).isObject())throw new IOException("Invalid transcript result");
+            }
         }
         var names=new HashSet<String>();for(Artifact a:result.artifacts())names.add(a.name());
         var playlists=new HashSet<String>();for(var variant:result.variants())playlists.add(variant.playlist());
@@ -248,14 +275,14 @@ class NoedaeriMedia {
             case 401,403->"FILE_MEDIA_REMOTE_AUTH";
             case 410->"FILE_MEDIA_RESULT_EXPIRED";
             case 413->"FILE_MEDIA_INPUT_LIMIT";
-            case 503->remote.code.equals("platform_delivery_not_configured")?"FILE_MEDIA_NOT_CONFIGURED":"FILE_MEDIA_REMOTE_UNAVAILABLE";
+            case 503->switch(remote.code){case "platform_delivery_not_configured"->"FILE_MEDIA_NOT_CONFIGURED";case "stt_not_configured","subtitle_renderer_unavailable"->"FILE_VIDEO_SUBTITLES_UNAVAILABLE";default->"FILE_MEDIA_REMOTE_UNAVAILABLE";};
             default->"FILE_MEDIA_REMOTE_UNAVAILABLE";
         }:"FILE_MEDIA_REMOTE_UNAVAILABLE";
         if(job.state().equals("IMPORTED")||db.queryForObject("SELECT state FROM file_media_jobs WHERE request_id=?",String.class,job.request()).equals("IMPORTED")) {
             db.update("UPDATE file_media_jobs SET error_code=?,attempts=attempts+1,next_check_at=now()+interval '5 minutes',updated_at=now() WHERE request_id=?",code,job.request());return;
         }
         if(code.equals("FILE_MEDIA_INPUT_LIMIT")){finishFailure(job,code,"UNSUPPORTED");return;}
-        if(Set.of("FILE_MEDIA_RESULT_EXPIRED","FILE_MEDIA_REMOTE_AUTH").contains(code)||job.attempts()>=7){finishFailure(job,code,"FAILED");return;}
+        if(Set.of("FILE_MEDIA_RESULT_EXPIRED","FILE_MEDIA_REMOTE_AUTH","FILE_VIDEO_SUBTITLES_UNAVAILABLE").contains(code)||job.attempts()>=7){finishFailure(job,code,"FAILED");return;}
         db.update("UPDATE file_media_jobs SET error_code=?,attempts=attempts+1,next_check_at=now()+(? * interval '1 second'),updated_at=now() WHERE request_id=?",code,Math.min(3600,30L<<job.attempts()),job.request());
         // Do not let an unprocessed notification bypass the retry delay after a download/network failure.
         processed(job);

@@ -68,7 +68,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 
 ## 후속 파일 연산·목소리 연결
 
-확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, `video.subtitles`의 파생 결과와 원본 없는 TTS용 작업 구조·관리 화면·권한은 별도 완료 단위로 구현한다. 영상 자막은 이번 범위에서 SRT/VTT 저장·플레이어 표시까지이며 영상에 자막을 입히는 기능은 뇌대리 후속 지침을 기다린다.
+확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, 독립 `video.subtitles`의 파생 결과와 원본 없는 TTS용 작업 구조·관리 화면·권한은 별도 완료 단위로 구현한다. v28 영상 통합 처리의 선택 자막은 기존 파일 업로드 `videoOptions.subtitles`와 단일 `video.package`로 연결한다. sidecar는 VTT 토글, burned는 모든 HLS 화질에 입히고 끄기 불가다. 전사·자막을 영속 저장한 뒤 기존 파일 receipt를 보내며 AI Job/AI 완료 알림을 사용하지 않는다. 상세 옵션·보호 URL은 [서비스 연동 지침](../SERVICE_INTEGRATION.md)을 따른다.
 
 ## PostgreSQL 문서 색인·전체 교체
 

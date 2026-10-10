@@ -2,6 +2,17 @@
 
 ## 현재 단계
 
+### 뇌대리 v28: 영상 통합 처리 선택 자막 연결 (2026-10-10)
+
+- **최신 운영 지시:** main에 커밋·푸시하고 기존 CI/CD의 verify→release→deploy에 배포를 맡긴다. 앞선 배포 보류 지시를 이번 완료 단위부터 대체한다. 요청별 자막 옵션에는 새 운영 환경변수·키·웹훅 변경이 없어 `.env.dev`·`.env.prod`를 유지하고 SSH 배포·운영 재시작·키 교체를 하지 않는다. 아래 v26의 배포 보류·자막 후속 지침 안내는 당시 기록이다.
+- **구현:** 영상 업로드의 `videoOptions.subtitles`로 자막 없음(생략/null), `sidecar`, `burned`를 선택한다. 언어 auto/ko/en/ja/zh/yue·useItn 기본 true를 정규화하고 업로드·재개·요청 멱등성과 원격 Job의 옵션 스냅샷에 포함한다. 기존 `video.package` 요청의 `options.subtitles.use_itn`으로 변환하며 원본·원격 Job은 한 번, 별도 STT Job 없음이다. READY인 기존 영상·자막 없는 요청·기존 360p와 두 HLS 파일명 형식을 유지한다.
+- **수령/보안:** HLS·썸네일·SRT/VTT·transcript JSON/TXT를 같은 generation에 영속 저장한 뒤 기존 파일 job.* receipt를 전송한다. manifest·요청 모드/언어·VAD 시각 정책·허용 파일명·명시된 바이트·UTF-8/VTT/JSON을 검증하고 자막/전사 파일별 16MiB·cueCount 10,000 상한을 적용한다. 부분 결과·자막 없는 성공 우회·원본 삭제/이전 generation 반영을 차단한다. 보호 자막은 기존 재생 URL 권한·공유 철회·만료·원본 보존/삭제 규칙을 적용한다. 무음의 빈 SRT/TXT·cueCount 0은 성공을 허용한다. 자동 자막 서비스 미설정은 원본을 보존하고 실패 안내한다.
+- **화면/계약:** 파일 추가 전 자막 모드·언어·ITN 선택, 업로드/재개 항목의 고정 선택 표시, 공유 플레이어 sidecar VTT 켜기·끄기와 브라우저 기본 CC 상태 동기화, burned 끄기 불가·자동 생성/근사 시각 안내, 자막/전사 다운로드를 추가했다. 기본 파일 뷰어·관리자 영상·에디터 기본 iframe이 같은 플레이어를 사용한다. 사용자 정의 에디터 어댑터 전달 타입·지침, 공개 파일 OpenAPI·Python 서버 클라이언트·개발자 센터·핵심/상세 요구사항을 함께 갱신했다. MP4·자막 번역·커스텀 자막/폰트·독립 STT/영상 자막 접수는 포함하지 않는다.
+- **백엔드 검증:** `docker compose --env-file .env.example -p platform-subtitle-v28-checks -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check`에서 소스를 `/tmp/subtitle-workspace`에 복사하고 `gradle --no-daemon :services:file-service:test --rerun-tasks` 실행. JUnit76개 중75통과·실패/오류0·기존 선택적 로컬 영상 검사1개 건너뜀. 최초 `--tests "*FilesDatabaseTest*"` 집중 검사도 통과했다. 신규 4개 회귀 검사는 두 모드의 단일 Job/업로드·저장 후 receipt·옵션 충돌/재개·권한 철회·무음·부분/위조/초과 크기/잘못된 VTT/원본 삭제를 확인한다. XML은 Git 제외 `output/job-checks/subtitles-v28-final`에 보존한다.
+- **기타 검증:** `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:subtitle-v28-check .`에서 TypeScript/Vite·에디터 패키지·공개 명세 자료 빌드 통과. 같은 이미지의 `npm test` 8개와 `/workspace/packages/editor`의 `node --test tests/media-layout.test.mjs tests/platform-image-views.test.mjs` 6개 통과. `node scripts/check-ai-integration.mjs`, `python -X utf8 scripts/check-ci.py`, `python -X utf8 scripts/check-admin-security.py`, Python 예제 `upload --help`, `git diff --check` 통과. 기존 npm high 취약점1개·번들 크기 경고·jsdom 미지원 pause 경고는 기록만 하고 관련 없는 의존성을 변경하지 않았다.
+- **정리:** `docker compose --env-file .env.example -p platform-subtitle-v28-checks -f compose.test.yml --profile jobs down`으로 이번 일회용 DB·네트워크만 종료했다. 기존 서비스·운영 데이터·볼륨은 변경하지 않았으며 새 장기 프로세스는 없다.
+- **미검증/다음:** 실제 뇌대리의 subtitle_support·STT/렌더러 가용 상태, 실제 음성 영상의 sidecar 시각/브라우저 표시와 burned 모든 화질 렌더링, 운영 webhook→영속 수령→receipt 종단은 미검증이다. CI/CD의 실제 운영 배포 완료는 푸시 후 확인한다. 독립 TTS·목소리 관리·STT·OCR·PDF·영상 자막 작업 구조·화면은 여전히 후속 범위이며 전체 신규 기능을 완료로 표시하지 않는다. 별도 AI 웹훅과 파일 웹훅 계약은 이번 작업에서 합치거나 변경하지 않았다.
+
 ### 뇌대리 v26 1차: 문장 번역·AI 완료 알림 연결 (2026-10-10)
 
 - **최신 운영 지시:** 사용자 지정 NAS의 `${NAS_DEPLOY_PATH}`로 배포하고 뇌대리 웹훅 설정을 연결해야 하나, 이후 사용자 지시로 추가 배포를 보류한다. 이번 확인은 읽기 전용이며 SSH 접속·릴리스·운영 재시작·키 생성/교체를 실행하지 않았다. 앞서 푸시된 기능의 CI/CD 상태는 이번 확인에서 검증하지 않았고 기존 자동 실행을 취소하거나 워크플로를 변경하지 않았다. 영상 자막 입히기는 후속 지침이 도착하면 계약을 검토하며 현재 구현 완료로 표시하지 않는다.

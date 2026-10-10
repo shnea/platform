@@ -3,7 +3,7 @@ import {mountImageViewer} from '../viewer/image-viewer.js';
 import {platformImageViews} from './platform-image-views.js';
 export type AttachmentKind='file'|'image'|'video'|'audio';
 export type AttachmentRef={fileId:string;scope:string;kind:AttachmentKind;name:string;size:number};
-export type AttachmentViews={fileId:string;kind:string;state:string;originalUrl:string;downloadUrl:string;viewerUrl:string;previewUrl:string|null;thumbnailUrl:string|null;expiresAt:string|null;streamExpiresAt?:string|null;streamUrl?:string|null;video?:{state:string;progress:number}|null};
+export type AttachmentViews={fileId:string;kind:string;state:string;originalUrl:string;downloadUrl:string;viewerUrl:string;previewUrl:string|null;thumbnailUrl:string|null;expiresAt:string|null;streamExpiresAt?:string|null;streamUrl?:string|null;video?:{state:string;progress:number;subtitles?:{mode:'sidecar'|'burned';language:string;timing:string;cueCount:number}|null}|null;subtitleUrls?:Record<string,string>};
 export type AttachmentAdapter={
  /** Image views are forwarded unchanged by the host; the editor resolves platform URLs. */
  platformImageOrigin?:string;

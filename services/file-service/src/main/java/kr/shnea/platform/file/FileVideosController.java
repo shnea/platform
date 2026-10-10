@@ -23,6 +23,9 @@ class FileVideosController {
             // A manifest is metadata, not successful content use. Segments refresh last-used through FileDelivery.
             response.setContentType("application/vnd.apple.mpegurl");response.setContentLength(body.length);
             if(!request.getMethod().equals("HEAD"))response.getOutputStream().write(body);
-        }else FileDelivery.send(files,videos.asset(id,asset),row,"video/mp2t",true,request,response);
+        }else {
+            String type=switch(asset){case "subtitles.vtt"->"text/vtt; charset=UTF-8";case "subtitles.srt"->"application/x-subrip; charset=UTF-8";case "transcript.json"->"application/json; charset=UTF-8";case "transcript.txt"->"text/plain; charset=UTF-8";default->"video/mp2t";};
+            FileDelivery.send(files,videos.asset(id,asset),row,type,!VideoOptions.ARTIFACTS.contains(asset)||asset.equals("subtitles.vtt"),asset,request,response);
+        }
     }
 }

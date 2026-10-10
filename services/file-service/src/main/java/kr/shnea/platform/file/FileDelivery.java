@@ -13,6 +13,9 @@ final class FileDelivery {
         send(files,store.path(row.id()),row,"application/octet-stream",false,request,response);
     }
     static void send(FilesService files, Path path, FilesService.Row row,String type,boolean inline,HttpServletRequest request,HttpServletResponse response) throws IOException {
+        send(files,path,row,type,inline,row.name(),request,response);
+    }
+    static void send(FilesService files, Path path, FilesService.Row row,String type,boolean inline,String filename,HttpServletRequest request,HttpServletResponse response) throws IOException {
         long size=Files.size(path),start=0,end=size-1;
         String range=request.getHeader("If-Range")==null?request.getHeader("Range"):null;
         if(range!=null&&!request.getMethod().equals("HEAD")) {
@@ -26,7 +29,7 @@ final class FileDelivery {
         var lease=files.beginDownload(row);boolean success=false;
         try(var input=Files.newInputStream(path)) {
             response.setContentType(type);
-            response.setHeader("Content-Disposition",(inline?ContentDisposition.inline():ContentDisposition.attachment()).filename(row.name(),StandardCharsets.UTF_8).build().toString());
+            response.setHeader("Content-Disposition",(inline?ContentDisposition.inline():ContentDisposition.attachment()).filename(filename,StandardCharsets.UTF_8).build().toString());
             response.setHeader("Accept-Ranges","bytes");response.setHeader("X-Frame-Options","SAMEORIGIN");
             if(inline)response.setHeader("Content-Security-Policy","default-src 'none'; img-src 'self'; media-src 'self'; frame-ancestors 'self'");
             response.setContentLengthLong(end-start+1);

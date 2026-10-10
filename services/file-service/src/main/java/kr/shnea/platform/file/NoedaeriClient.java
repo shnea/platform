@@ -41,9 +41,12 @@ class NoedaeriClient {
     }
     boolean configured(){return base!=null&&!key.isBlank()&&!webhookSecret.isBlank();}
     JsonNode create(UUID request,String kind,String extension) throws Exception {
+        return create(request,kind,extension,Map.of());
+    }
+    JsonNode create(UUID request,String kind,String extension,Map<String,Object> options) throws Exception {
         var input=new LinkedHashMap<String,Object>();input.put("type","upload");
         if(kind.equals("image.package"))input.put("extension",extension);
-        return json("POST","/api/v1/jobs",Map.of("kind",kind,"title","파일 파생물 생성","idempotency_key",request.toString(),"input",input,"options",Map.of()));
+        return json("POST","/api/v1/jobs",Map.of("kind",kind,"title","파일 파생물 생성","idempotency_key",request.toString(),"input",input,"options",options));
     }
     JsonNode status(UUID id) throws Exception {return json("GET",path(id),null);}
     void upload(UUID id,Path original) throws Exception {
@@ -54,7 +57,7 @@ class NoedaeriClient {
         if(!json("POST",path(id)+"/receipt",Map.of("event_id",event.toString())).path("accepted").asBoolean())throw new IOException("Receipt rejected");
     }
     void download(UUID id,String name,Path output,long limit) throws Exception {
-        if(!name.matches("thumbnail\\.jpg|preview\\.webp|master\\.m3u8|"+FileVideos.HLS_CHILD_PATTERN))throw new IOException("Invalid artifact name");
+        if(!VideoOptions.ARTIFACTS.contains(name)&&!name.matches("thumbnail\\.jpg|preview\\.webp|master\\.m3u8|"+FileVideos.HLS_CHILD_PATTERN))throw new IOException("Invalid artifact name");
         request("GET",path(id)+"/files/"+name,HttpRequest.BodyPublishers.noBody(),null,output,limit);
     }
     private JsonNode json(String method,String path,Object body) throws Exception {
@@ -76,7 +79,7 @@ class NoedaeriClient {
                     String code="";
                     try {
                         String detail=json.readTree(in.readNBytes(JSON_LIMIT+1)).path("detail").asString();
-                        if(Set.of("platform_delivery_not_configured","platform_key_required","upload_too_large","storage_capacity_exceeded","result_unavailable","result_missing").contains(detail))code=detail;
+                        if(Set.of("platform_delivery_not_configured","platform_key_required","upload_too_large","storage_capacity_exceeded","result_unavailable","result_missing","stt_not_configured","subtitle_renderer_unavailable").contains(detail))code=detail;
                     }catch(Exception ignored){}
                     throw new RemoteFailure(response.statusCode(),code);
                 }

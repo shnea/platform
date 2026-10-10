@@ -127,6 +127,8 @@ const attachments = {
 
 호스트 서버가 프로젝트·환경·사용자 권한·용량·형식을 검사하고 플랫폼 파일 API를 호출한다. 같은 requestId 재시도는 중복 파일을 만들지 않도록 처리한다. 큰 파일은 기존 분할/재개 업로드 어댑터를 연결한다. 위 FormData 예제는 대용량 분할 전송을 구현하지 않는다. 영상은 호스트의 `attachments.video(element, data)`로 HLS 플레이어를 연결할 수 있고, 생략하면 `viewerUrl`의 기본 뷰어를 iframe으로 연다. 영상 변환·URL 접근 권한은 파일 서비스가 담당한다. 상세 타입은 받은 패키지의 `AttachmentAdapter`·`AttachmentRef`·`AttachmentViews` 선언을 사용한다.
 
+자동 자막은 호스트 서버가 업로드 접수 시 `videoOptions.subtitles`로 선택한다. `sidecar` 결과의 `video.subtitles`와 `subtitleUrls`를 어댑터에 그대로 전달하고, 호스트 플레이어에 `subtitleUrls['subtitles.vtt']`를 captions 트랙으로 연결해 켜기·끄기를 제공한다. HLS master에는 자막 트랙이 자동 등록되지 않는다. `burned`는 영상 자체에 입혀진 자막이므로 추가 트랙·끄기 버튼을 만들지 않는다. 기본 플랫폼 뷰어는 두 모드를 처리하며 자동 생성·근사 시각임을 안내한다. SRT·VTT·전사 다운로드도 원본의 접근 권한·만료를 따르며 URL을 공개 주소로 바꾸거나 토큰을 제거하지 않는다.
+
 현재 플랫폼 기본 뷰어는 `frame-ancestors 'self'`이므로 다른 도메인에서 iframe으로 바로 표시할 수 없으며 파일 API의 임의 출처 CORS도 제공하지 않는다. 새 탭의 기본 뷰어로 먼저 확인하고, 본문 내 재생은 호스트 플레이어와 인증된 같은 출처 중계 또는 별도로 합의한 허용 출처/임베드 정책이 필요하다. 위 기본 iframe 동작은 이 제한을 우회하지 않는다. 다른 서비스의 연결 계약은 https://platform.shnea.kr/integrations/SERVICE_INTEGRATION.md 에서 찾는다.
 
 ## 파일 보기 URL 연결 규칙

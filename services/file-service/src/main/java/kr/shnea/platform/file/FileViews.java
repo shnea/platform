@@ -21,7 +21,7 @@ class FileViews {
     record View(String state,String kind,String mediaType,boolean thumbnail,String errorCode) {}
     record Links(UUID fileId,String state,String kind,String mediaType,String errorCode,String originalUrl,String previewUrl,
                  String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt,
-                 FileVideos.Status video,String streamUrl,Instant streamExpiresAt,String shareUrl) {}
+                 FileVideos.Status video,String streamUrl,Instant streamExpiresAt,String shareUrl,Map<String,String> subtitleUrls) {}
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FilesService files;
     private final FileAccess access; private final FileStore store; private final FileVideos videos;
     private final MediaBackend backend;
@@ -67,10 +67,13 @@ class FileViews {
         View v=view(id);String base="/api/v1/files/"+id;String query=token==null?"":"?token="+token;
         var video=FileVideos.candidate(files.downloadable(id).name())?videos.status(id):null;
         Instant streamEnd=token==null?null:db.query("SELECT playback_expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=? AND playback_expires_at IS NOT NULL",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
+        var subtitleUrls=new LinkedHashMap<String,String>();
+        if(video!=null&&video.state().equals("READY")&&video.subtitles()!=null)
+            for(String name:VideoOptions.ARTIFACTS)subtitleUrls.put(name,base+"/hls/"+name+query);
         return new Links(id,v.state(),video==null?v.kind():"VIDEO",v.mediaType(),v.errorCode(),base+"/content/original"+query,
             v.state().equals("READY")||imagePreviewable(v)?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
             base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd,
-            files.downloadable(id).visibility().equals("PUBLIC")?base+"/share":null);
+            files.downloadable(id).visibility().equals("PUBLIC")?base+"/share":null,subtitleUrls);
     }
     Object retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{

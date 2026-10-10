@@ -15,7 +15,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 class FilesService {
     static final long MAX_FILE = 5_000_000_000L;
-    record Create(UUID requestId, String originalName, Long size, String sha256, String visibility, String retentionCode) {}
+    record Create(UUID requestId, String originalName, Long size, String sha256, String visibility, String retentionCode, VideoOptions videoOptions) {
+        Create(UUID requestId,String originalName,Long size,String sha256,String visibility,String retentionCode) {this(requestId,originalName,size,sha256,visibility,retentionCode,null);}
+    }
     record Upload(UUID uploadId, String state, long size, long receivedBytes, long maxChunkBytes,
                   Instant expiresAt, UUID fileId) {}
     record FileInfo(UUID fileId, String originalName, long size, String sha256, String visibility,
@@ -24,7 +26,8 @@ class FilesService {
     record Row(UUID id, UUID project, UUID environment, UUID owner, String name, long size, String hash,
                long offset, String state, String visibility, String retention, Instant expires,
                Instant completed, Instant used, String ownerKind) {}
-    record Resumable(Upload upload, String originalName, String sha256, String visibility, String retentionCode, UUID requestId) {}
+    record Resumable(Upload upload, String originalName, String sha256, String visibility, String retentionCode, UUID requestId, VideoOptions videoOptions) {}
+    @Value("${platform.files.processing-backend:noedaeri}") private String processingBackend="noedaeri";
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final FileStore store;
@@ -41,6 +44,11 @@ class FilesService {
     }
     Upload create(FileAccess.Context context, Create input) {
         validate(input);
+        var videoOptions=VideoOptions.normalize(input.videoOptions());
+        if(videoOptions!=null&&!FileVideos.candidate(input.originalName()))throw FileFailure.invalid();
+        if(videoOptions!=null&&videoOptions.subtitles()!=null&&!processingBackend.equals("noedaeri"))
+            throw new FileFailure("FILE_VIDEO_SUBTITLES_UNAVAILABLE",503,"자동 자막은 뇌대리 영상 처리 연결이 필요합니다.");
+        String encodedOptions=VideoOptions.encode(videoOptions);
         String visibility = input.visibility() == null ? "PUBLIC" : input.visibility();
         String retention = input.retentionCode() == null ? "default" : input.retentionCode();
         return tx.execute(status -> {
@@ -52,7 +60,8 @@ class FilesService {
                 var old = previous.getFirst();
                 if (!old.name().equals(input.originalName()) || old.size() != input.size() || !old.hash().equals(input.sha256())
                         || !db.queryForObject("SELECT upload_visibility FROM files WHERE id=?", String.class, old.id()).equals(visibility)
-                        || !db.queryForObject("SELECT upload_retention_code FROM files WHERE id=?",String.class,old.id()).equals(retention))
+                        || !db.queryForObject("SELECT upload_retention_code FROM files WHERE id=?",String.class,old.id()).equals(retention)
+                        || !new tools.jackson.databind.json.JsonMapper().readTree(db.queryForObject("SELECT video_options::text FROM files WHERE id=?",String.class,old.id())).equals(new tools.jackson.databind.json.JsonMapper().readTree(encodedOptions)))
                     throw new FileFailure("FILE_REQUEST_CONFLICT", 409, "같은 요청 ID에 다른 파일 정보가 지정되었습니다.");
                 return upload(old);
             }
@@ -76,6 +85,7 @@ class FilesService {
                 """, id, context.projectId(), context.environmentId(), context.credentialId(), input.requestId(),
                 input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, retention, context.ownerKind(),
                 java.sql.Timestamp.from(created), FileStore.storagePath(id, context.projectId(), context.environmentId(), input.originalName(), created));
+            db.update("UPDATE files SET video_options=?::jsonb WHERE id=?",encodedOptions,id);
             audit(id, context, "upload.created");
             return upload(get(id, false));
         });
@@ -83,7 +93,7 @@ class FilesService {
     Upload status(UUID id, FileAccess.Context context) { return upload(owned(id, context, false)); }
     List<Resumable> resumable(FileAccess.Context context) {
         return db.query("SELECT * FROM files WHERE environment_id=? AND project_id=? AND owner_kind=? AND owner_credential_id=? AND state='UPLOADING' AND upload_expires_at>now() ORDER BY created_at DESC LIMIT 100",
-            (rs,n) -> { var row=row(rs,n); return new Resumable(upload(row),row.name(),row.hash(),row.visibility(),row.retention(),rs.getObject("request_id",UUID.class)); },
+            (rs,n) -> { var row=row(rs,n); return new Resumable(upload(row),row.name(),row.hash(),row.visibility(),row.retention(),rs.getObject("request_id",UUID.class),VideoOptions.decode(rs.getString("video_options"))); },
             context.environmentId(),context.projectId(),context.ownerKind(),context.credentialId());
     }
     Upload append(UUID id, FileAccess.Context context, long offset, long length, String hash, InputStream input) {

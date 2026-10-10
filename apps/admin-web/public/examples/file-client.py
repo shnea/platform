@@ -52,7 +52,7 @@ class Client:
                 problem = {}
             raise RuntimeError(f"HTTP {error.code}: {problem.get('code', 'HTTP_ERROR')} · {problem.get('detail', '요청을 확인해 주세요.')} · 요청 ID {problem.get('requestId', error.headers.get('X-Request-Id', '-'))}") from None
 
-    def upload(self, source, state_path, visibility='PUBLIC', retention='default'):
+    def upload(self, source, state_path, visibility='PUBLIC', retention='default', video_options=None):
         source, state_path = Path(source), Path(state_path)
         size = source.stat().st_size
         if size > 5_000_000_000:
@@ -60,6 +60,10 @@ class Client:
         with source.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         identity = dict(originalName=source.name, size=size, sha256=digest, visibility=visibility, retentionCode=retention)
+        if video_options is not None:
+            if source.suffix.lower() not in ('.mp4', '.m4v', '.mov', '.mkv', '.webm'):
+                raise ValueError('영상 자막 옵션은 지원 영상 파일에만 지정하세요.')
+            identity['videoOptions'] = video_options
         credential = hashlib.sha256(self.key.encode()).hexdigest()
         if state_path.exists():
             state = json.loads(state_path.read_text(encoding='utf-8'))
@@ -105,6 +109,9 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     upload = commands.add_parser('upload'); upload.add_argument('source'); upload.add_argument('--state', required=True)
     upload.add_argument('--visibility', choices=['PUBLIC', 'PRIVATE'], default='PUBLIC'); upload.add_argument('--retention', default='default'); upload.add_argument('--wait', type=int, default=0)
+    upload.add_argument('--subtitles', choices=['none', 'sidecar', 'burned'], default='none')
+    upload.add_argument('--subtitle-language', choices=['auto', 'ko', 'en', 'ja', 'zh', 'yue'], default='auto')
+    upload.add_argument('--no-itn', action='store_true')
     views = commands.add_parser('views'); views.add_argument('file_id'); views.add_argument('--wait', type=int, default=0)
     delete = commands.add_parser('delete'); delete.add_argument('file_id')
     args = parser.parse_args()
@@ -115,7 +122,8 @@ def main():
         if args.command == 'delete':
             client.call('DELETE', '/'+str(uuid.UUID(args.file_id))); print('삭제 완료'); return
         if args.command == 'upload':
-            result = client.upload(args.source, args.state, args.visibility, args.retention)
+            video_options = None if args.subtitles == 'none' else dict(seconds=0, subtitles=dict(mode=args.subtitles, language=args.subtitle_language, useItn=not args.no_itn))
+            result = client.upload(args.source, args.state, args.visibility, args.retention, video_options)
             file_id = result['fileId']
             print('업로드 완료 · 파일 ID: '+file_id)
         else:

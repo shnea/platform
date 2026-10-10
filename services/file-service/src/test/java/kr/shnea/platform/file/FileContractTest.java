@@ -25,5 +25,8 @@ class FileContractTest {
             assertThat(spec.path("components").path("schemas").path(model.getKey()).path("properties").propertyNames())
                 .containsExactlyInAnyOrderElementsOf(Arrays.stream(model.getValue().getRecordComponents()).map(c -> c.getName()).toList());
         }
+        for(var model:Map.of("VideoOptions",VideoOptions.class,"SubtitleOptions",VideoOptions.Subtitles.class,"VideoSubtitles",FileVideos.Subtitles.class,"Resumable",FilesService.Resumable.class).entrySet())
+            assertThat(spec.path("components").path("schemas").path(model.getKey()).path("properties").propertyNames())
+                .containsExactlyInAnyOrderElementsOf(Arrays.stream(model.getValue().getRecordComponents()).map(component->component.getName()).toList());
     }
 }

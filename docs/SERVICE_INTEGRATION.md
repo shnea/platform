@@ -42,15 +42,32 @@
 | --- | --- |
 | 환경 확인 | `GET /api/v1/integration/context` + `X-Platform-Key`, `integration:read`. 응답의 프로젝트·환경을 입력값과 대조 |
 | 이용자 로그인 | 환경 issuer의 OIDC discovery, client `app`, Code + PKCE S256. 서버 키/관리자 계정 사용 금지 |
-| 파일 | 호스트 서버에서 `X-Platform-Key`. `files:read/write/delete/share` 중 필요한 권한만 발급. 프로젝트 파일 사용 켜기 필요 |
+| 파일 | 호스트 서버에서 `X-Platform-Key`. `files:read/write/delete/share` 중 필요한 권한만 발급. 프로젝트 파일 사용 켜기 필요. 영상 업로드의 `videoOptions.subtitles`로 v28 sidecar/burned 자동 자막 선택 |
 | 에디터 | 패키지 자체는 인증 불필요. 본문 JSON 저장·사용자 권한·첨부 전송은 호스트 책임 |
 | Job | 호스트 서버 키 `jobs:write/read/work`. 플랫폼이 큐 관리, 프로젝트 워커가 실행. 업무는 job.id로 멱등 처리 |
 | 로그 | 호스트 서버 키 `logs:write/read`. 비동기·제한된 전송, 민감값 제외. 7일 보존·환경별 한도 |
-| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage/index:write/index:read/index:search`. 번역 포함 10종 AI·RAG 실행, AI 완료 inbox·수령 확인, Raya·임베딩·usage·PostgreSQL 문서 색인 전체 교체·검색. Qdrant 예제와 별도. TTS·목소리·STT·OCR·PDF 추출·영상 자막은 플랫폼 후속 연결 |
+| AI | 호스트 서버 키 `ai:read/route/embed/execute/jobs:read/cancel/usage/index:write/index:read/index:search`. 번역 포함 10종 AI·RAG 실행, AI 완료 inbox·수령 확인, Raya·임베딩·usage·PostgreSQL 문서 색인 전체 교체·검색. Qdrant 예제와 별도. TTS·목소리·독립 STT·OCR·PDF 추출·독립 영상 자막은 플랫폼 후속 연결 |
 
 플랫폼 로그인 기능을 쓰지 않거나 다른 OIDC로 로그인하는 프로젝트도 서버 키로 파일·Job·로그·AI 서비스를 독립 이용한다. 최종 이용자의 인증·인가·익명 이용은 호스트 서버가 판단하고 플랫폼 Keycloak으로 이전하지 않는다. 관리자 등록·환경 설정·키 발급에는 관리자 로그인이 필요하다. 기존 키는 AI 권한을 자동으로 받지 않는다.
 
 ## 구현 규칙
+
+### 영상 통합 처리의 선택 자막 — 뇌대리 v28
+
+`POST /api/v1/files/uploads`(관리자도 같은 본문)에 선택적인 `videoOptions`를 추가한다. 지원 영상에만 사용하고 동일 요청의 재전송·재개에는 옵션을 유지한다. 변경하려면 새 요청 UUID를 사용한다.
+
+```json
+{"requestId":"<새 UUID>","originalName":"sample.mp4","size":1234,"sha256":"<원본 SHA-256>","videoOptions":{"seconds":0,"subtitles":{"mode":"sidecar","language":"ko","useItn":true}}}
+```
+
+- 생략/null 또는 `subtitles:null`: 기존 영상 처리. `sidecar`: SRT/VTT·전사 생성, VTT 켜기·끄기. `burned`: 모든 출력 HLS 화질에 입히며 끄기 불가. language는 auto/ko/en/ja/zh/yue, useItn 기본 true다.
+- 플랫폼이 뇌대리 `video.package.options.subtitles`의 `use_itn`으로 변환한다. 원본·원격 Job은 각각 한 번, 별도 STT Job 없음. 결과는 기존 video.zip 계약이며 플랫폼은 ZIP을 임의로 풀지 않고 manifest의 HLS·썸네일·자막·전사 4개를 개별 수령한다.
+- 자막 없는 기존 결과는 유지한다. 보기 응답의 `video.subtitles`와 `subtitleUrls`를 사용한다. sidecar는 `subtitleUrls["subtitles.vtt"]`를 `<track>`으로 연결하고 burned에는 별도 트랙을 붙이지 않는다. 기본 플랫폼 뷰어·관리자 재생 화면은 같은 플레이어를 사용한다. 에디터 기본 iframe도 같은 뷰어이며 사용자 정의 video 어댑터는 이 계약을 유지한다.
+- 자막 시각은 VAD 기반 근삿값이며 자동 생성 자막임을 안내한다. 무음 cueCount 0은 성공, 오디오 없는 영상은 뇌대리에서 거부한다. MP4 출력·번역·SRT 업로드·스타일/폰트 지정은 없다. 독립 video.subtitles 접수는 이번 연결이 아니다.
+- 모든 필요한 파생물을 generation·원본 존재·권한·이름·크기·형식 검사 후 영속 저장한 뒤 receipt를 전송한다. 자막·전사도 원본과 동일한 공개/비공개·공유 철회·보존/삭제 규칙을 적용하며 보호 URL을 로그에 넣지 않는다. 각 자막/전사 파일은 플랫폼에서 16MiB 이하, cueCount는 0~10,000으로 제한한다. 실패를 자막 없는 성공으로 바꾸지 않는다.
+- 추가 운영 환경변수·키·웹훅 변경은 필요 없다. 기존 뇌대리 연결과 서비스 측 STT/자막 렌더러 가용 상태가 필요하며 `FILE_VIDEO_SUBTITLES_UNAVAILABLE`는 설정 확인 대상이다. 운영 설정은 유지하고 배포는 main push의 기존 CI/CD에 맡긴다.
+
+서버 예제: `python file-client.py upload ./sample.mp4 --state ./subtitle-upload.json --subtitles sidecar --subtitle-language ko --wait 120`. burned는 `--subtitles burned`, 정규화 해제는 `--no-itn`이다. 같은 재개 기록의 옵션을 바꾸지 않는다.
 
 1. 호스트 서버가 사용자 권한/파일 소유 관계를 확인한다. 서버 키는 브라우저·앱·URL·로그에 넣지 않는다. 관리자/내부 API·플랫폼 DB를 사용하지 않는다.
 2. 파일은 기본 공개. 보호할 파일은 `PRIVATE`. 본문에는 `fileId` 저장, 임시 보기 URL은 필요할 때 조회한다. 업로드 세션 재개는 생성한 키로 한다.

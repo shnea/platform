@@ -18,7 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
 class FileVideos {
     static final String HLS_CHILD_PATTERN="q[0-9]{1,4}(?:\\.m3u8|-[0-9]{5}\\.ts)|[0-9]{1,4}p(?:\\.m3u8|-[0-9]{5}\\.ts)";
     record Variant(int quality,int width,int height,int bandwidth,String playlist) {}
-    record Status(String state,int progress,Double durationSeconds,List<Variant> variants,String errorCode) {}
+    record Subtitles(String mode,String language,String timing,int cueCount,String srt,String vtt,String transcript) {}
+    record Status(String state,int progress,Double durationSeconds,List<Variant> variants,String errorCode,Subtitles subtitles) {}
     record Source(int width,int height,double duration,boolean audio) {}
     private static final String FORMATS="mov,matroska";
     private final JdbcTemplate db; private final TransactionTemplate tx; private final FileStore store;
@@ -32,8 +33,8 @@ class FileVideos {
     static boolean candidate(String name) {return name.toLowerCase(Locale.ROOT).matches(".*\\.(mp4|m4v|mov|mkv|webm)$");}
     Status status(UUID id) {
         var rows=db.query("SELECT * FROM file_videos WHERE file_id=?",(r,n)->new Status(r.getString("state"),r.getInt("progress"),
-            (Double)r.getObject("duration_seconds"),Arrays.asList(json.readValue(r.getString("variants"),Variant[].class)),r.getString("error_code")),id);
-        return rows.isEmpty()?new Status("QUEUED",0,null,List.of(),null):rows.getFirst();
+            (Double)r.getObject("duration_seconds"),Arrays.asList(json.readValue(r.getString("variants"),Variant[].class)),r.getString("error_code"),r.getString("subtitles")==null?null:json.readValue(r.getString("subtitles"),Subtitles.class)),id);
+        return rows.isEmpty()?new Status("QUEUED",0,null,List.of(),null,null):rows.getFirst();
     }
     Status retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
@@ -203,7 +204,7 @@ class FileVideos {
         try(var paths=Files.walk(directory)){long sum=0;for(Path p:paths.filter(Files::isRegularFile).toList())sum+=Files.size(p);return sum;}
     }
     Path asset(UUID id,String name) {
-        if(!name.matches("master\\.m3u8|"+HLS_CHILD_PATTERN))throw FileFailure.missing();
+        if(!VideoOptions.ARTIFACTS.contains(name)&&!name.matches("master\\.m3u8|"+HLS_CHILD_PATTERN))throw FileFailure.missing();
         UUID generation=db.query("SELECT generation FROM file_videos WHERE file_id=? AND state='READY'",(r,n)->r.getObject(1,UUID.class),id).stream().findFirst().orElseThrow(FileFailure::missing);
         Path path=store.video(id).resolve(generation.toString()).resolve(name);
         if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS))throw FileFailure.missing();return path;

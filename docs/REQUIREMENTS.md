@@ -521,7 +521,8 @@ NCP의 SENS·Cloud Outbound Mailer 통합 안내를 기준으로 사용 중인 �
 
 - 뇌대리 v26 후속 연결 확정: `tts.synthesize`·`tts.voice.register`·`stt.transcribe`·`ocr.recognize`·`pdf.extract`·`video.subtitles`를 플랫폼에서 지원한다. 목소리 CRUD/샘플은 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 원본 없는 TTS용 작업 원장·파생 파일 저장·권한·관리 화면은 별도 완료 단위이며 현재 이미지/영상 어댑터가 모두 지원한다고 표시하지 않는다.
 - 목소리의 requester_id는 호스트 서버가 확인한 사용자 식별이며 프로젝트·환경은 서버 키로 고정한다. 참조 음성의 영속 보관·명시적 삭제는 작업 결과 receipt·TTL과 구분한다. STT/OCR/PDF/자막은 현재 원본 존재·권한·generation을 재확인한 뒤 결과를 반영한다. 서비스 가용 여부와 실제 한도는 뇌대리 services 계약으로 확인하고 플랫폼에 모델을 별도로 설치하지 않는다.
-- 영상 자막은 이번 연결 범위에서 SRT/VTT 생성·저장·플레이어 표시까지다. 영상에 자막을 입히는 기능은 뇌대리 후속 지침을 기다리며 현재 제공된 것으로 안내하지 않는다.
+- 뇌대리 v28 영상 통합 처리의 선택 자막 확정: 플랫폼 업로드 시작의 `videoOptions.subtitles`를 뇌대리 `video.package`의 `options.subtitles`로 전달한다. 생략·null은 기존 처리, `sidecar`는 SRT/VTT·전사 생성과 플레이어 VTT 켜기·끄기, `burned`는 모든 출력 HLS 화질에 자막을 입히며 재생 중 끄기 불가다. 언어는 auto/ko/en/ja/zh/yue, useItn 기본 true다. 옵션은 업로드 세션과 원격 작업에 영속 스냅샷으로 남기며 동일 요청의 옵션 변경은 409다. 원본 업로드·Job은 각각 한 번이며 별도 STT Job을 만들지 않는다.
+- HLS·썸네일·SRT/VTT·전사 JSON/TXT를 같은 generation의 저장 트랜잭션에 반영한 뒤 receipt를 전송한다. 자막 manifest·이름 허용 목록·크기·UTF-8/VTT/JSON을 검사하고 원본 존재·generation·권한·예약 공간을 재확인한다. 자막 파일은 각각 16MiB 이하, 무음의 빈 SRT/TXT는 허용하며 전사 파일은 원본의 공개 범위·권한·보존·삭제 정책을 따른다. 근사 시각의 자동 생성 자막을 안내한다. 자막 실패를 자막 없는 성공으로 바꾸지 않으며 오디오 없는 영상·STT/렌더러 미설정·실행 실패는 뇌대리 오류로 처리한다. 기존 결과·360p·두 HLS 이름 규칙은 보존한다. MP4 출력·자막 편집/번역·사용자 필터/폰트 업로드는 포함하지 않는다. 독립 `video.subtitles` 작업 연결은 별도 후속 범위다.
 
 ## 4. 사용자 흐름
 

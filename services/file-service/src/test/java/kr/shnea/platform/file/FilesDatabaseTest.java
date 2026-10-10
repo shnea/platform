@@ -51,6 +51,8 @@ class FilesDatabaseTest {
         final NoedaeriClient client;final NoedaeriMedia media;
         final tools.jackson.databind.json.JsonMapper json=new tools.jackson.databind.json.JsonMapper();
         final Map<String,byte[]> artifacts=new LinkedHashMap<>();
+        Map<String,Object> subtitleManifest;
+        tools.jackson.databind.JsonNode submittedOptions;
         RemoteMediaFixture(boolean video) throws Exception {
             this.video=video;id=videoFile();db.update("UPDATE files SET original_name=? WHERE id=?",video?"video.mp4":"photo.png",id);
             artifacts.put("thumbnail.jpg",new byte[]{(byte)0xff,(byte)0xd8,(byte)0xff,0});
@@ -65,7 +67,7 @@ class FilesDatabaseTest {
                     assertThat(exchange.getRequestHeaders().getFirst("X-Noedaeri-API-Key")).isEqualTo("test-request-key");
                     String path=exchange.getRequestURI().getPath();byte[] response;int status=200;
                     if(path.equals("/api/v1/jobs")) {
-                        var body=json.readTree(exchange.getRequestBody().readAllBytes());request=UUID.fromString(body.path("idempotency_key").asString());creates++;
+                        var body=json.readTree(exchange.getRequestBody().readAllBytes());request=UUID.fromString(body.path("idempotency_key").asString());submittedOptions=body.path("options");creates++;
                         assertThat(body.path("kind").asString()).isEqualTo(video?"video.package":"image.package");
                         assertThat(body.path("input").path("type").asString()).isEqualTo("upload");
                         if(!video)assertThat(body.path("input").path("extension").asString()).isEqualTo("png");
@@ -76,6 +78,8 @@ class FilesDatabaseTest {
                     }else if(path.endsWith("/receipt")) {
                         assertThat(db.queryForObject("SELECT state FROM file_media_jobs WHERE request_id=?",String.class,request)).isEqualTo("IMPORTED");
                         assertThat(Files.readAllBytes(store.thumbnail(id))).isEqualTo(artifacts.get("thumbnail.jpg"));
+                        if(subtitleManifest!=null)for(String name:VideoOptions.ARTIFACTS)
+                            assertThat(Files.readAllBytes(store.mediaOutput(id,job().generation(),true).resolve(name))).isEqualTo(artifacts.get(name));
                         receipts++;response="{\"accepted\":true,\"cleanup\":\"scheduled\"}".getBytes();
                     }else if(path.endsWith("/cancel")){cancels++;response="{}".getBytes();}
                     else if(path.contains("/files/"))response=artifacts.get(path.substring(path.lastIndexOf('/')+1));
@@ -89,9 +93,11 @@ class FilesDatabaseTest {
         Map<String,Object> result() {
             if(video) {
                 var sizes=new LinkedHashMap<String,Long>();artifacts.forEach((name,body)->sizes.put(name,(long)body.length));
-                return Map.of("type","video_package","master","master.m3u8","thumbnail","thumbnail.jpg","duration_seconds",12,
+                var result=new LinkedHashMap<String,Object>(Map.of("type","video_package","master","master.m3u8","thumbnail","thumbnail.jpg","duration_seconds",12,
                     "variants",List.of(Map.of("label","480p","width",852,"height",480,"bandwidth",1200000,"playlist","480p.m3u8")),
-                    "files",new ArrayList<>(artifacts.keySet()),"file_sizes",sizes);
+                    "files",new ArrayList<>(artifacts.keySet()),"file_sizes",sizes));
+                if(subtitleManifest!=null)result.put("subtitles",subtitleManifest);
+                return result;
             }
             return Map.of("type","image_package","source",Map.of("media_type","image/png","width",100,"height",100),
                 "thumbnail",Map.of("name","thumbnail.jpg","width",100,"height",100,"media_type","image/jpeg","bytes",artifacts.get("thumbnail.jpg").length),
@@ -162,6 +168,69 @@ class FilesDatabaseTest {
             fixture.due();fixture.media.work();assertThat(fixture.creates).isEqualTo(1);assertThat(fixture.uploads).isEqualTo(1);
             fixture.succeeded=true;fixture.due();fixture.media.work();assertThat(fixture.job().state()).isEqualTo("IMPORTED");
         }
+    }
+    void captions(RemoteMediaFixture fixture,String mode,int cueCount) {
+        var options=VideoOptions.normalize(new VideoOptions(0.0,new VideoOptions.Subtitles(mode,"ko",true)));
+        db.update("UPDATE files SET video_options=?::jsonb WHERE id=?",VideoOptions.encode(options),fixture.id);
+        fixture.subtitleManifest=Map.of("mode",mode,"language","ko","timing","vad_proportional","cue_count",cueCount,"srt","subtitles.srt","vtt","subtitles.vtt","transcript","transcript.json");
+        fixture.artifacts.put("subtitles.srt",(cueCount==0?"":"1\n00:00:00,000 --> 00:00:01,000\n자동 자막\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        fixture.artifacts.put("subtitles.vtt",(cueCount==0?"WEBVTT\n\n":"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n자동 자막\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        fixture.artifacts.put("transcript.json","{\"text\":\"자동 자막\",\"segments\":[]}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        fixture.artifacts.put("transcript.txt",(cueCount==0?"":"자동 자막").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+    @Test void subtitlesUseOneJobAndUploadAndAllArtifactsAreStoredBeforeReceipt() throws Exception {
+        for(String mode:List.of("sidecar","burned"))try(var fixture=new RemoteMediaFixture(true)) {
+            captions(fixture,mode,1);fixture.media.work();
+            assertThat(fixture.submittedOptions.path("subtitles").path("mode").asString()).isEqualTo(mode);
+            assertThat(fixture.submittedOptions.path("subtitles").path("language").asString()).isEqualTo("ko");
+            assertThat(fixture.submittedOptions.path("subtitles").path("use_itn").asBoolean()).isTrue();
+            fixture.succeeded=true;fixture.due();fixture.media.work();
+            assertThat(videos().status(fixture.id).subtitles().mode()).isEqualTo(mode);
+            assertThat(fixture.receipts).isZero();fixture.media.work();assertThat(fixture.receipts).isEqualTo(1);
+            assertThat(fixture.creates).isEqualTo(1);assertThat(fixture.uploads).isEqualTo(1);
+            service.visibility(fixture.id,owner,"PRIVATE");code("FILE_NOT_FOUND",()->views().authorize(fixture.id,null,null,true));
+            var links=views().manage(fixture.id,owner,null);assertThat(links.subtitleUrls()).hasSize(4);
+            String token=links.streamUrl().split("token=")[1];
+            var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(new FileVideosController(videos(),views(),service,org.mockito.Mockito.mock(FileAccess.class))).setControllerAdvice(new FileErrors()).build();
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/files/"+fixture.id+"/hls/subtitles.vtt").param("token",token))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType("text/vtt; charset=UTF-8"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(fixture.artifacts.get("subtitles.vtt")));
+            service.visibility(fixture.id,owner,"PUBLIC");code("FILE_NOT_FOUND",()->views().authorize(fixture.id,token,null,true));
+        }
+    }
+    @Test void silentSubtitlesCanPersistEmptySrtAndTranscript() throws Exception {
+        try(var fixture=new RemoteMediaFixture(true)) {
+            captions(fixture,"sidecar",0);fixture.media.work();fixture.succeeded=true;fixture.due();fixture.media.work();
+            assertThat(videos().status(fixture.id).subtitles().cueCount()).isZero();
+            assertThat(Files.size(videos().asset(fixture.id,"subtitles.srt"))).isZero();fixture.media.work();assertThat(fixture.receipts).isEqualTo(1);
+        }
+    }
+    @Test void requestedCaptionsCannotSilentlyFallBackOrExposePartialResults() throws Exception {
+        for(String invalid:List.of("missing","mode","path","size","vtt","deleted"))try(var fixture=new RemoteMediaFixture(true)) {
+            captions(fixture,"sidecar",1);fixture.media.work();
+            if(invalid.equals("missing"))fixture.subtitleManifest=null;
+            if(invalid.equals("mode")){var changed=new LinkedHashMap<>(fixture.subtitleManifest);changed.put("mode","burned");fixture.subtitleManifest=changed;}
+            if(invalid.equals("path")){var changed=new LinkedHashMap<>(fixture.subtitleManifest);changed.put("vtt","../subtitles.vtt");fixture.subtitleManifest=changed;}
+            if(invalid.equals("size"))fixture.artifacts.put("subtitles.vtt",new byte[16*1024*1024+1]);
+            if(invalid.equals("vtt"))fixture.artifacts.put("subtitles.vtt","<html>invalid</html>".getBytes());
+            if(invalid.equals("deleted"))service.delete(fixture.id,owner);
+            fixture.succeeded=true;fixture.due();fixture.media.work();
+            assertThat(fixture.receipts).isZero();assertThat(videos().status(fixture.id).state()).isNotEqualTo("READY");
+            assertThat(Files.exists(store.mediaOutput(fixture.id,fixture.job().generation(),true))).isFalse();
+        }
+    }
+    @Test void uploadOptionsAreNormalizedIdempotentScopedAndRestoredOnResume() throws Exception {
+        UUID request=UUID.randomUUID();var options=new VideoOptions(null,new VideoOptions.Subtitles("sidecar",null,null));
+        var input=new FilesService.Create(request,"video.mp4",(long)bytes.length,hash(bytes),"PRIVATE","default",options);
+        UUID id=service.create(owner,input).uploadId();assertThat(service.create(owner,input).uploadId()).isEqualTo(id);
+        assertThat(service.resumable(owner).getFirst().videoOptions().subtitles()).isEqualTo(new VideoOptions.Subtitles("sidecar","auto",true));
+        code("FILE_REQUEST_CONFLICT",()->service.create(owner,new FilesService.Create(request,"video.mp4",(long)bytes.length,hash(bytes),"PRIVATE","default",new VideoOptions(0.0,new VideoOptions.Subtitles("burned","auto",true)))));
+        code("INVALID_REQUEST",()->service.create(owner,new FilesService.Create(UUID.randomUUID(),"photo.png",0L,hash(new byte[0]),null,null,options)));
+        code("INVALID_REQUEST",()->VideoOptions.normalize(new VideoOptions(0.0,new VideoOptions.Subtitles("invalid","ko",true))));
+        code("INVALID_REQUEST",()->VideoOptions.normalize(new VideoOptions(Double.NaN,null)));
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"processingBackend","local");
+        code("FILE_VIDEO_SUBTITLES_UNAVAILABLE",()->service.create(owner,new FilesService.Create(UUID.randomUUID(),"video.mp4",0L,hash(new byte[0]),null,null,options)));
     }
     @Test void deletedFileAndReplacedGenerationRejectLateRemoteResults() throws Exception {
         for(boolean deleted:List.of(true,false))try(var fixture=new RemoteMediaFixture(true)) {
