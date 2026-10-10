@@ -29,7 +29,7 @@ class FileViews {
         this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;this.videos=videos;this.backend=backend;
     }
     View view(UUID id) {
-        db.update("INSERT INTO file_views(file_id) VALUES (?) ON CONFLICT DO NOTHING",id);
+        db.update("INSERT INTO file_views(file_id,state) SELECT id,CASE WHEN automatic_derivatives THEN 'QUEUED' ELSE 'UNSUPPORTED' END FROM files WHERE id=? ON CONFLICT DO NOTHING",id);
         return db.queryForObject("SELECT * FROM file_views WHERE file_id=?",(r,n)->new View(r.getString("state"),r.getString("kind"),r.getString("media_type"),r.getBoolean("thumbnail"),r.getString("error_code")),id);
     }
     Links manage(UUID id,FileAccess.Context context,Instant expiry) {
@@ -78,7 +78,7 @@ class FileViews {
     Object retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
             db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.detail(id,context);view(id);
-            db.update("UPDATE file_views SET state='QUEUED',attempts=0,error_code=NULL WHERE file_id=? AND state='FAILED'",id);
+            db.update("UPDATE file_views SET state='QUEUED',attempts=0,error_code=NULL WHERE file_id=? AND state='FAILED' AND EXISTS (SELECT 1 FROM files WHERE id=? AND automatic_derivatives)",id,id);
             return view(id);
         });
     }
@@ -94,7 +94,7 @@ class FileViews {
     void work() {
         db.update("DELETE FROM file_view_tokens WHERE greatest(expires_at,playback_expires_at)<=now()");
         // Discover completed files, including files uploaded before this feature was installed.
-        db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
+        db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND f.automatic_derivatives AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
         db.update("UPDATE file_views SET state=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,error_code='FILE_PREVIEW_INTERRUPTED' WHERE state='PROCESSING' AND processing_backend='local' AND started_at<now()-interval '2 minutes'");
         UUID id=tx.execute(s->{
             var ids=db.queryForList("SELECT v.file_id FROM file_views v JOIN files f ON f.id=v.file_id WHERE v.state='QUEUED' AND f.state='READY' AND (?=false OR lower(f.original_name) !~ '\\.(png|jpg|jpeg|jfif|gif|webp|bmp|ico|tif|tiff|heic|heif|avif|mp4|m4v|mov|mkv|webm)$') ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF v SKIP LOCKED",UUID.class,backend.remote());

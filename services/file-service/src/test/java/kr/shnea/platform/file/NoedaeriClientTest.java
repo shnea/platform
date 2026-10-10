@@ -27,4 +27,17 @@ class NoedaeriClientTest {
         assertThat(new NoedaeriClient("","","",512).configured()).isFalse();
         assertThatThrownBy(()->new NoedaeriClient("https://example.invalid","key","secret",FilesService.MAX_FILE+1)).isInstanceOf(IllegalArgumentException.class);
     }
+    @Test void rejectedDownloadsNeverDeleteExistingFilesAndPartialDownloadsAreRemoved(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/api/v1/jobs",exchange->{exchange.sendResponseHeaders(200,0);exchange.getResponseBody().write(new byte[100]);exchange.close();});server.start();
+        try {
+            var client=new NoedaeriClient(java.net.URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"key","secret",100000);
+            var existing=directory.resolve("existing.wav");java.nio.file.Files.writeString(existing,"preserve");
+            assertThatThrownBy(()->client.downloadResult(java.util.UUID.randomUUID(),existing,200)).isInstanceOf(java.io.IOException.class);
+            assertThat(java.nio.file.Files.readString(existing)).isEqualTo("preserve");
+            var partial=directory.resolve("partial.wav");assertThatThrownBy(()->client.downloadResult(java.util.UUID.randomUUID(),partial,10)).isInstanceOf(java.io.IOException.class);
+            assertThat(java.nio.file.Files.exists(partial)).isFalse();
+            assertThatThrownBy(()->client.downloadTaskFile(java.util.UUID.randomUUID(),"stt.transcribe","../speech.wav",partial)).isInstanceOf(java.io.IOException.class);
+        }finally{server.stop(0);}
+    }
 }

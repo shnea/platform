@@ -17,6 +17,507 @@
     }
   ],
   "paths": {
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks/{id}/artifacts/{name}/ticket": {
+      "post": {
+        "operationId": "noedaeri_post__tasks__id__artifacts__name__ticket",
+        "summary": "현재 원본·결과 권한을 확인한 일회용 다운로드 티켓",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "transcript.json",
+                "transcript.txt",
+                "transcript.zip",
+                "subtitles.srt",
+                "subtitles.vtt",
+                "subtitles.zip",
+                "document.json",
+                "document.txt",
+                "document.zip",
+                "text.json",
+                "text.txt",
+                "text.zip",
+                "speech.wav",
+                "thumbnail.jpg"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadTicket"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks/{id}/recover": {
+      "post": {
+        "operationId": "noedaeri_post__tasks__id__recover",
+        "summary": "같은 작업의 통신·수령 복구 — 새 모델 호출 없음",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks/{id}/cancel": {
+      "post": {
+        "operationId": "noedaeri_post__tasks__id__cancel",
+        "summary": "실행 종료 확인을 기다리는 취소 요청",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks/{id}": {
+      "get": {
+        "operationId": "noedaeri_get__tasks__id_",
+        "summary": "독립 작업 상태와 영속 결과 조회 — 재실행 없음",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks": {
+      "post": {
+        "operationId": "noedaeri_post__tasks",
+        "summary": "독립 작업 멱등 접수 — 원격 Job은 한 번",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "kind"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "video.subtitles",
+                      "pdf.extract",
+                      "ocr.recognize",
+                      "stt.transcribe",
+                      "tts.synthesize",
+                      "video.thumbnail"
+                    ]
+                  },
+                  "sourceFileId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "input": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "language": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "options": {
+                    "type": "object",
+                    "description": "작업별 언어·ITN·PDF 모드·OCR 언어 보정·썸네일 seconds 또는 TTS voice_id/instruct. requester/project/environment은 서버에서만 지정."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "noedaeri_get__tasks",
+        "summary": "이 관리자의 독립 작업 최근 100건",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/uploads": {
+      "post": {
+        "operationId": "noedaeri_post__uploads",
+        "summary": "자동 변환 없는 비공개 tmp 원본 업로드 접수",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/services": {
+      "get": {
+        "operationId": "noedaeri_get__services",
+        "summary": "뇌대리 설정과 기능 가용 상태 확인",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "한국어 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/files/uploads": {
       "post": {
         "operationId": "post_files_uploads",

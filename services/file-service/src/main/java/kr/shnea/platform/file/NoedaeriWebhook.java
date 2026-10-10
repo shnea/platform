@@ -34,7 +34,17 @@ class NoedaeriWebhook {
         String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
         return tx.execute(s->{
             var expected=db.queryForList("SELECT job_id,kind FROM file_media_jobs WHERE request_id=?",key);
-            if(expected.isEmpty())throw FileFailure.missing();var row=expected.getFirst();
+            if(expected.isEmpty()) {
+                var tasks=db.queryForList("SELECT job_id,kind FROM file_noedaeri_tasks WHERE id=? FOR UPDATE",key);
+                if(tasks.isEmpty())throw FileFailure.missing();var task=tasks.getFirst();
+                if((task.get("job_id")!=null&&!job.equals(task.get("job_id")))||!value.path("job").path("kind").asString().equals(task.get("kind")))throw FileFailure.invalid();
+                int inserted=db.update("INSERT INTO file_noedaeri_task_events(event_id,task_id,job_id,body_hash) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",event,key,job,hash);
+                if(inserted==0&&!hash.equals(db.queryForObject("SELECT body_hash FROM file_noedaeri_task_events WHERE event_id=?",String.class,event)))
+                    throw new FileFailure("FILE_MEDIA_EVENT_CONFLICT",409,"같은 완료 알림 ID의 내용이 다릅니다.");
+                db.update("UPDATE file_noedaeri_tasks SET job_id=coalesce(job_id,?),state=CASE WHEN state='NEW' THEN 'ACTIVE' ELSE state END,payload=NULL,next_check_at=now() WHERE id=?",job,key);
+                return Map.of("accepted",true,"duplicate",inserted==0);
+            }
+            var row=expected.getFirst();
             if((row.get("job_id")!=null&&!job.equals(row.get("job_id")))||!value.path("job").path("kind").asString().equals(row.get("kind")))throw FileFailure.invalid();
             int inserted=db.update("INSERT INTO file_media_inbox(event_id,job_id,request_id,payload,body_hash) VALUES (?,?,?,?::jsonb,?) ON CONFLICT DO NOTHING",event,job,key,new String(body,StandardCharsets.UTF_8),hash);
             if(inserted==0&&!hash.equals(db.queryForObject("SELECT body_hash FROM file_media_inbox WHERE event_id=?",String.class,event)))

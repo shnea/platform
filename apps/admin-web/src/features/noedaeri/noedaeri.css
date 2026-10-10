@@ -11,4 +11,11 @@
 .noedaeri-result details { margin-block: 24px; }
 .noedaeri-result .section-line { flex-wrap: wrap; overflow-wrap: anywhere; }
 .noedaeri-table { overflow: auto; }
+.noedaeri-independent pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 500px; overflow: auto; }
+.noedaeri-independent .actions { flex-wrap: wrap; margin-block: 16px; }
+.noedaeri-independent section { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 16px; overflow-wrap: anywhere; }
+.noedaeri-image,.noedaeri-video { display: block; max-width: 100%; max-height: 480px; margin-block: 16px; }
+.noedaeri-ocr-source { position: relative; width: fit-content; max-width: 100%; margin: 16px 0; }
+.noedaeri-ocr-source img { display: block; width: auto; max-width: 100%; max-height: 600px; }
+.noedaeri-ocr-box { position: absolute; box-sizing: border-box; border: 2px solid var(--accent); background: color-mix(in srgb,var(--accent) 15%,transparent); pointer-events: none; }
 @media(max-width:900px) { .noedaeri-layout { grid-template-columns: minmax(0,1fr); } .noedaeri-nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } }

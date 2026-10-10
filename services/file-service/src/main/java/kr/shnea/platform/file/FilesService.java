@@ -43,6 +43,13 @@ class FilesService {
         this.store = store; this.quota = quota; this.pendingLimit = pendingLimit;
     }
     Upload create(FileAccess.Context context, Create input) {
+        return create(context,input,true);
+    }
+    Upload createSource(FileAccess.Context context, Create input) {
+        if(!context.ownerKind().equals("ADMIN")||input.videoOptions()!=null)throw FileFailure.invalid();
+        return create(context,input,false);
+    }
+    private Upload create(FileAccess.Context context, Create input,boolean automaticDerivatives) {
         validate(input);
         var videoOptions=VideoOptions.normalize(input.videoOptions());
         if(videoOptions!=null&&!FileVideos.candidate(input.originalName()))throw FileFailure.invalid();
@@ -61,7 +68,8 @@ class FilesService {
                 if (!old.name().equals(input.originalName()) || old.size() != input.size() || !old.hash().equals(input.sha256())
                         || !db.queryForObject("SELECT upload_visibility FROM files WHERE id=?", String.class, old.id()).equals(visibility)
                         || !db.queryForObject("SELECT upload_retention_code FROM files WHERE id=?",String.class,old.id()).equals(retention)
-                        || !new tools.jackson.databind.json.JsonMapper().readTree(db.queryForObject("SELECT video_options::text FROM files WHERE id=?",String.class,old.id())).equals(new tools.jackson.databind.json.JsonMapper().readTree(encodedOptions)))
+                        || !new tools.jackson.databind.json.JsonMapper().readTree(db.queryForObject("SELECT video_options::text FROM files WHERE id=?",String.class,old.id())).equals(new tools.jackson.databind.json.JsonMapper().readTree(encodedOptions))
+                        || db.queryForObject("SELECT automatic_derivatives FROM files WHERE id=?",Boolean.class,old.id())!=automaticDerivatives)
                     throw new FileFailure("FILE_REQUEST_CONFLICT", 409, "같은 요청 ID에 다른 파일 정보가 지정되었습니다.");
                 return upload(old);
             }
@@ -86,6 +94,7 @@ class FilesService {
                 input.originalName(), input.size(), input.sha256(), visibility, visibility, retention, retention, context.ownerKind(),
                 java.sql.Timestamp.from(created), FileStore.storagePath(id, context.projectId(), context.environmentId(), input.originalName(), created));
             db.update("UPDATE files SET video_options=?::jsonb WHERE id=?",encodedOptions,id);
+            db.update("UPDATE files SET automatic_derivatives=? WHERE id=?",automaticDerivatives,id);
             audit(id, context, "upload.created");
             return upload(get(id, false));
         });
@@ -175,9 +184,16 @@ class FilesService {
     Row downloadable(UUID id) {
         Row row = get(id, false);
         if (!row.state().equals("READY")) throw FileFailure.missing();
+        requireResultSource(id);
         return row;
     }
-    void used(UUID id) { db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id); }
+    private void requireResultSource(UUID id) {
+        if(db.queryForObject("SELECT count(*) FROM file_noedaeri_artifacts artifact JOIN files source ON source.id=artifact.source_file_id WHERE artifact.file_id=? AND source.state<>'READY'",Integer.class,id)>0)throw FileFailure.missing();
+    }
+    void used(UUID id) {
+        db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id);
+        db.update("UPDATE files source SET last_used_at=now(),retention_marked_at=NULL FROM file_noedaeri_artifacts artifact WHERE artifact.file_id=? AND source.id=artifact.source_file_id AND source.state='READY'",id);
+    }
     FileInfo retention(UUID id,FileAccess.Context context,String code,String expectedCode) {
         return tx.execute(status->{
             RetentionService.lock(db,context.environmentId());Row row=managed(id,context,true);
@@ -196,6 +212,7 @@ class FilesService {
         UUID lease=tx.execute(status->{
             RetentionService.lock(db,authorized.environment());Row current=get(authorized.id(),true);
             if(!current.state().equals("READY") || !current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
+            requireResultSource(current.id());
             UUID key=UUID.randomUUID();db.update("INSERT INTO file_download_leases(id,file_id,expires_at) VALUES (?,?,now()+interval '2 minutes')",key,current.id());return key;
         });
         downloads.put(lease,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(90));return lease;

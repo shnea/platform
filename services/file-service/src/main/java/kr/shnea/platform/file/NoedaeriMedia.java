@@ -57,15 +57,15 @@ class NoedaeriMedia {
         }
     }
     void discover() {
-        db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
-        db.update("INSERT INTO file_videos(file_id) SELECT f.id FROM files f LEFT JOIN file_videos v ON v.file_id=f.id WHERE f.state='READY' AND v.file_id IS NULL AND lower(f.original_name) ~ '\\.(mp4|m4v|mov|mkv|webm)$' ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
+        db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND f.automatic_derivatives AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
+        db.update("INSERT INTO file_videos(file_id) SELECT f.id FROM files f LEFT JOIN file_videos v ON v.file_id=f.id WHERE f.state='READY' AND f.automatic_derivatives AND v.file_id IS NULL AND lower(f.original_name) ~ '\\.(mp4|m4v|mov|mkv|webm)$' ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
     }
     void claim() {
         if(db.queryForObject("SELECT count(*) FROM file_media_jobs WHERE state IN ('NEW','ACTIVE')",Integer.class)>=16)return;
         tx.executeWithoutResult(s->{
             var candidates=db.queryForList("""
                 SELECT f.id FROM files f JOIN file_views v ON v.file_id=f.id LEFT JOIN file_videos h ON h.file_id=f.id
-                WHERE f.state='READY' AND ((v.state='QUEUED' AND lower(f.original_name) ~ '\\.(png|jpg|jpeg|jfif|gif|webp|bmp|ico|tif|tiff|heic|heif|avif)$')
+                WHERE f.state='READY' AND f.automatic_derivatives AND ((v.state='QUEUED' AND lower(f.original_name) ~ '\\.(png|jpg|jpeg|jfif|gif|webp|bmp|ico|tif|tiff|heic|heif|avif)$')
                 OR (h.state='QUEUED' AND v.state<>'PROCESSING')) ORDER BY f.completed_at LIMIT 1 FOR UPDATE OF f SKIP LOCKED
                 """,UUID.class);
             if(candidates.isEmpty())return;

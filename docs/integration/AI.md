@@ -12,7 +12,7 @@ AI 작업은 **호스트 서버 → 플랫폼 → 뇌대리 → n8n** 순서로 
 
 ## 관리자 뇌대리 테스트
 
-**뇌대리** 탭에서 프로젝트·환경을 선택한 뒤 AI 작업·문장 번역·Raya·임베딩·문서 색인·벡터 검색을 실행하고 상태·최근 이력·사용량·JSON을 확인한다. 이미지·영상은 기존 파일 업로드·수령 계약을 재사용한다. PDF/OCR/STT/TTS/목소리/독립 영상 자막/단독 썸네일은 아직 플랫폼 어댑터가 없어 연결 예정으로 표시한다. 영상 처리의 sidecar/burned 자동 자막은 실행할 수 있다.
+**뇌대리** 탭에서 프로젝트·환경을 선택한 뒤 AI 작업·문장 번역·Raya·임베딩·문서 색인·벡터 검색을 실행하고 상태·최근 이력·사용량·JSON을 확인한다. 이미지·영상은 기존 파일 업로드·수령 계약을 재사용한다. 독립 PDF/OCR/STT/TTS/영상 자막/단독 썸네일은 관리자 파일 어댑터로 실행한다. 목소리 관리 화면은 아직 연결 예정이다. 영상 처리의 sidecar/burned 자동 자막은 실행할 수 있다.
 
 관리자 전용 기본 경로는 `/api/v1/admin/environments/{environmentId}/ai`이며 Bearer 관리자 JWT를 사용한다. 그 아래 `/raya/route`, `/embeddings`, `/jobs`, `/jobs/{id}`, `/jobs/{id}/cancel`, `/translations`, `/usage`, `/indexing`, `/indexing/{id}`, `/indexing/{id}/cancel`, `/indexing/collections`, `/indexing/search`를 제공한다. 키 발급·서버 키 우회는 없으며 프로젝트 활성/환경 READY를 확인하고 서버에서 범위를 고정한다. 일반 서비스 호출에는 기존 표의 서버 키·권한을 그대로 적용한다.
 
@@ -42,7 +42,7 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. 뇌대리가 제공하는 TTS·목소리·STT·OCR·PDF·영상 자막의 플랫폼 연결과 관리자 실행 화면은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+`n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·STT·OCR·PDF·독립 영상 자막·단독 썸네일은 관리자 실행 화면에 연결한다. 목소리 관리와 외부 호스트용 신규 API·권한은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
 
 ## 문장 번역
 
@@ -74,9 +74,24 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 
 작업 응답은 `notify`, `terminal_event_id`, `received_at`, `delivery`의 상태·설정·시도 수·마지막 HTTP 상태·다음 시각을 전달한다. upstream 관리자 재전송 API는 관리자 세션이 필요하므로 플랫폼 서버 키로 대신 호출하지 않는다.
 
-## 후속 파일 연산·목소리 연결
+## 파일 연산·목소리 연결
 
-확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, 독립 `video.subtitles`의 파생 결과와 원본 없는 TTS용 작업 구조·관리 화면·권한은 별도 완료 단위로 구현한다. v28 영상 통합 처리의 선택 자막은 기존 파일 업로드 `videoOptions.subtitles`와 단일 `video.package`로 연결한다. sidecar는 VTT 토글, burned는 모든 HLS 화질에 입히고 끄기 불가다. 전사·자막을 영속 저장한 뒤 기존 파일 receipt를 보내며 AI Job/AI 완료 알림을 사용하지 않는다. 상세 옵션·보호 URL은 [서비스 연동 지침](../SERVICE_INTEGRATION.md)을 따른다.
+### 관리자 독립 작업 테스트
+
+`/api/v1/files/admin/environments/{environmentId}/noedaeri`는 관리자 JWT 전용이다. 환경은 반영 완료·프로젝트 활성·파일 서비스 사용 상태여야 한다. `/services`는 로컬 설정, 원격 연결 확인, 기능별 available/한도를 구분한다. 설정 조회는 모델 실행 성공을 뜻하지 않는다.
+
+- `POST /uploads`: 비공개·tmp 원본 전용 업로드 접수. 이후 기존 `/uploads/{id}` 조각 전송·상태·완료 API를 재사용한다. 기존 이미지/영상 패키지 작업은 자동 추가하지 않는다. 일반 파일 업로드와 이미 READY인 결과는 그대로 유지한다.
+- `POST /tasks`: `{requestId,kind,sourceFileId,options}`. TTS만 sourceFileId 없이 `input:{text,language}`를 전달한다. requester_id는 서버의 관리자 식별, 프로젝트·환경은 인증된 대상 범위로 고정한다. TTS 입력은 원격 접수를 확인할 때까지 큐에만 두며 접수·종료 시 제거한다.
+- `GET /tasks`, `GET /tasks/{id}`: 자신의 환경·관리자 범위에서 최근 100건·단건 상태/단계·읽기용 결과를 조회한다. 동일 requestId와 정규화 입력은 재사용하고 다른 입력은409다. 조회·화면 진입으로 모델을 다시 실행하지 않는다.
+- `POST /tasks/{id}/cancel`: 원격 종료를 확인할 때까지 취소 요청 상태를 유지한다. `POST /tasks/{id}/recover`는 통신·수령 자동 재시도 8회가 끝났을 때 같은 작업의 확인을 재개한다. 실패한 모델을 새 요청으로 자동 재실행하지 않는다.
+- 기존 서명 job.* 웹훅을 원장에 연결하고 이벤트 ID/본문 해시를 확인한다. 알림 누락은 저장된 원격 ID로 복구한다. AI ai.job.* 계약과 합치지 않는다.
+- 결과 JSON/TXT/SRT/VTT는 파일별4MiB, ZIP32MiB, WAV64MiB, JPEG2MiB로 제한한다. UTF-8·문서/좌표/구간·단일 WAV 형식, ZIP 허용 파일명·중복·경로 탈출·압축 해제 크기를 검사한다. 다운로드가 실패하면 미완성 파일만 지우며 기존 파일을 덮어쓰지 않는다.
+- 모든 결과를 비공개 파일로 영속 저장하고 원본 존재를 다시 확인한 뒤 receipt를 보낸다. 수령 실패는 같은 작업에서 제한 복구한다. TTS와 썸네일은 `/result`의 단일 파일이며 TTS `/files/speech.wav`나 ZIP을 요청하지 않는다.
+- `POST /tasks/{id}/artifacts/{name}/ticket`은 현재 원본·결과 권한을 검사한 기존 일회용 다운로드 티켓이다. 원본 삭제 시 결과 접근을 즉시 닫고 결과 파일도 삭제 대상으로 표시한다. 결과의 플랫폼 보존은 원본 보존 코드(원본 없는 TTS는 tmp)를 사용하며, 뇌대리 보관 상한·receipt와 별도다. 자동 정리가 꺼져 있으면 파일 메뉴에서 삭제한다.
+
+메뉴에서 페이지별 PDF 텍스트/OCR 줄 위치, 이미지 OCR 위치, STT 전사 구간, VTT 실제 cue와 영상 미리보기, 단일 WAV 재생·다운로드, JPEG 썸네일을 확인한다. 원본 코덱의 브라우저 지원은 별도다. 인식/자막 시각과 confidence는 정확도 보장이 아니며 무음·문자 미검출의 빈 결과도 표시한다. 이력 열기는 GET만 사용한다. 목소리 관리 화면·외부 호스트의 신규 서버 키 권한/API는 아직 후속 범위다.
+
+확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, 독립 `video.subtitles`, `video.thumbnail`과 원본 없는 `tts.synthesize`는 관리자 테스트 전용 파일 어댑터로 연결한다. 외부 호스트의 서버 키에 새 권한을 자동 부여하지 않는다. v28 영상 통합 처리의 선택 자막은 기존 파일 업로드 `videoOptions.subtitles`와 단일 `video.package`로 연결한다. sidecar는 VTT 토글, burned는 모든 HLS 화질에 입히고 끄기 불가다. 전사·자막을 영속 저장한 뒤 기존 파일 receipt를 보내며 AI Job/AI 완료 알림을 사용하지 않는다. 상세 옵션·보호 URL은 [서비스 연동 지침](../SERVICE_INTEGRATION.md)을 따른다.
 
 ## PostgreSQL 문서 색인·전체 교체
 

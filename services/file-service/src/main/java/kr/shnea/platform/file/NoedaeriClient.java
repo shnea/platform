@@ -2,6 +2,8 @@ package kr.shnea.platform.file;
 
 import java.io.*;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.net.http.*;
 import java.nio.file.*;
 import java.time.Duration;
@@ -45,8 +47,33 @@ class NoedaeriClient {
     }
     JsonNode create(UUID request,String kind,String extension,Map<String,Object> options) throws Exception {
         var input=new LinkedHashMap<String,Object>();input.put("type","upload");
-        if(kind.equals("image.package"))input.put("extension",extension);
+        if(Set.of("image.package","ocr.recognize").contains(kind))input.put("extension",extension);
         return json("POST","/api/v1/jobs",Map.of("kind",kind,"title","파일 파생물 생성","idempotency_key",request.toString(),"input",input,"options",options));
+    }
+    JsonNode create(UUID request,String kind,Map<String,Object> input,Map<String,Object> options) throws Exception {
+        if(!Set.of("image.package","video.package","video.thumbnail","video.subtitles","pdf.extract","ocr.recognize","stt.transcribe","tts.synthesize").contains(kind))throw new IOException("Invalid job kind");
+        return json("POST","/api/v1/jobs",Map.of("kind",kind,"title","플랫폼 기능 실행","idempotency_key",request.toString(),"input",input,"options",options));
+    }
+    JsonNode services() throws Exception {return json("GET","/api/v1/services",null,1024*1024);}
+    JsonNode voices(String requester,UUID project,UUID environment) throws Exception {
+        return json("GET","/api/v1/voices"+voiceScope(requester,project,environment),null,2*1024*1024);
+    }
+    JsonNode voice(UUID id,String requester,UUID project,UUID environment) throws Exception {
+        return json("GET","/api/v1/voices/"+id+voiceScope(requester,project,environment),null);
+    }
+    JsonNode registerVoice(Map<String,Object> body) throws Exception {return json("POST","/api/v1/voices",body);}
+    JsonNode renameVoice(UUID id,String requester,UUID project,UUID environment,String name) throws Exception {
+        return json("PATCH","/api/v1/voices/"+id+voiceScope(requester,project,environment),Map.of("name",name));
+    }
+    JsonNode deleteVoice(UUID id,String requester,UUID project,UUID environment) throws Exception {
+        return json("DELETE","/api/v1/voices/"+id+voiceScope(requester,project,environment),null);
+    }
+    void voiceSample(UUID id,String requester,UUID project,UUID environment,Path output) throws Exception {
+        request("GET","/api/v1/voices/"+id+"/sample"+voiceScope(requester,project,environment),HttpRequest.BodyPublishers.noBody(),null,output,64*1024*1024);
+    }
+    private static String voiceScope(String requester,UUID project,UUID environment) {
+        if(requester==null||requester.isBlank()||requester.length()>128||project==null||environment==null)throw new IllegalArgumentException("Invalid voice scope");
+        return "?requester_id="+URLEncoder.encode(requester,StandardCharsets.UTF_8)+"&project="+project+"&environment="+environment;
     }
     JsonNode status(UUID id) throws Exception {return json("GET",path(id),null);}
     void upload(UUID id,Path original) throws Exception {
@@ -60,10 +87,20 @@ class NoedaeriClient {
         if(!VideoOptions.ARTIFACTS.contains(name)&&!name.matches("thumbnail\\.jpg|preview\\.webp|master\\.m3u8|"+FileVideos.HLS_CHILD_PATTERN))throw new IOException("Invalid artifact name");
         request("GET",path(id)+"/files/"+name,HttpRequest.BodyPublishers.noBody(),null,output,limit);
     }
+    void downloadResult(UUID id,Path output,long limit) throws Exception {
+        request("GET",path(id)+"/result",HttpRequest.BodyPublishers.noBody(),null,output,limit);
+    }
+    void downloadTaskFile(UUID id,String kind,String name,Path output) throws Exception {
+        if(!NoedaeriTaskContract.files(kind).contains(name))throw new IOException("Invalid task artifact");
+        request("GET",path(id)+"/files/"+name,HttpRequest.BodyPublishers.noBody(),null,output,NoedaeriTaskContract.fileLimit(name));
+    }
     private JsonNode json(String method,String path,Object body) throws Exception {
+        return json(method,path,body,JSON_LIMIT);
+    }
+    private JsonNode json(String method,String path,Object body,int limit) throws Exception {
         byte[] bytes=body==null?null:json.writeValueAsBytes(body);
         byte[] result=request(method,path,bytes==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(bytes),
-            body==null?null:"application/json",null,JSON_LIMIT);
+            body==null?null:"application/json",null,limit);
         return json.readTree(result);
     }
     private byte[] request(String method,String path,HttpRequest.BodyPublisher body,String type,Path output,long limit) throws Exception {
@@ -71,6 +108,7 @@ class NoedaeriClient {
         var builder=HttpRequest.newBuilder(base.resolve(path)).timeout(Duration.ofSeconds(120)).header("X-Noedaeri-API-Key",key).method(method,body);
         if(type!=null)builder.header("Content-Type",type);
         var stream=new AtomicReference<InputStream>();var executor=Executors.newVirtualThreadPerTaskExecutor();
+        var outputCreated=new java.util.concurrent.atomic.AtomicBoolean();
         Future<byte[]> pending=executor.submit(()->{
             var response=http.send(builder.build(),HttpResponse.BodyHandlers.ofInputStream());
             try(InputStream in=response.body()) {
@@ -86,6 +124,7 @@ class NoedaeriClient {
                 if(response.headers().firstValueAsLong("Content-Length").orElse(0)>limit)throw new IOException("Artifact limit exceeded");
                 var bytes=new ByteArrayOutputStream();
                 try(OutputStream out=output==null?bytes:Files.newOutputStream(output,StandardOpenOption.CREATE_NEW)) {
+                    if(output!=null)outputCreated.set(true);
                     long total=0;byte[] buffer=new byte[64*1024];int count;
                     while((count=in.read(buffer))!=-1){total+=count;if(total>limit)throw new IOException("Artifact limit exceeded");out.write(buffer,0,count);}
                 }
@@ -93,11 +132,14 @@ class NoedaeriClient {
                 return bytes.toByteArray();
             }
         });
-        try{return pending.get(125,TimeUnit.SECONDS);}
+        boolean completed=false;
+        try{byte[] value=pending.get(125,TimeUnit.SECONDS);completed=true;return value;}
         catch(ExecutionException e){if(e.getCause() instanceof Exception cause)throw cause;throw new IOException("Remote request failed");}
         finally {
             InputStream in=stream.get();if(in!=null)try{in.close();}catch(IOException ignored){}
             pending.cancel(true);executor.shutdownNow();
+            executor.awaitTermination(5,TimeUnit.SECONDS);
+            if(!completed&&output!=null&&outputCreated.get())Files.deleteIfExists(output);
         }
     }
     private static String path(UUID id){return "/api/v1/jobs/"+id;}

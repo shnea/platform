@@ -34,12 +34,13 @@ class FileVideos {
     Status status(UUID id) {
         var rows=db.query("SELECT * FROM file_videos WHERE file_id=?",(r,n)->new Status(r.getString("state"),r.getInt("progress"),
             (Double)r.getObject("duration_seconds"),Arrays.asList(json.readValue(r.getString("variants"),Variant[].class)),r.getString("error_code"),r.getString("subtitles")==null?null:json.readValue(r.getString("subtitles"),Subtitles.class)),id);
+        if(rows.isEmpty()&&!db.queryForObject("SELECT automatic_derivatives FROM files WHERE id=?",Boolean.class,id))return new Status("UNSUPPORTED",0,null,List.of(),null,null);
         return rows.isEmpty()?new Status("QUEUED",0,null,List.of(),null,null):rows.getFirst();
     }
     Status retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
             db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);var info=files.detail(id,context);
-            if(!candidate(info.originalName()))throw FileFailure.invalid();
+            if(!candidate(info.originalName())||!db.queryForObject("SELECT automatic_derivatives FROM files WHERE id=?",Boolean.class,id))throw FileFailure.invalid();
             db.update("INSERT INTO file_videos(file_id) VALUES (?) ON CONFLICT DO NOTHING",id);
             if(db.update("UPDATE file_videos SET state='QUEUED',attempts=0,error_code=NULL,progress=0 WHERE file_id=? AND state='FAILED'",id)>0)
                 db.update("INSERT INTO file_audit(file_id,environment_id,actor,action) VALUES (?,?,?,'file.video.retry')",id,context.environmentId(),context.actor());
@@ -59,7 +60,7 @@ class FileVideos {
                     recover();
                     db.update("""
                         INSERT INTO file_videos(file_id) SELECT f.id FROM files f LEFT JOIN file_videos v ON v.file_id=f.id
-                        WHERE f.state='READY' AND v.file_id IS NULL AND lower(f.original_name) ~ '\\.(mp4|m4v|mov|mkv|webm)$'
+                        WHERE f.state='READY' AND f.automatic_derivatives AND v.file_id IS NULL AND lower(f.original_name) ~ '\\.(mp4|m4v|mov|mkv|webm)$'
                         ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING
                         """);
                     UUID id=tx.execute(s->{

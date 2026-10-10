@@ -18,9 +18,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AdminSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class,RetentionController.class,FileViewsController.class,FileVideosController.class})
+    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class,RetentionController.class,FileViewsController.class,FileVideosController.class,AdminNoedaeriController.class})
     static class Config {
         @Bean FileAccess access() { return mock(FileAccess.class); }
+        @Bean NoedaeriTasks tasks(){return mock(NoedaeriTasks.class);}
         @Bean FilesService files() { return mock(FilesService.class); }
         @Bean DownloadTickets tickets() { return mock(DownloadTickets.class); }
         @Bean RetentionService retention() { return mock(RetentionService.class); }
@@ -51,6 +52,11 @@ class AdminSecurityTest {
                 mvc.perform(request.header("X-Platform-Key","pk_not-an-admin")).andExpect(status().isUnauthorized());
                 mvc.perform(request.header("Authorization","Bearer member")).andExpect(status().isForbidden());
             }
+            for(var request:List.of(get(root+"/noedaeri/services"),post(root+"/noedaeri/uploads"),get(root+"/noedaeri/tasks"),post(root+"/noedaeri/tasks"),get(root+"/noedaeri/tasks/"+id),post(root+"/noedaeri/tasks/"+id+"/cancel"),post(root+"/noedaeri/tasks/"+id+"/recover"),post(root+"/noedaeri/tasks/"+id+"/artifacts/transcript.json/ticket"))) {
+                mvc.perform(request.header("X-Platform-Key","pk_not-an-admin")).andExpect(status().isUnauthorized());
+                mvc.perform(request.header("Authorization","Bearer member")).andExpect(status().isForbidden());
+            }
+            verifyNoInteractions(context.getBean(NoedaeriTasks.class));
             mvc.perform(get(root).header("Authorization","Bearer invalid")).andExpect(status().isUnauthorized());
             verifyNoInteractions(context.getBean(FileAccess.class),context.getBean(FilesService.class),context.getBean(DownloadTickets.class),context.getBean(RetentionService.class),context.getBean(FileViews.class));
             mvc.perform(get(root).header("Authorization","Bearer admin")).andExpect(status().isOk());

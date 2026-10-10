@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {activeJob,initialFields,menuGroups,testRequest} from '../src/features/noedaeri/test-contract.ts';
-test('15개 기능의 실제 연결·후속 메뉴를 구분한다',()=>{const items=menuGroups.flatMap(group=>[...group.items]);assert.equal(items.length,15);assert.equal(new Set(items.map(item=>item.id)).size,15);assert.equal(items.filter(item=>item.ready).length,8);assert.equal(items.find(item=>item.id==='tts')?.ready,false);});
+test('15개 기능의 실제 연결·후속 메뉴를 구분한다',()=>{const items=menuGroups.flatMap(group=>[...group.items]);assert.equal(items.length,15);assert.equal(new Set(items.map(item=>item.id)).size,15);assert.equal(items.filter(item=>item.ready).length,14);assert.equal(items.find(item=>item.id==='tts')?.ready,true);assert.equal(items.find(item=>item.id==='voices')?.ready,false);});
 test('AI·번역은 동일 요청 ID와 내용으로 재확인하고 프로젝트 식별은 서버가 지정한다',()=>{
  const fields={...initialFields,prompt:'질문',inputJson:'{"collection":"portfolio"}'};
  const request=testRequest('jobs',fields,'stable-id');assert.deepEqual(request,testRequest('jobs',fields,'stable-id'));
