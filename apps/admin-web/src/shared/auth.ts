@@ -22,6 +22,7 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  headers?: Record<string,string>,
 ): Promise<T> {
   try {
     await auth.updateToken(30);
@@ -33,6 +34,7 @@ export async function api<T>(
   const response = await fetch("/api/v1/admin" + path, {
     method,
     headers: {
+      ...headers,
       Authorization: "Bearer " + auth.token,
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },

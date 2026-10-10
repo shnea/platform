@@ -181,6 +181,15 @@ class ProjectService {
         });
     }
 
+    Context administratorAi(UUID id) {
+        Environment env = findEnvironment(id);
+        requireActive(project(env.projectId(), false));
+        requireReady(env);
+        return new Context(env.projectId(), env.id(), env.kind(), identity.issuer(env.realm()), List.of());
+    }
+
+    void auditAi(UUID environment, String actor, String action) { audit(actor, action, environment); }
+
     Context context(String key, String requiredScope) {
         if (key == null || key.length() > 150 || !key.startsWith("pk_")) throw unauthorized();
         UUID keyId;

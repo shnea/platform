@@ -2,6 +2,17 @@
 
 ## 현재 단계
 
+### 뇌대리 테스트 탭 1차·영상 자막 선택 누락 수정 (2026-10-10)
+
+- **사용자 범위:** 별도 뇌대리 테스트 탭을 승인했고 이어 HLS 링크 용도/스타일·자막 및 언어 셀렉트 불일치·자막 미표시를 보고했다. 사용자가 해당 영상의 `subtitles: null`을 확인했다. 특정 원격 작업의 요청 본문·실제 영상 재생은 이번 코드 검증과 구분한다.
+- **자막 수정:** 파일을 추가할 때 고정되던 자막 선택 때문에 추가 뒤 모드·언어·ITN을 바꾸면 대기 파일에 반영되지 않는 경로를 수정했다. 아직 시작하지 않은 영상에만 즉시 반영하고 원본 확인 중·해시가 있는 응답 유실 가능 항목·재개/종료 세션은 유지한다. 각 영상에 자막 없음/선택을 항상 표시하며 두 셀렉트·ITN을 기존 파일 폼 스타일로 통일했다. 이미 READY인 영상을 재실행하거나 사용자 데이터를 변경하지 않았다.
+- **HLS 화면:** m3u8 플레이어 연동용 재생 목록과 HTML 영상 재생 화면을 구분했다. HLS는 다른 URL과 같은 목록/복사 UI에 넣고 직접 웹페이지 열기를 제공하지 않는다. 브라우저 재생에는 viewerUrl을 안내하며 HLS와 원본/뷰어의 서로 다른 만료를 적용한다. 자막 결과가 없는 기존 영상에 새 선택을 자동 적용하지 않는다는 안내를 추가했다.
+- **테스트 탭:** 프로젝트·환경 공통 선택 안에서 개요와 5개 그룹/15개 메뉴·실행 이력·사용량을 제공한다. 이미지 처리·영상 처리·문장 번역·AI 작업·Raya·임베딩·문서 색인·벡터 검색 8개는 기존 어댑터로 실제 실행한다. 이미지/영상은 제한한 입력 형식과 비공개/tmp 기본 업로드·기존 상세/보기·영속 수령을 재사용하며 목록에 환경의 기존 파일도 포함됨을 안내한다. 독립 PDF/OCR/STT/TTS/목소리/영상 자막/단독 썸네일 7개는 연결 예정으로 표시한다. 통합 영상의 sidecar/burned는 영상 처리에서 선택할 수 있다. 독립 작업 전체 구현 완료로 표시하지 않는다.
+- **안전/계약:** 관리자 JWT 전용 12개 경로(14개 동작)를 기존 AI 서비스에 연결하고 프로젝트 활성/환경 READY·서버 고정 범위·본문 상한·필터 허용 목록을 유지한다. 서버 키 발급/권한 확대 없이 실행·취소·색인 변경 감사를 남긴다. 원본 입력은 화면 메모리에만 두고 같은 ID/내용 확인·새 실행을 구분한다. 상태 GET만 5초 간격으로 최대 15분 조회하며 실패 때 자동 모델 재호출하지 않는다. 전체 교체/삭제는 UI 확인과 대상 컬렉션 헤더를 요구하고 100문서/1MiB·Qdrant 분리 계약을 유지한다. AI 결과 조회는 receipt를 보내지 않으며 결과 만료/수령됨을 구분한다. OpenAPI·Nginx 2MiB/120초·개발자 센터·핵심/상세 요구사항을 갱신했다.
+- **검증:** `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:noedaeri-ui-check .`의 TypeScript/Vite·에디터/공개 자료 빌드와 같은 이미지 `npm test` 14개 통과. 일회용 DB에서 `docker compose --env-file .env.example -p platform-subtitle-v28-checks -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check`로 소스를 임시 폴더에 복사하고 `gradle --no-daemon :services:project-service:test --tests "*Ai*" --tests "*OpenApiTest" --tests "*ExternalServicesDatabaseTest" --rerun-tasks` 실행, JUnit45개 중43통과·실패/오류0·기존 선택적 실제 서버 검사2개 건너뜀. JWT/서버 키/일반 회원 차단·환경 활성/READY/존재 검사·위조 필터·본문 상한·교체 확인·Spring 초기화·모든 공개 경로 일치를 포함한다. 최초 검사에서 테스트의 자격정보 테이블 오기와 아직 미반영된 OpenAPI를 확인해 수정 후 통과했다. 최초 UI 빌드의 unknown 조건 타입도 수정했다. `node scripts/check-ai-integration.mjs`, `python -X utf8 scripts/check-ci.py`, `python -X utf8 scripts/check-admin-security.py`, 일회용 네트워크 없는 `nginx -t`, `git diff --check` 통과. 기존 npm high 취약점1개·큰 번들 경고는 관련 없는 의존성 수정 없이 유지했다.
+- **미검증/정리:** 실제 브라우저 표시·신규 음성 영상의 모든 burned 화질·실제 신규 관리자 AI 실행은 미검증이다. 플랫폼 주소만 대상으로 브라우저 도구를 두 번 시도했으나 런타임이 시작되지 않았다. 지정 영상의 설정만 개발 DB에서 읽기 전용 확인을 시도했으나 실행 중 개발 스키마에 v12 video_options 열이 없어 조회하지 못했고 DB·서비스를 변경하지 않았다. 해당 영상의 원격/운영 옵션을 읽었다고 보고하지 않는다. 격리 XML은 Git 제외 `output/job-checks/noedaeri-ui-focused-final`에 보존하며 일회용 DB/네트워크는 완료 후 같은 Compose의 down으로 정리한다. 기존 개발 서비스·파일·키·운영 환경은 유지한다.
+- **반영/다음:** 이전 [CI #18](https://github.com/shnea/platform/actions/runs/38008497274)의 verify·release·deploy 성공은 확인됐다. 이번 완료 단위는 검증 후 main 커밋·푸시하여 기존 CI/CD에 맡기며 실제 운영 반영은 별도 상태로 확인한다. 새 환경변수/키/웹훅 변경과 SSH 배포는 없다. 수정본 반영 뒤 새 영상 업로드에서 파일별 burned/언어 선택과 실제 자막 표시를 검수하고 독립 7개 작업 어댑터는 다음 완료 단위로 연결한다.
+
 ### 뇌대리 v28: 영상 통합 처리 선택 자막 연결 (2026-10-10)
 
 - **최신 운영 지시:** main에 커밋·푸시하고 기존 CI/CD의 verify→release→deploy에 배포를 맡긴다. 앞선 배포 보류 지시를 이번 완료 단위부터 대체한다. 요청별 자막 옵션에는 새 운영 환경변수·키·웹훅 변경이 없어 `.env.dev`·`.env.prod`를 유지하고 SSH 배포·운영 재시작·키 교체를 하지 않는다. 아래 v26의 배포 보류·자막 후속 지침 안내는 당시 기록이다.

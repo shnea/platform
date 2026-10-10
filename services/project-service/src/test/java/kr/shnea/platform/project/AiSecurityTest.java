@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AiSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, AiController.class, AiJobController.class, AiIndexingController.class, AiCompletion.class})
+    @Import({SecurityConfig.class, ApiProblems.class, ApiErrors.class, AiController.class, AiJobController.class, AiIndexingController.class, AiCompletion.class, AdminAiController.class})
     static class Config {
         @Bean ProjectService projects() { return mock(ProjectService.class); }
         @Bean AiGateway ai() { return mock(AiGateway.class); }
@@ -29,6 +29,39 @@ class AiSecurityTest {
         @Bean JwtDecoder decoder() {
             return token -> Jwt.withTokenValue(token).header("alg", "RS256").subject("user")
                 .claim("realm_access", Map.of("roles", List.of(token.equals("admin") ? "platform-admin" : "reader"))).build();
+        }
+    }
+    @Test void adminTestsRequireAdminJwtUseSelectedScopeAndConfirmDestructiveIndexing() throws Exception {
+        try(var context=new AnnotationConfigWebApplicationContext()) {
+            context.setServletContext(new MockServletContext());context.register(Config.class);context.refresh();
+            var mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean(kr.shnea.platform.http.RequestTrace.class),context.getBean("springSecurityFilterChain",Filter.class)).build();
+            var projects=context.getBean(ProjectService.class);var jobs=context.getBean(AiJobs.class);var indexing=context.getBean(AiIndexing.class);var ai=context.getBean(AiGateway.class);
+            var scope=new ProjectService.Context(UUID.randomUUID(),UUID.randomUUID(),"DEV","https://identity.example",List.of());
+            String root="/api/v1/admin/environments/"+scope.environmentId()+"/ai",id=UUID.randomUUID().toString();
+            for(String path:List.of("/raya/route","/embeddings","/jobs","/translations","/indexing","/indexing/search","/jobs/"+id+"/cancel","/indexing/"+id+"/cancel")) {
+                mvc.perform(post(root+path).header("X-Platform-Key","not-admin").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+                mvc.perform(post(root+path).header("Authorization","Bearer reader").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+            }
+            for(String path:List.of("/jobs","/jobs/"+id,"/usage","/indexing","/indexing/collections","/indexing/"+id)) {
+                mvc.perform(get(root+path)).andExpect(status().isUnauthorized());
+                mvc.perform(get(root+path).header("Authorization","Bearer reader")).andExpect(status().isForbidden());
+            }
+            verifyNoInteractions(projects,jobs,indexing,ai);
+            when(projects.administratorAi(scope.environmentId())).thenReturn(scope);
+            when(jobs.submit(eq(scope),any())).thenReturn(new JsonMapper().readTree("{\"id\":\""+id+"\",\"status\":\"running\"}"));
+            mvc.perform(post(root+"/jobs").header("Authorization","Bearer admin").contentType("application/json").content("{}")).andExpect(status().isAccepted()).andExpect(header().string("Cache-Control","no-store"));
+            verify(jobs).submit(eq(scope),any());verify(projects).auditAi(scope.environmentId(),"user","noedaeri.ai.submitted");
+            mvc.perform(get(root+"/jobs").header("Authorization","Bearer admin").param("project","other")).andExpect(status().isUnprocessableEntity());
+            verify(jobs,never()).list(any(),any(),anyInt());
+            mvc.perform(post(root+"/raya/route").header("Authorization","Bearer admin").contentType("application/json").content("x".repeat(AiGateway.ROUTE_LIMIT+1))).andExpect(status().isPayloadTooLarge());
+            verifyNoInteractions(ai);
+            when(ai.parse(any(),eq(AiGateway.INDEX_LIMIT))).thenReturn(new JsonMapper().readTree("{\"mode\":\"replace_all\",\"collection\":\"portfolio\",\"documents\":[]}"));
+            mvc.perform(post(root+"/indexing").header("Authorization","Bearer admin").contentType("application/json").content("{}")).andExpect(status().isUnprocessableEntity());
+            mvc.perform(post(root+"/indexing").header("Authorization","Bearer admin").header("X-Confirm-Collection","other").contentType("application/json").content("{}")).andExpect(status().isUnprocessableEntity());
+            verifyNoInteractions(indexing);
+            when(indexing.submit(eq(scope),any())).thenReturn(new JsonMapper().readTree("{\"status\":\"pending\"}"));
+            mvc.perform(post(root+"/indexing").header("Authorization","Bearer admin").header("X-Confirm-Collection","portfolio").contentType("application/json").content("{}")).andExpect(status().isAccepted());
+            verify(indexing).submit(eq(scope),any());
         }
     }
     @Test void keysWorkWithoutUserLoginAndBearerCannotReplaceFeatureScopes() throws Exception {

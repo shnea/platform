@@ -27,13 +27,15 @@ import { ProjectIntegration } from "../features/projects/ProjectIntegration";
 import { DeveloperCenter } from "../features/developer/DeveloperCenter";
 import { EditorEntry } from "../features/editor/EditorEntry";
 import { FileWorkspace } from "../features/files/FileWorkspace";
+import { NoedaeriWorkspace } from "../features/noedaeri/NoedaeriWorkspace";
 
-type View = "projects" | "files" | "jobs" | "logs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
+type View = "projects" | "files" | "noedaeri" | "jobs" | "logs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
 type ProjectSection = "overview" | "integration" | "auth" | "members" | "keys" | "test" | "settings";
-const viewIcons = {projects:'folder',files:'file',editor:'pencil',jobs:'list-checks',logs:'search',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
+const viewIcons = {projects:'folder',files:'file',noedaeri:'activity',editor:'pencil',jobs:'list-checks',logs:'search',monitoring:'activity',alerts:'bell',developer:'code-xml',audit:'shield-check'} as const;
 const views: { value: View; label: string; description: string }[] = [
   { value: "projects", label: "프로젝트", description: "프로젝트를 선택해 환경과 서비스 접근을 관리하세요." },
   { value: "files", label: "파일", description: "파일을 올리고 썸네일·미리보기·URL과 보존 정책을 관리하세요." },
+  { value: "noedaeri", label: "뇌대리", description: "현재 환경의 이미지·영상·AI·번역·검색 연동을 직접 검수하세요." },
   { value: "editor", label: "에디터", description: "문서를 직접 편집하고 읽기 화면과 연동 데이터를 확인하세요." },
   { value: "jobs", label: "비동기 작업", description: "프로젝트와 환경을 선택해 작업 상태와 실행 이력을 확인하세요." },
   { value: "logs", label: "로그", description: "프로젝트 서버가 전송한 로그를 검색하고 같은 요청의 흐름을 확인하세요." },
@@ -729,6 +731,7 @@ function Workspace() {
                     {tab === "files" && project.filesEnabled && <FileWorkspace key={`files:${env.id}:${refresh}`} environmentId={env.id}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"}
                       onBusyChange={setBusy} />}
+                    {tab === "noedaeri" && <NoedaeriWorkspace key={`noedaeri:${env.id}`} environmentId={env.id} environmentLabel={`${project.name} / ${env.code} (${env.kind})`} available={env.state === "READY" && project.status === "ACTIVE"} filesEnabled={project.filesEnabled} onBusyChange={setBusy} />}
                     {tab === "jobs" && <>
                     <JobWorkspace key={`jobs:${env.id}`} environmentId={env.id} initialState={jobInitialState}
                       environmentLabel={`${project.name} / ${env.code} (${env.kind})`}

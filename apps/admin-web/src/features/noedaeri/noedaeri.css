@@ -1,0 +1,14 @@
+.noedaeri-layout { display: grid; grid-template-columns: 190px minmax(0,1fr); gap: 32px; margin-top: 24px; }
+.noedaeri-nav { display: flex; flex-direction: column; gap: 20px; }
+.noedaeri-nav h3 { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.noedaeri-nav button { display: flex; width: 100%; justify-content: space-between; gap: 8px; margin-bottom: 4px; min-height: 44px; }
+.noedaeri-nav button[aria-current="page"] { color: var(--accent); border-color: var(--accent); background: var(--raised); }
+.noedaeri-content { min-width: 0; }
+.noedaeri-form { max-width: 800px; margin-block: 24px; }
+.noedaeri-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.noedaeri-result { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 16px; }
+.noedaeri-result pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 500px; overflow: auto; background: var(--bg); padding: 16px; }
+.noedaeri-result details { margin-block: 24px; }
+.noedaeri-result .section-line { flex-wrap: wrap; overflow-wrap: anywhere; }
+.noedaeri-table { overflow: auto; }
+@media(max-width:900px) { .noedaeri-layout { grid-template-columns: minmax(0,1fr); } .noedaeri-nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } }

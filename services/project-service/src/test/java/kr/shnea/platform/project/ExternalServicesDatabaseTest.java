@@ -38,6 +38,13 @@ class ExternalServicesDatabaseTest {
  ExternalJobs.Job enqueue(int max){return jobs.enqueue(env,request(UUID.randomUUID(),max),"test","0123456789abcdef0123456789abcdef");}
  void due(UUID id){db.update("UPDATE external_jobs SET next_run_at=now()-interval '1 second' WHERE id=?",id);}
  void fails(Runnable operation,ApiCode expected){assertThatThrownBy(operation::run).isInstanceOfSatisfying(ApiCode.Failure.class,error->assertThat(error.code).isEqualTo(expected));}
+ @Test void administratorAiContextIsBoundToAnActiveReadyEnvironmentWithoutIssuingKeys() {
+  var context=projects.administratorAi(env);assertThat(context.environmentId()).isEqualTo(env);assertThat(context.projectId()).isEqualTo(db.queryForObject("SELECT project_id FROM environments WHERE id=?",UUID.class,env));assertThat(context.scopes()).isEmpty();
+  db.update("UPDATE environments SET state='PENDING' WHERE id=?",env);fails(()->projects.administratorAi(env),ApiCode.ENVIRONMENT_NOT_READY);
+  db.update("UPDATE environments SET state='READY' WHERE id=?",env);db.update("UPDATE projects SET status='SUSPENDED' WHERE id=?",context.projectId());fails(()->projects.administratorAi(env),ApiCode.PROJECT_SUSPENDED);
+  assertThatThrownBy(()->projects.administratorAi(UUID.randomUUID())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+  assertThat(db.queryForObject("SELECT count(*) FROM service_credentials",Integer.class)).isZero();
+ }
  @Test void allAdvertisedScopesPassRequestValidationAndIssueWithoutWideningPermissions() {
   db.update("UPDATE projects SET files_enabled=true");
   try(var factory=jakarta.validation.Validation.buildDefaultValidatorFactory()) {

@@ -11,6 +11,1102 @@
     }
   ],
   "paths": {
+    "/api/v1/admin/environments/{environmentId}/ai/indexing/search": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_indexing_search",
+        "summary": "관리자 테스트: 문서 코사인 유사도 검색",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:search"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "collection": {
+                    "type": "string",
+                    "default": "portfolio"
+                  },
+                  "query": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 5
+                  },
+                  "min_similarity": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "현재 환경의 검색 결과"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. ",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/indexing/collections": {
+      "get": {
+        "operationId": "admin_get_api_v1_ai_indexing_collections",
+        "summary": "관리자 테스트: 현재 환경의 색인 컬렉션 통계",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "컬렉션·문서 수·추정 토큰"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. ",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/indexing/{id}/cancel": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_indexing_id_cancel",
+        "summary": "관리자 테스트: 대기 중 색인 작업 취소",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:write"
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "취소된 작업"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. "
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/indexing/{id}": {
+      "get": {
+        "operationId": "admin_get_api_v1_ai_indexing_id",
+        "summary": "관리자 테스트: 색인 작업 상태",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:read"
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "작업 상태와 보관 중인 결과 요약"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. "
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/indexing": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_indexing",
+        "summary": "관리자 테스트: 문서 색인 추가·전체 교체·삭제",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 키의 프로젝트·환경에 한정한다. replace_all은 요청의 최대 100문서로 컬렉션 전체를 원자적으로 교체하며 빈 documents는 전체 삭제한다. Qdrant 수동 예제와 별도인 PostgreSQL 색인이다.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "request_id",
+                  "mode",
+                  "documents"
+                ],
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "collection": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+                    "default": "portfolio"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "upsert",
+                      "replace_all",
+                      "delete"
+                    ]
+                  },
+                  "sync": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "documents": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "content"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 256
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        "content": {
+                          "type": "string",
+                          "maxLength": 16000
+                        },
+                        "metadata": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "delete_ids": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 256
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "완료 또는 기존 작업"
+          },
+          "202": {
+            "description": "대기·실행 중 접수. 모델 재호출 없이 상태를 조회한다."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Confirm-Collection",
+            "in": "header",
+            "description": "replace_all/delete는 대상 collection과 같은 값을 반드시 확인해 전달한다.",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "admin_get_api_v1_ai_indexing",
+        "summary": "관리자 테스트: 색인 작업 목록",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:index:read"
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "현재 환경의 작업 목록"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. "
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/usage": {
+      "get": {
+        "operationId": "admin_get_api_v1_ai_usage",
+        "summary": "관리자 테스트: 현재 환경의 AI 사용량 집계·기록",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 공급자/모델/작업별 집계와 최근 상세 기록. 플랫폼이 scope 고정. upstream_reported_unverified: 실제 토큰·최종 공급자 검수 전. 원격 보고값을 비용·가용 한도로 단정하지 않음.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:usage"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "blog.tags",
+                "blog.summary",
+                "portfolio.search",
+                "ui.render",
+                "comment.generate",
+                "document.analyze",
+                "code.analyze",
+                "chat.general",
+                "article.draft"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/translations": {
+      "post": {
+        "operationId": "admin_post__api_v1_translations",
+        "summary": "관리자 테스트: 문장 번역 비동기 접수",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:execute"
+        ],
+        "responses": {
+          "202": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 본문64KiB·text4000자·7언어. 프로젝트/환경은 현재 서버 키로 고정. 같은 request_id는 일반 AI jobs와 동일한 원장을 사용하며 모델을 다시 호출하지 않음. notify 기본false.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiTranslationInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/jobs/{id}/cancel": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_jobs_id_cancel",
+        "summary": "관리자 테스트: 현재 환경의 AI 작업 취소 요청",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 소유 범위 조회 후 취소. 실행 프로세스 종료 보장이 없으며 이후 실제 상태를 확인. 모델을 다시 호출하지 않음.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:cancel"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJobCancellation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/jobs/{id}": {
+      "get": {
+        "operationId": "admin_get_api_v1_ai_jobs_id",
+        "summary": "관리자 테스트: 현재 환경의 AI 작업 상태·결과",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 다른 환경은404. expires_at이 지나면result=null·result_expired=true로 결과 재사용을 막으며 이력은 유지.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/jobs": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_jobs",
+        "summary": "관리자 테스트: 블로그·댓글·초안 및 공통 RAG AI 작업 접수",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 본문2MiB. 10종 작업·번역4000자, 나머지prompt200000자. 키의 프로젝트/환경 고정. 동일 request_id·내용은 재조회, 다른 내용409. sync=false는pending/running이며 notify 변경은 새 내용으로 판단. 원문/결과는 플랫폼 DB에 저장하지 않음. 자동 재실행 없음.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:execute"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "대기·실행 중 접수. 모델 재호출 없이 상태를 조회한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiJobInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "admin_get_api_v1_ai_jobs",
+        "summary": "관리자 테스트: 현재 환경의 AI 작업 목록",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. project/environment 외부 필터 금지. 키의 현재 환경만 조회. 최근100건까지·페이지네이션 없음.",
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:jobs:read"
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiJobList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "succeeded",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/embeddings": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_embeddings",
+        "summary": "관리자 테스트: 공통 단일·배치 텍스트 임베딩",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 플랫폼 본문 최대 1MiB, 텍스트당 16000자, 1~100건. index로 입력에 매핑. 모델·차원을 검색/인덱싱에 동일 적용하고 기존 벡터를 혼합하지 않는다. 서버가 원문·벡터를 저장하지 않으며 usage는 공급자 보고값이다.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiEmbeddingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:embed"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiEmbeddingInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/environments/{environmentId}/ai/raya/route": {
+      "post": {
+        "operationId": "admin_post_api_v1_ai_raya_route",
+        "summary": "관리자 테스트: Raya 난이도 판단",
+        "description": "플랫폼 관리자 JWT 전용. 사용 중인 프로젝트·반영 완료 환경을 확인하고 선택한 프로젝트·환경 범위로 고정한다. 브라우저·서버 API 키·뇌대리 키를 서로 대체하지 않는다. 본문 최대 64KiB. 동기 텍스트 판단이며 이미지 분석·AI 답변·웹훅·저장은 수행하지 않는다. 실패 시 자동 재시도·임의 등급 우회 없음.",
+        "responses": {
+          "200": {
+            "description": "성공 · Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiRouteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "504": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "adminBearer": []
+          }
+        ],
+        "x-required-scopes": [
+          "ai:route"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiRouteInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
     "/api/v1/config": {
       "get": {
         "operationId": "get_api_v1_config",
