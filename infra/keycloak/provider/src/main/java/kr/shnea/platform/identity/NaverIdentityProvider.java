@@ -35,6 +35,12 @@ public final class NaverIdentityProvider extends AbstractOAuth2IdentityProvider 
         SocialNickname.requireUserChoice(context);
     }
 
+    @Override public void updateBrokeredUser(KeycloakSession session, org.keycloak.models.RealmModel realm,
+            org.keycloak.models.UserModel user, BrokeredIdentityContext context) {
+        super.updateBrokeredUser(session, realm, user, context);
+        SocialEmail.verify(user, context);
+    }
+
     @Override public Response performLogin(AuthenticationRequest request) {
         return SharedSocialCallback.begin(session, getConfig(), "naver", request, super.performLogin(request));
     }

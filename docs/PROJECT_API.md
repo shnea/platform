@@ -267,7 +267,7 @@ docker stop shnea-platform-dev-failure-check
 - 기존 관리 대상 `oidc`·`google` 설정도 읽을 수 있다. 저장 시 같은 별칭을 유지하면서 `platform-kakao`·`platform-google`로 전환하고 공통 모드를 적용한다. 기존 회원 연결을 삭제하거나 비밀키를 API로 조회하지 않는다.
 - 감사 이벤트에는 제공자·환경만 기록하며 자격증명은 기록하지 않는다. 콜백 검증·운영 적용은 [공통 소셜 로그인](SOCIAL_LOGIN.md)을 참고한다.
 
-Keycloak의 기본 `first broker login`, `trustEmail=false`, `storeToken=false`를 유지한다. 이메일만으로 기존 계정을 자동 연결하지 않는다. 연결 서비스는 원래 realm의 공개 클라이언트 `app`과 Authorization Code + PKCE(S256)를 사용하며, `kc_idp_hint=platform-kakao`처럼 제공자 별칭을 지정할 수 있다. 서비스 복귀 주소는 환경의 `redirectUris`에 별도 등록한다.
+Keycloak의 기본 `first broker login`, `storeToken=false`를 유지하고 소셜 설정 저장 시 `trustEmail=true`를 적용한다. 정상 구글·카카오·네이버 인증 뒤 제공자 이메일과 로컬 이메일이 일치하면 추가 이메일 인증을 생략한다. 기존 `trustEmail=false` 플랫폼 어댑터/미인증 소셜 회원도 다음 소셜 로그인에서 처리하며 전체 회원을 일괄 인증하지 않는다. 제공자 이메일 누락·다른 로컬 이메일·프로필 확인에서 직접 입력/변경한 이메일은 자동 인증하지 않고, 일반 가입·로그인의 필수 인증과 다른 필수 작업도 유지한다. 이메일만으로 기존 계정을 자동 연결하지 않는다. 연결 서비스는 원래 realm의 공개 클라이언트 `app`과 Authorization Code + PKCE(S256)를 사용하며, `kc_idp_hint=platform-kakao`처럼 제공자 별칭을 지정할 수 있다. 서비스 복귀 주소는 환경의 `redirectUris`에 별도 등록한다.
 
 로컬 설정 검증 명령(비활성 제공자와 가짜 전환 설정만 사용, 외부 소셜 로그인 없음):
 

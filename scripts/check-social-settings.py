@@ -82,7 +82,7 @@ instances = identity+'/admin/realms/'+env['realm']+'/identity-provider/instances
 for item in items:
     stored = request('GET', instances+'/'+item['alias'], token=provisioner)
     assert stored['providerId'] == 'platform-'+item['code']
-    assert not stored['enabled'] and not stored['trustEmail'] and not stored['storeToken']
+    assert not stored['enabled'] and stored['trustEmail'] and not stored['storeToken']
     assert stored['firstBrokerLoginFlowAlias'] == 'first broker login'
     assert stored['config']['platform.environmentId'] == env['id']
     assert not stored['config'].get('clientSecret') and not stored['config'].get('clientId')

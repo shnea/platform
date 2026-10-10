@@ -167,8 +167,9 @@ export function AuthenticationPolicyPanel({
                   available={policy.emailActionsAvailable}
                 />
                 <p className="hint">
-                  켜면 인증되지 않은 기존 계정도 다음 로그인에서 이메일 인증을
-                  요구받을 수 있습니다.
+                  일반 가입·로그인에서는 인증되지 않은 기존 계정도 이메일 인증을
+                  요구받을 수 있습니다. 소셜 로그인으로 전달된 이메일은 추가 인증을
+                  생략하며, 직접 입력하거나 변경한 이메일은 인증이 필요합니다.
                 </p>
                 <EmailOption
                   name="resetPasswordAllowed"

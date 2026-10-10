@@ -1,5 +1,13 @@
 # 작업 상태와 다음 작업
 
+### 소셜 로그인 이메일 추가 인증 생략 (2026-10-11)
+
+- **사용자 확정/완료:** 이메일 인증 필수 설정은 일반 가입·로그인에 유지하고 구글·카카오·네이버 소셜 인증으로 전달된 이메일의 추가 인증을 생략한다. 정상 브로커 인증/계정 연결 이후 이메일이 일치하면 인증 처리하며 `VERIFY_EMAIL`만 사용자/인증 세션에서 제거한다. 다른 필수 작업·닉네임 확인·기존 계정 연결 확인·프로젝트별 분리는 유지한다. 제공자 이메일 누락·로컬 이메일 불일치·사용자의 프로필 이메일 입력/변경은 자동 인증하지 않는다.
+- **기존 설정/계정:** 소셜 설정 저장은 `trustEmail=true`, `storeToken=false`, 기존 `first broker login`을 사용한다. 기존 `trustEmail=false` 플랫폼 어댑터도 다음 정상 소셜 로그인에서 처리하므로 운영 계정 전체를 일괄 인증하거나 realm의 이메일 인증 정책을 끄지 않는다. DB·운영 환경·공통 소셜 키·콜백 주소는 변경하지 않았다. 관리자 가입/복구 화면 설명과 핵심/상세 요구사항·관리자 지침·프로젝트 API 문서를 함께 갱신했다.
+- **인증 검증:** `docker build -f infra/keycloak/Dockerfile -t registry.shnea.kr/platform-keycloak:social-email-check infra/keycloak`에서 제공자 전체 JUnit15개 및 실제 Keycloak26.7.4 최적화/이미지 빌드 통과. 세 제공자의 신규/기존 미인증 이메일·이전 신뢰 설정·이메일 누락/변경 거절·다른 필수 작업 보존과 Keycloak 기본 VerifyEmail의 소셜 생략/일반 로그인 필수 분기를 확인했다. 기존 nonce·콜백·프로필·닉네임 검사도 통과했다. 최초 새 테스트는 모의 제공자 enabled 누락으로 실패했으며 fixture 수정 후 모두 통과했다.
+- **플랫폼/화면 검증:** `docker compose --env-file .env.example -p platform-social-email-check -f compose.test.yml --profile jobs run --rm --no-deps --entrypoint sh job-check`에서 임시 소스에 `gradle --no-daemon :services:project-service:test --tests "*IdentitySettingsTest"` 실행, 9개 통과. 소셜 설정을 저장해도 `verifyEmail=true`가 유지됨을 확인했다. `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:social-email-check .`의 TypeScript/Vite 빌드 및 같은 이미지의 `npm test` 단위23·모의 UI13개 통과. `python -X utf8 scripts/check-admin-security.py`, `python -X utf8 scripts/check-ci.py`, `git diff --check` 통과. 기존 번들/Keycloak SPI 경고는 유지한다.
+- **정리/다음:** XML은 Git 제외 `output/job-checks/social-email`에 보존했다. 이번 Compose는 DB 없이 검사 컨테이너만 실행했으며 `docker compose --env-file .env.example -p platform-social-email-check -f compose.test.yml --profile jobs down`으로 일회용 네트워크를 정리했다. 새 장기 프로세스·기존 서비스 재시작·운영 설정/계정 일괄 수정은 없다. 기존 원격 이력 확인 후 완료 단위를 main에 푸시하고 기존 CI/CD에 맡긴다. 실제 외부 소셜 로그인·운영 인증 메일 종단과 `check-social-settings.py`의 실서버 검수는 미실행이며, 배포 후 이메일 인증 필수 환경에서 소셜 신규/기존 로그인 및 일반 미인증 계정 요구를 확인한다.
+
 ### 사용량 보고 작업 검증 수정·신규 참조 음성 길이 제한 (2026-10-10)
 
 - **완료:** 사용량 응답/필터의 `task_type`을 AI 실행 작업 목록에서 분리해 공백 제외 1~80자 식별자로 검증한다. `indexing`·`vector_search` 및 이후 정상 보고도 전체 조회를 실패시키지 않는다. 필터는 URL 인코딩하며 종류 일치·프로젝트/환경·ID/시간·토큰 검증은 유지한다. 실행 가능한 AI 작업 10종은 확대하지 않았다. 관리자/호스트 OpenAPI·공개 계약 검사·핵심/상세 요구사항·AI 지침을 함께 갱신했다.

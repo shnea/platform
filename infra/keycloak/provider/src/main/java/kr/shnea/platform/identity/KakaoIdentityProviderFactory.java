@@ -28,6 +28,11 @@ public final class KakaoIdentityProviderFactory extends AbstractIdentityProvider
             super.preprocessFederatedIdentity(session, realm, context);
             SocialNickname.requireUserChoice(context);
         }
+        @Override public void updateBrokeredUser(KeycloakSession session, org.keycloak.models.RealmModel realm,
+                org.keycloak.models.UserModel user, org.keycloak.broker.provider.BrokeredIdentityContext context) {
+            super.updateBrokeredUser(session, realm, user, context);
+            SocialEmail.verify(user, context);
+        }
         @Override public Response performLogin(AuthenticationRequest request) {
             return SharedSocialCallback.begin(session, getConfig(), "kakao", request, super.performLogin(request));
         }

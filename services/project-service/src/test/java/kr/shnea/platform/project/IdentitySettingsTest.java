@@ -161,6 +161,7 @@ class IdentitySettingsTest {
     }
 
     @Test void commonCredentialsStayOutOfRealmSettingsAndApiResponses() {
+        realmSettings.put("verifyEmail", true);
         for (SocialProvider provider : SocialProvider.ALL) {
             var first = client.updateSocialProvider(env, provider,
                 new ProjectController.SocialSettings(true, "unconfigured"));
@@ -179,7 +180,8 @@ class IdentitySettingsTest {
                 new ProjectController.SocialSettings(true, first.revision())));
             assertFalse(json.writeValueAsString(providers).contains("clientSecret"));
             var stored = providers.get(provider.alias());
-            assertEquals(false, stored.get("trustEmail"));
+            assertEquals(true, stored.get("trustEmail"));
+            assertEquals(true, realmSettings.get("verifyEmail"));
             assertEquals(false, stored.get("storeToken"));
             assertEquals("first broker login", stored.get("firstBrokerLoginFlowAlias"));
         }

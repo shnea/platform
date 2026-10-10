@@ -233,7 +233,7 @@ class IdentityClient {
         representation.put("displayName", provider.label());
         representation.put("providerId", provider.providerId());
         representation.put("enabled", request.enabled());
-        representation.put("trustEmail", false);
+        representation.put("trustEmail", true);
         representation.put("storeToken", false);
         representation.put("addReadTokenRoleOnCreate", false);
         representation.put("linkOnly", false);
