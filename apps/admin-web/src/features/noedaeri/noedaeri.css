@@ -4,6 +4,20 @@
 .noedaeri-nav button { display: flex; width: 100%; justify-content: space-between; gap: 8px; margin-bottom: 4px; min-height: 44px; }
 .noedaeri-nav button[aria-current="page"] { color: var(--accent); border-color: var(--accent); background: var(--raised); }
 .noedaeri-content { min-width: 0; }
+.noedaeri-service { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+.noedaeri-sample { margin-block: 16px; }
+.noedaeri-form .actions { flex-wrap: wrap; margin-block: 16px; }
+.noedaeri-comparison { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.noedaeri-comparison article { min-width: 0; }
+.noedaeri-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 16px; }
+.noedaeri-metrics dt { color: var(--muted); font-size: 13px; }
+.noedaeri-metrics dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.noedaeri-probabilities label { display: grid; grid-template-columns: 32px minmax(60px,1fr) 90px; align-items: center; gap: 12px; }
+.noedaeri-probabilities meter { width: 100%; height: 20px; }
+.noedaeri-tags { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; list-style: none; }
+.noedaeri-tags li { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; }
+.noedaeri-search-result { margin-block: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.noedaeri-table th,.noedaeri-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
 .noedaeri-form { max-width: 800px; margin-block: 24px; }
 .noedaeri-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .noedaeri-result { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 16px; }
@@ -19,3 +33,4 @@
 .noedaeri-ocr-source img { display: block; width: auto; max-width: 100%; max-height: 600px; }
 .noedaeri-ocr-box { position: absolute; box-sizing: border-box; border: 2px solid var(--accent); background: color-mix(in srgb,var(--accent) 15%,transparent); pointer-events: none; }
 @media(max-width:900px) { .noedaeri-layout { grid-template-columns: minmax(0,1fr); } .noedaeri-nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } }
+@media(max-width:600px) { .noedaeri-comparison { grid-template-columns: minmax(0,1fr); } }

@@ -17,8 +17,8 @@ const message = (error: unknown) => error instanceof TypeError ? "서버에 연�
   : error instanceof DOMException ? "파일을 처리하지 못했습니다. 원본 파일을 다시 선택해 주세요."
   : error instanceof Error ? error.message : "처리하지 못했습니다. 상태를 확인하고 다시 시도해 주세요.";
 
-export function FileWorkspace({ environmentId, environmentLabel, available, onBusyChange, testKind }: {
-  environmentId: string; environmentLabel: string; available: boolean; onBusyChange: (value: boolean) => void;testKind?:'image'|'video';
+export function FileWorkspace({ environmentId, environmentLabel, available, onBusyChange, testKind,processingAvailable=true }: {
+  environmentId: string; environmentLabel: string; available: boolean; onBusyChange: (value: boolean) => void;testKind?:'image'|'video';processingAvailable?:boolean;
 }) {
   const [tab, setTab] = useState<"list" | "uploads" | "retention">(testKind?'uploads':'list');
   const [detail, setDetail] = useState<FileInfo | null>(null);
@@ -153,7 +153,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     patch(item.id, { stage: "done", file: undefined });
   }
   async function start(ids: string[]) {
-    if (running.current || !available) return;
+    if (running.current || !available || !processingAvailable) return;
     running.current = true; stopQueue.current = false;
     setError(""); setNotice("");
     try {
@@ -258,7 +258,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
         <p className="small muted">파일을 추가한 뒤에도 업로드 시작 전 대기 영상에는 자막 선택이 반영됩니다. 시작한 업로드·재개 세션·저장된 영상의 옵션은 변경하지 않습니다. 아래 파일별 선택을 확인한 뒤 시작하세요. 자동 생성 자막의 시각은 근삿값이며 자막 번역·MP4 출력은 제공하지 않습니다.</p>
         <div className="section-line"><h3>업로드 현황 <span className="muted">{items.length}개</span></h3><div className="actions">
           {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}><Icon name="pause"/>일시정지</button>
-            : <button disabled={mutating || !items.some(item => item.file && ["queued", "paused", "error"].includes(item.stage))}
+            : <button disabled={!available || !processingAvailable || mutating || !items.some(item => item.file && ["queued", "paused", "error"].includes(item.stage))}
                 onClick={() => void start(items.filter(item => item.file && ["queued", "paused", "error"].includes(item.stage)).map(item => item.id))}><Icon name="upload"/>업로드 시작</button>}
           <button className="quiet" disabled={busy || !items.some(item => ["done", "cancelled"].includes(item.stage))}
             onClick={() => updateItems(old => old.filter(item => !["done", "cancelled"].includes(item.stage)))}><Icon name="trash-2"/>완료·취소 항목 정리</button>
@@ -278,7 +278,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
                 onChange={event => { const file = event.target.files?.[0]; if (!file) return;
                   if (file.size !== item.size) patch(item.id, { error: "파일 크기가 다릅니다. 같은 원본을 선택해 주세요." });
                   else patch(item.id, { file, stage: "paused", error: undefined }); event.target.value = ""; }} /></label>}
-              {item.file && <button className="secondary" disabled={busy} onClick={() => void start([item.id])}><Icon name="upload"/>{item.stage === "error" ? "다시 시도" : "이어서 올리기"}</button>}
+              {item.file && <button className="secondary" disabled={busy||!available||!processingAvailable} onClick={() => void start([item.id])}><Icon name="upload"/>{item.stage === "error" ? "다시 시도" : "이어서 올리기"}</button>}
               <button className="quiet danger" disabled={busy} onClick={() => void cancel(item)}><Icon name="x"/>업로드 취소</button>
             </div>}
           </li>)}
