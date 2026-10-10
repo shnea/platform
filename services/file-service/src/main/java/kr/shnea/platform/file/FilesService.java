@@ -210,7 +210,7 @@ class FilesService {
     }
     UUID beginDownload(Row authorized) {
         UUID lease=tx.execute(status->{
-            RetentionService.lock(db,authorized.environment());Row current=get(authorized.id(),true);
+            RetentionService.lockTransfers(db,authorized.environment());Row current=get(authorized.id(),true);
             if(!current.state().equals("READY") || !current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
             requireResultSource(current.id());
             UUID key=UUID.randomUUID();db.update("INSERT INTO file_download_leases(id,file_id,expires_at) VALUES (?,?,now()+interval '2 minutes')",key,current.id());return key;
@@ -219,7 +219,7 @@ class FilesService {
     }
     void finishDownload(UUID lease,Row row,boolean success) {
         try {tx.executeWithoutResult(status->{
-            RetentionService.lock(db,row.environment());
+            RetentionService.lockTransfers(db,row.environment());
             if(success && db.queryForObject("SELECT count(*) FROM file_download_leases WHERE id=? AND expires_at>now()",Long.class,lease)==1)used(row.id());
             db.update("DELETE FROM file_download_leases WHERE id=?",lease);
         });} finally {downloads.remove(lease);}
@@ -253,6 +253,7 @@ class FilesService {
                         db.update("UPDATE files SET state='EXPIRED' WHERE id=?", id);
                         audit(id, new FileAccess.Context(row.project(), row.environment(), row.owner(), row.ownerKind()), "upload.expired");
                     } else if (!Set.of("CANCELLED", "EXPIRED", "DELETED").contains(row.state())) return;
+                    if(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE file_id=? AND expires_at>now()",Long.class,id)>0)return;
                     if(db.queryForObject("SELECT count(*) FROM file_videos WHERE file_id=? AND state='PROCESSING' AND heartbeat_at>now()-interval '2 minutes'",Long.class,id)>0)return;
                     store.delete(id);
                     db.update("UPDATE files SET purged_at=coalesce(purged_at,now()) WHERE id=?", id);

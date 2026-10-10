@@ -1,5 +1,14 @@
 # 작업 상태와 다음 작업
 
+### 파일 콘텐츠 전송 공유 잠금·물리 삭제 보호 (2026-10-11)
+
+- **사용자 승인/범위:** 기존 파일서비스보다 이미지 응답이 느린 원인을 읽기 전용 비교한 뒤, 환경 전체 독점 잠금으로 전송끼리 대기하는 부분의 개선을 승인받았다. 이번 완료 단위는 플랫폼의 공통 전송 잠금과 전송 중 삭제 보호만 변경한다. status의 문서 검사·응답 버퍼링·추가 메타데이터 조회, 플랫폼 반복 조회·이용 기록 쓰기·인증·캐시 정책은 유지한다.
+- **구현:** `beginDownload`·`finishDownload`가 같은 기존 advisory 키의 공유 잠금을 사용한다. 서로 다른 파일 전송의 시작·종료는 병렬로 진행하며 해당 파일 행 확인과 durable lease 등록·갱신·종료, 성공 시 이용 시각/유예 갱신을 유지한다. 보존 정책·유예 변경·자동 정리는 기존 독점 잠금으로 전송 등록/종료와의 충돌을 보호한다. 본문 전송 내내 잠금을 보유하지 않으며 같은 파일 변경 또는 정리/정책 변경 때문에 필요한 대기는 남는다. 잠금 5초 제한과 기존 DB 스키마는 유지한다.
+- **삭제 보호:** 논리 삭제는 즉시 신규 접근을 막는다. 물리 정리기는 해당 파일 행을 잠근 뒤 유효한 lease가 있으면 삭제를 미루고, 전송 종료/lease 만료 뒤 다음 회차에 정리한다. 성공 종료로 삭제 상태를 복원하거나 실패/HEAD의 이용 시각을 갱신하지 않는다. 기존 파일·원본/파생물·공개/보호 URL·키·운영 환경값은 변경하지 않았다.
+- **검증:** `docker compose --env-file .env.example -p platform-file-transfer-checks -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check`의 일회용 PostgreSQL과 읽기 전용 소스 마운트를 사용해 `/tmp/transfer-workspace`로 복사한 뒤 Gradle을 실행했다. `gradle --no-daemon :services:file-service:test --tests "*FilesDatabaseTest.waitingTransfer*" --tests "*FilesDatabaseTest.policyLock*" --tests "*FilesDatabaseTest.deletedFileIsPhysically*" --tests "*FilesDatabaseTest.expiredTransfer*" --tests "*FilesDatabaseTest.activeDownloads*" --rerun-tasks` 집중 6개 통과. `gradle --no-daemon :services:file-service:test --rerun-tasks` 전체 JUnit99개 중98개 통과·실패/오류0·기존 선택 검사1개 건너뜀. 같은 환경의 파일 A가 행 잠금에 막혀도 B의 등록/성공 종료가 먼저 완료됨, 독점 정책 잠금 중 등록/종료 대기, 자동 정리·수동 삭제 중 진행 전송 보존, 만료 lease 정리와 기존 권한/미리보기/HLS/뇌대리 계약을 검수했다.
+- **검사 보완/자료:** 최초 집중 검사에서 운영 코드 오류가 아니라 테스트의 `pg_stat_activity` 트랜잭션 통계 스냅샷 때문에 새 연결 대기를 관측하지 못했다. 실제 잠금 뷰 `pg_locks`·`pg_blocking_pids`로 수정 후 모두 통과했다. 결과 XML은 Git 제외 `output/job-checks/file-transfer-focused-final`·`output/job-checks/file-transfer-final`에 보존한다. 핵심/상세 요구사항과 파일 지침을 함께 갱신하고 `git diff --check`를 통과했다. 기존 deprecated/unchecked/JVM 경고는 관련 없는 변경 없이 유지한다.
+- **정리/반영/다음:** `docker compose --env-file .env.example -p platform-file-transfer-checks -f compose.test.yml --profile jobs down`으로 이번 일회용 DB/네트워크만 종료했다. 기존 개발/운영 컨테이너와 데이터는 유지하고 새 장기 프로세스·환경변수·마이그레이션·SSH 배포는 없다. 기존 원격 이력 확인 후 이 완료 단위를 main에 커밋·푸시해 기존 CI/CD에 맡긴다. 운영 배포 완료와 실제 이미지 지연 개선 수치는 아직 검증하지 않았다. 배포 후 같은 조건의 다중 이미지 TTFB·DB 잠금 대기를 대조하고 나머지 병목은 별도 승인 범위로 진행한다.
+
 ### 소셜 로그인 이메일 추가 인증 생략 (2026-10-11)
 
 - **사용자 확정/완료:** 이메일 인증 필수 설정은 일반 가입·로그인에 유지하고 구글·카카오·네이버 소셜 인증으로 전달된 이메일의 추가 인증을 생략한다. 정상 브로커 인증/계정 연결 이후 이메일이 일치하면 인증 처리하며 `VERIFY_EMAIL`만 사용자/인증 세션에서 제거한다. 다른 필수 작업·닉네임 확인·기존 계정 연결 확인·프로젝트별 분리는 유지한다. 제공자 이메일 누락·로컬 이메일 불일치·사용자의 프로필 이메일 입력/변경은 자동 인증하지 않는다.

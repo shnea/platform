@@ -670,6 +670,83 @@ class FilesDatabaseTest {
         r.sweepEnvironment(owner.environmentId());assertThat(r.candidates(owner,0)).isEmpty();
         assertThat(service.detail(id,owner).lastUsedAt()).isAfter(old);
     }
+    @Test void waitingTransferDoesNotBlockAnotherFileInTheSameEnvironment() throws Exception {
+        UUID first=readyOld(),second=readyOld();
+        var firstRow=service.downloadable(first);var secondRow=service.downloadable(second);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<UUID>>();
+            tx.executeWithoutResult(status->{
+                RetentionService.lockTransfers(db,owner.environmentId());
+                db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",first);
+                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
+                waiting.set(pool.submit(()->service.beginDownload(firstRow)));
+                awaitBlockedBy(backend);
+                var independent=pool.submit(()->{
+                    UUID lease=service.beginDownload(secondRow);
+                    service.finishDownload(lease,secondRow,true);return lease;
+                });
+                assertThatCode(()->independent.get(2,TimeUnit.SECONDS)).doesNotThrowAnyException();
+                assertThat(waiting.get().isDone()).isFalse();
+            });
+            UUID lease=waiting.get().get(2,TimeUnit.SECONDS);service.finishDownload(lease,firstRow,false);
+        }
+        assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases",Long.class)).isZero();
+        assertThat(service.detail(second,owner).lastUsedAt()).isAfter(secondRow.used());
+        assertThat(service.detail(first,owner).lastUsedAt()).isEqualTo(firstRow.used());
+    }
+    @Test void policyLockStillBlocksTransferRegistration() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        try(var pool=Executors.newSingleThreadExecutor()) {
+            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<UUID>>();
+            tx.executeWithoutResult(status->{
+                RetentionService.lock(db,owner.environmentId());
+                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
+                waiting.set(pool.submit(()->service.beginDownload(row)));
+                awaitBlockedBy(backend);
+                assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE file_id=?",Long.class,id)).isZero();
+            });
+            UUID lease=waiting.get().get(2,TimeUnit.SECONDS);service.finishDownload(lease,row,false);
+        }
+    }
+    @Test void policyLockStillBlocksTransferCompletion() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
+        try(var pool=Executors.newSingleThreadExecutor()) {
+            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<?>>();
+            tx.executeWithoutResult(status->{
+                RetentionService.lock(db,owner.environmentId());
+                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
+                waiting.set(pool.submit(()->service.finishDownload(lease,row,true)));
+                awaitBlockedBy(backend);
+                assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(row.used());
+                assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE id=?",Long.class,lease)).isEqualTo(1);
+            });
+            waiting.get().get(2,TimeUnit.SECONDS);
+        }
+        assertThat(service.detail(id,owner).lastUsedAt()).isAfter(row.used());
+        assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases",Long.class)).isZero();
+    }
+    @Test void deletedFileIsPhysicallyRetainedUntilActiveTransferFinishes() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
+        service.delete(id,owner);code("FILE_NOT_FOUND",()->service.downloadable(id));
+        service.cleanup();assertThat(Files.readAllBytes(store.path(id))).isEqualTo(bytes);
+        assertThat(db.queryForObject("SELECT purged_at FROM files WHERE id=?",java.sql.Timestamp.class,id)).isNull();
+        service.finishDownload(lease,row,true);service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
+        assertThat(db.queryForObject("SELECT last_used_at FROM files WHERE id=?",java.sql.Timestamp.class,id).toInstant()).isEqualTo(row.used());
+    }
+    @Test void expiredTransferDoesNotPreventPhysicalCleanup() {
+        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
+        service.delete(id,owner);db.update("UPDATE file_download_leases SET expires_at=now()-interval '1 second' WHERE id=?",lease);
+        service.heartbeatDownloads();service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
+        service.finishDownload(lease,row,false);
+    }
+    void awaitBlockedBy(int backend) {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);
+        while(System.nanoTime()<deadline) {
+            if(db.queryForObject("SELECT count(*) FROM pg_locks WHERE NOT granted AND ?=ANY(pg_blocking_pids(pid))",Integer.class,backend)>0)return;
+            try {Thread.sleep(10);}catch(InterruptedException error){Thread.currentThread().interrupt();throw new AssertionError(error);}
+        }
+        fail("Expected a transfer to wait for the transaction lock");
+    }
     @Test void expiryAuditFailureRollsBackAndPausedCleanupRetainsFiles() {
         UUID id=readyOld();var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());
         db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);

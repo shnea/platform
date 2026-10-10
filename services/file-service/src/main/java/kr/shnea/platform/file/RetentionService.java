@@ -34,6 +34,10 @@ class RetentionService {
         db.execute("SET LOCAL lock_timeout='5s'");
         db.queryForList("SELECT pg_advisory_xact_lock(hashtextextended(?::text,94721))",env.toString());
     }
+    static void lockTransfers(JdbcTemplate db,UUID environmentId) {
+        db.execute("SET LOCAL lock_timeout='5s'");
+        db.queryForList("SELECT pg_advisory_xact_lock_shared(hashtextextended(?::text,94721))",environmentId.toString());
+    }
     Overview overview(FileAccess.Context context) {
         initialize(db,context.environmentId());
         return new Overview(settings(context.environmentId()),policies(context.environmentId()),eligible(context.environmentId()));
