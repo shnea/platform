@@ -144,6 +144,44 @@ class AiJobsDatabaseTest {
         row.put("environment", own.environmentId().toString()).put("total_tokens", -1); fails(() -> jobs.usage(own, null, 50), ApiCode.AI_INVALID_RESPONSE);
     }
 
+    @Test void usageIncludesIndexingSearchAndFutureReportsWithoutExpandingExecutableTasks() {
+        var usage = json.createObjectNode();
+        var summaries = usage.putArray("summary"); var records = usage.putArray("records");
+        for (String task : List.of("chat.general", "indexing", "vector_search", "embedding.future")) {
+            summaries.addObject().put("provider", "google").put("model", AiGateway.EMBEDDING_MODEL).put("task_type", task)
+                .put("call_count", 1).put("total_prompt_tokens", 5).put("total_completion_tokens", 0).put("total_tokens", 5);
+            records.addObject().put("id", UUID.randomUUID().toString()).putNull("job_id").put("request_id", "report:" + task)
+                .put("project", own.projectId().toString()).put("environment", own.environmentId().toString())
+                .put("provider", "google").put("model", AiGateway.EMBEDDING_MODEL).put("task_type", task)
+                .put("prompt_tokens", 5).put("completion_tokens", 0).put("total_tokens", 5).put("created_at", Instant.now().toString());
+        }
+        doReturn(usage).when(ai).exchange(eq("GET"), contains("/api/v1/ai/usage?"), isNull(), anyInt());
+        var result = jobs.usage(own, null, 50);
+        assertThat(result.path("summary").size()).isEqualTo(4); assertThat(result.path("records").size()).isEqualTo(4);
+        assertThat(result.path("records").get(2).path("task_type").asText()).isEqualTo("vector_search");
+        var filtered = json.createObjectNode(); filtered.putArray("summary").add(summaries.get(1)); filtered.putArray("records").add(records.get(1));
+        doReturn(filtered).when(ai).exchange(eq("GET"), contains("/api/v1/ai/usage?"), isNull(), anyInt());
+        assertThat(jobs.usage(own, "indexing", 50).path("summary").size()).isEqualTo(1);
+        fails(() -> jobs.usage(own, "vector_search", 50), ApiCode.AI_INVALID_RESPONSE);
+        for (String task : List.of("", " ", "x".repeat(81))) fails(() -> jobs.usage(own, task, 50), ApiCode.AI_INVALID_REQUEST);
+        ((tools.jackson.databind.node.ObjectNode)summaries.get(1)).put("task_type", " ");
+        fails(() -> jobs.usage(own, null, 50), ApiCode.AI_INVALID_RESPONSE);
+        assertThat(AiGateway.TASKS).doesNotContain("indexing", "vector_search", "embedding.future");
+        fails(() -> jobs.prepare(own, "{\"request_id\":\"index\",\"task_type\":\"indexing\",\"prompt\":\"x\"}".getBytes(StandardCharsets.UTF_8)), ApiCode.AI_INVALID_REQUEST);
+        verify(ai, never()).exchange(eq("POST"), anyString(), any(), anyInt());
+    }
+
+    @Test void usageReportFilterIsEncodedWithoutInjectingScopeOrLimit() {
+        String task = "indexing&project=other&limit=1";
+        var usage = json.createObjectNode(); usage.putArray("records");
+        usage.putArray("summary").addObject().put("provider", "google").put("model", AiGateway.EMBEDDING_MODEL).put("task_type", task)
+            .put("call_count", 1).put("total_prompt_tokens", 1).put("total_completion_tokens", 0).put("total_tokens", 1);
+        doReturn(usage).when(ai).exchange(eq("GET"), anyString(), isNull(), anyInt());
+        assertThat(jobs.usage(own, task, 50).path("summary").size()).isEqualTo(1);
+        verify(ai).exchange(eq("GET"), eq("/api/v1/ai/usage?project=" + own.projectId() + "&environment=" + own.environmentId()
+            + "&limit=50&task_type=indexing%26project%3Dother%26limit%3D1"), isNull(), eq(1024 * 1024));
+    }
+
     @Test void translationPathsShareOneIdentityWithoutAddingRagAndPendingIsAccepted() {
         var translated = (tools.jackson.databind.node.ObjectNode) reply(own);
         translated.put("task_type", "text.translate").put("status", "pending").putNull("result");

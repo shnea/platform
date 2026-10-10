@@ -57,6 +57,12 @@ assert.ok(spec.paths['/api/v1/translations'].post.responses['202']);
 assert.equal(spec.components.schemas.AiTranslationInput.properties.target_language.enum.includes('auto'),false);
 assert.ok(spec.components.schemas.AiJobInput.allOf.some(rule=>rule.if?.properties?.task_type?.const==='article.draft'));
 assert.deepEqual(spec.components.schemas.AiUsage.properties.measurement.enum,['upstream_reported_unverified']);
+for(const schema of [spec.components.schemas.AiUsageSummary.properties.task_type,spec.components.schemas.AiUsageRecord.properties.task_type,
+ spec.paths['/api/v1/ai/usage'].get.parameters.find(parameter=>parameter.name==='task_type').schema]) {
+ assert.equal(schema.minLength,1);assert.equal(schema.maxLength,80);assert.equal(schema.enum,undefined);
+}
+assert.equal(spec.components.schemas.AiJobInput.properties.task_type.enum.includes('indexing'),false);
+assert.equal(spec.components.schemas.AiJobInput.properties.task_type.enum.includes('vector_search'),false);
 assert.equal(JSON.stringify(spec).includes('/admin/'),false);
 assert.equal(JSON.stringify(spec).includes('/internal/'),false);
 assert.equal(JSON.stringify(spec).includes('platform-admin'),false);

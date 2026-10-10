@@ -101,7 +101,7 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 
 파일 관리자 `/api/v1/files/admin/environments/{environmentId}/noedaeri/voices`에서 GET 목록, `/{id}` GET/PATCH(name만)/DELETE, `/{id}/sample-ticket` POST를 제공한다. 일반 서버 키·일반 이용자 토큰으로는 호출하지 않는다. 요청자 `admin:<인증 subject>`·프로젝트 UUID·환경 UUID를 서버에서 확정하고 뇌대리 응답 범위를 다시 검사한다. 변경과 샘플 저장은 원문 없는 감사 기록을 남긴다.
 
-등록은 독립 테스트 `/noedaeri/tasks`의 플랫폼 내부 `kind:tts.voice.register`로 접수하며 **뇌대리 POST /api/v1/voices**로 전달한다. 뇌대리 `/api/v1/jobs`에 이 종류를 직접 등록하지 않는다. `input`은 `name`, `kind:preset`, `speaker` 또는 `name`, `kind:clone`, `reference_text`다. clone만 `sourceFileId`가 필요하며 참조 음성은 3~30초·64MiB 이하·WAV/MP3/FLAC/OGG/M4A/AAC다. preset은 ready 프로필을 저장하고 별도 Job/receipt가 없다. clone은 registration_job_id에 원본을 한 번 업로드하고 서명 job.* 알림·GET 복구로 종료와 프로필 ready·sample_available을 확인한다. 정규화된 24kHz 모노 PCM16 참조 WAV와 필요한 프로필 요약을 플랫폼에 영속 저장한 뒤 기존 파일 receipt를 보낸다. 대본은 접수 확인까지 큐에만 남기고 프로필 조회 응답으로 확인하며 작업 DB 요약·감사에는 저장하지 않는다.
+등록은 독립 테스트 `/noedaeri/tasks`의 플랫폼 내부 `kind:tts.voice.register`로 접수하며 **뇌대리 POST /api/v1/voices**로 전달한다. 뇌대리 `/api/v1/jobs`에 이 종류를 직접 등록하지 않는다. `input`은 `name`, `kind:preset`, `speaker` 또는 `name`, `kind:clone`, `reference_text`다. clone만 `sourceFileId`가 필요하며 신규 참조 음성은 3초 초과·30초 이하·64MiB 이하·WAV/MP3/FLAC/OGG/M4A/AAC다. 선택 파일은 업로드 전에 브라우저에서 길이를 확인해 3초 이하면 경고하며, 저장된 파일 ID·브라우저 미지원 형식도 서버가 음성 트랙 길이를 검사한 뒤 접수한다. 검사 불가·범위 밖 입력은 HTTP400 `INVALID_REQUEST`로 거절하며 원격 등록/모델 실행을 시작하지 않는다. 기존 등록 목소리·샘플·TTS 합성은 유지한다. preset은 ready 프로필을 저장하고 별도 Job/receipt가 없다. clone은 registration_job_id에 원본을 한 번 업로드하고 서명 job.* 알림·GET 복구로 종료와 프로필 ready·sample_available을 확인한다. 정규화된 24kHz 모노 PCM16 참조 WAV와 필요한 프로필 요약을 플랫폼에 영속 저장한 뒤 기존 파일 receipt를 보낸다. 대본은 접수 확인까지 큐에만 남기고 프로필 조회 응답으로 확인하며 작업 DB 요약·감사에는 저장하지 않는다.
 
 이름 수정 후 같은 등록 본문을 다시 원격 접수하지 않고 프로필을 조회한다. 삭제는 UI에 이름·ID·참조 음성 삭제 영향을 표시하고 `X-Confirm-Voice`에 같은 ID를 요구한다. 사용 중 409와 `deleted:false, cleanup_failed`를 성공으로 처리하지 않는다. 삭제 응답 유실은 같은 ID의 삭제로 복구하며 원격 삭제 후 플랫폼 참조 샘플도 정리한다. 이미 저장한 합성 WAV는 삭제하지 않는다. 목록·새로고침·샘플은 모델을 호출하지 않는다. TTS에서는 ready 프리셋과 실제 샘플이 있는 ready clone만 선택하고 clone의 instruct는 비운다. 실제 결과의 voice_source·speaker를 확인한다.
 
@@ -258,6 +258,8 @@ portfolio.search·document.analyze 등을 단일 공통 검색 노드로 연결�
 summary에는 provider/model/task_type별 call_count·total_prompt_tokens·total_completion_tokens·total_tokens, records에는 요청·작업 식별자와 보고 토큰/시간을 제공한다. 뇌대리 v12 중복 키는 (project,environment,request_id,provider,model)이며 같은 보고를 1회 반영한다. 같은 요청에서 같은 provider/model을 여러 번 실제 호출했을 때 각각 식별하는 계약은 아직 없다. 공개 n8n 예제의 결과 정리에는 글자 수/4 기반 토큰 추정과 추천 등급 기반 provider/model 매핑이 남아 있으므로 실제 사용량이라고 단정하지 않는다. 플랫폼은 값의 범위와 소유권을 검증해 `measurement:upstream_reported_unverified`를 명시한다. 실제 공급자 usage·최종 모델·Agent 각 호출과 대조하기 전 비용·무료 잔여 한도·완전한 실측으로 표시하지 않는다.
 
 인증된 서비스·소유권의 request_id/task_type에 공급자 호출 ID 또는 실행·노드·차수·항목 식별자를 연결한다. 동일 보고 재전송은 1회만 반영하고 새 실제 호출은 별도 사용량이다. 추천/최종 등급·대체 사유·실제 provider/응답 model·재시도·실패 전 발생한 호출·시간을 구분한다. 모델 미확인은 미확인, 실제 입력/출력/총 토큰만 집계한다. 추정치를 실제 사용량에 더하지 않는다. Agent의 여러 호출도 각각 기록한다.
+
+사용량 조회의 보고 `task_type`은 실행 가능한 AI 작업 목록과 다르다. 공백 제외 1~80자 식별자로 검증하며 `indexing`·`vector_search`와 이후 정상 보고 종류도 전체 조회 및 `task_type` 필터에서 수용한다. 필터는 URL 인코딩하고 반환 종류의 일치를 검사한다. 프로젝트·환경 격리·토큰/시간/ID 검증은 유지하며 보고 종류를 허용해도 AI jobs의 실행 작업 열거형을 확대하지 않는다.
 
 관리자는 전체, 연결 서비스는 플랫폼을 통해 자기 요청만 조회한다. 원문·지침·응답 전문·인증 토큰·임의 콜백 URL을 usage에 저장하지 않는다. Raya CPU 추론/입력 토큰은 운영 지표이며 공급자 토큰/비용에 합산하지 않는다. 무료 모델도 기록하되 비용·잔여 무료 한도를 토큰 수만으로 단정하지 않는다. 수집 실패와 AI 실패는 구분하고 보고 재시도로 모델을 재호출하지 않는다. 학습 원문·결과 검토·접근·보존·내보내기·파인튜닝은 별도 미구현이다.
 

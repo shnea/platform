@@ -174,9 +174,10 @@ class AiJobs {
     }
 
     JsonNode usage(ProjectService.Context context, String task, int limit) {
-        if (limit < 1 || limit > 200 || task != null && !AiGateway.TASKS.contains(task)) throw ApiCode.AI_INVALID_REQUEST.failure();
+        if (limit < 1 || limit > 200 || task != null && (task.isBlank() || task.codePointCount(0, task.length()) > 80))
+            throw ApiCode.AI_INVALID_REQUEST.failure();
         JsonNode reply = ai.exchange("GET", "/api/v1/ai/usage" + scope(context) + "&limit=" + limit
-            + (task == null ? "" : "&task_type=" + task), null, 1024 * 1024);
+            + (task == null ? "" : "&task_type=" + java.net.URLEncoder.encode(task, java.nio.charset.StandardCharsets.UTF_8)), null, 1024 * 1024);
         if (!reply.path("summary").isArray() || !reply.path("records").isArray() || reply.path("records").size() > limit) invalid();
         ObjectNode result = json.createObjectNode();
         var summaries = result.putArray("summary"); var records = result.putArray("records");
@@ -275,7 +276,8 @@ class AiJobs {
     }
     private static void usageIdentity(JsonNode item, String task) {
         validText(item.path("provider"), 64); validText(item.path("model"), 128);
-        if (!AiGateway.TASKS.contains(item.path("task_type").asText()) || task != null && !task.equals(item.path("task_type").asText())) invalid();
+        validText(item.path("task_type"), 80);
+        if (task != null && !task.equals(item.path("task_type").asText())) invalid();
     }
     private static void validText(JsonNode node, int max) {
         if (!node.isString() || node.asText().isBlank() || node.asText().codePointCount(0, node.asText().length()) > max) invalid();

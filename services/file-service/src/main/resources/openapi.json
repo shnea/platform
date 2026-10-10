@@ -674,7 +674,7 @@
                         "maxLength": 1000
                       }
                     },
-                    "description": "목소리 preset은 sourceFileId 생략, clone은 참조 파일과 실제 대본. requester/project/environment은 서버 지정. 직접 /jobs로 등록하지 않는다."
+                    "description": "목소리 preset은 sourceFileId 생략, clone은 3초 초과·30초 이하·64MiB 이하 참조 음성과 실제 대본. 서버가 음성 길이를 확인하며 범위 밖·확인 불가 입력은 INVALID_REQUEST로 거절한다. requester/project/environment은 서버 지정. 직접 /jobs로 등록하지 않는다."
                   },
                   "options": {
                     "type": "object",

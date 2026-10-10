@@ -53,7 +53,13 @@ class NoedaeriTasks {
             }
             if(db.queryForObject("SELECT count(*) FROM file_noedaeri_tasks WHERE state IN ('NEW','ACTIVE')",Integer.class)>=20)
                 throw new FileFailure("FILE_QUOTA_EXCEEDED",409,"진행 중인 뇌대리 테스트 작업이 많습니다. 완료 후 다시 실행해 주세요.");
-            if(source!=null){db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",source);files.detail(source,context);}
+            if(source!=null){
+                db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",source);files.detail(source,context);
+                if(kind.equals("tts.voice.register")) {
+                    try{ReferenceAudio.validate(store.path(source));}catch(FileFailure error){throw error;}
+                    catch(Exception error){throw FileFailure.unavailable();}
+                }
+            }
             UUID created=UUID.randomUUID();
             db.update("INSERT INTO file_noedaeri_tasks(id,environment_id,project_id,actor_id,request_id,source_file_id,kind,fingerprint,payload) VALUES (?,?,?,?,?,?,?,?,?::jsonb)",
                 created,context.environmentId(),context.projectId(),context.credentialId(),request,source,kind,fingerprint,encoded);

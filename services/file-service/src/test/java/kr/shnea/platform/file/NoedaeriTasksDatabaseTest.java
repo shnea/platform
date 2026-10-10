@@ -67,7 +67,12 @@ class NoedaeriTasksDatabaseTest {
         doAnswer(call->{assertThat(db.queryForObject("SELECT state FROM file_noedaeri_tasks WHERE job_id=?",String.class,remote)).isEqualTo("IMPORTED");assertThat(db.queryForObject("SELECT count(*) FROM files WHERE state='READY'",Integer.class)).isEqualTo(2);return null;}).when(client).receipt(remote,event);
         var tasks=new NoedaeriTasks(db,tx,files,store,mock(FileAccess.class),client);
         var body=json.readTree(json.writeValueAsString(Map.of("requestId",UUID.randomUUID(),"sourceFileId",source,"kind","tts.voice.register","input",Map.of("kind","clone","name","한국어 안내","reference_text","실제로 말한 대본"))));
-        UUID id=(UUID)((Map<?,?>)tasks.create(owner,body)).get("id");tasks.advance(id);tasks.advance(id);
+        UUID id;
+        try(var probe=mockStatic(FileViews.class)) {
+            probe.when(()->FileViews.run(anyList(),eq(10))).thenReturn("{\"streams\":[{\"codec_type\":\"audio\",\"duration\":\"4\"}]}".getBytes());
+            id=(UUID)((Map<?,?>)tasks.create(owner,body)).get("id");
+        }
+        tasks.advance(id);tasks.advance(id);
         UUID stored=tasks.artifact(owner,id,"reference.wav");assertThat(Files.readAllBytes(store.path(stored))).isEqualTo(bytes);verify(client,times(1)).upload(remote,store.path(source));verify(client,times(1)).registerVoice(anyMap());
         assertThat(db.queryForObject("SELECT manifest::text FROM file_noedaeri_tasks WHERE id=?",String.class,id)).doesNotContain("reference_text");
         var voices=new NoedaeriVoices(client,files,store,db);UUID preview=voices.sample(owner,voice);assertThat(voices.sample(owner,voice)).isEqualTo(preview);assertThat(Files.readAllBytes(store.path(preview))).isEqualTo(bytes);verify(client,times(2)).voiceSample(eq(voice),anyString(),any(),any(),any());
@@ -75,6 +80,25 @@ class NoedaeriTasksDatabaseTest {
         when(client.deleteVoice(eq(voice),anyString(),any(),any())).thenReturn(json.readTree("{\"deleted\":false,\"status\":\"cleanup_failed\"}"));assertThat(voices.delete(owner,voice,voice.toString())).isEqualTo(Map.of("deleted",false,"status","cleanup_failed"));assertThat(files.detail(preview,owner)).isNotNull();
         when(client.deleteVoice(eq(voice),anyString(),any(),any())).thenReturn(json.readTree("{\"deleted\":true}"));assertThat(voices.delete(owner,voice,voice.toString())).isEqualTo(Map.of("deleted",true));assertThatThrownBy(()->files.downloadable(stored)).isInstanceOf(FileFailure.class);assertThatThrownBy(()->files.downloadable(preview)).isInstanceOf(FileFailure.class);
     }
+    @Test void storedReferenceDurationIsCheckedBeforeCreatingOrDispatchingARegistration() throws Exception {
+        UUID source=source("reference.mp3");var client=mock(NoedaeriClient.class);when(client.configured()).thenReturn(true);
+        var tasks=new NoedaeriTasks(db,tx,files,store,mock(FileAccess.class),client);
+        try(var probe=mockStatic(FileViews.class)) {
+            for(String seconds:List.of("2.99","3","30.01")) {
+                probe.when(()->FileViews.run(anyList(),eq(10))).thenReturn(("{\"streams\":[{\"codec_type\":\"audio\",\"duration\":\""+seconds+"\"}]}").getBytes());
+                var body=json.readTree(json.writeValueAsString(Map.of("requestId",UUID.randomUUID(),"sourceFileId",source,"kind","tts.voice.register","input",Map.of("kind","clone","name","참조 검사","reference_text","실제 대본"))));
+                assertThatThrownBy(()->tasks.create(owner,body)).isInstanceOf(FileFailure.class);
+            }
+            assertThat(db.queryForObject("SELECT count(*) FROM file_noedaeri_tasks",Integer.class)).isZero();
+            probe.when(()->FileViews.run(anyList(),eq(10))).thenReturn("{\"streams\":[{\"codec_type\":\"audio\",\"duration\":\"3.001\"}]}".getBytes());
+            var body=json.readTree(json.writeValueAsString(Map.of("requestId",UUID.randomUUID(),"sourceFileId",source,"kind","tts.voice.register","input",Map.of("kind","clone","name","참조 검사","reference_text","실제 대본"))));
+            assertThat(((Map<?,?>)tasks.create(owner,body)).get("reused")).isEqualTo(false);
+            assertThat(((Map<?,?>)tasks.create(owner,body)).get("reused")).isEqualTo(true);
+            probe.verify(()->FileViews.run(anyList(),eq(10)),times(4));
+        }
+        verify(client,never()).registerVoice(anyMap());verify(client,never()).create(any(),any(),anyMap(),anyMap());
+    }
+
     @Test void voiceScopeForgeryAndReferenceDurationAreRejected() throws Exception {
         var client=mock(NoedaeriClient.class);when(client.configured()).thenReturn(true);var profile=(tools.jackson.databind.node.ObjectNode)voiceProfile(UUID.randomUUID(),"preset",null);profile.put("requester_id","other");
         when(client.voices(anyString(),any(),any())).thenReturn(json.createArrayNode().add(profile));var voices=new NoedaeriVoices(client,files,store,db);

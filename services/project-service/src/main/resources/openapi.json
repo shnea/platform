@@ -491,17 +491,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "blog.tags",
-                "blog.summary",
-                "portfolio.search",
-                "ui.render",
-                "comment.generate",
-                "document.analyze",
-                "code.analyze",
-                "chat.general",
-                "article.draft"
-              ]
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "보고된 작업 종류. AI 실행 작업 외 indexing·vector_search 등도 조회한다."
             }
           },
           {
@@ -5064,17 +5056,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "blog.tags",
-                "blog.summary",
-                "portfolio.search",
-                "ui.render",
-                "comment.generate",
-                "document.analyze",
-                "code.analyze",
-                "chat.general",
-                "article.draft"
-              ]
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "보고된 작업 종류. AI 실행 작업 외 indexing·vector_search 등도 조회한다."
             }
           },
           {
@@ -8676,18 +8660,9 @@
           },
           "task_type": {
             "type": "string",
-            "enum": [
-              "blog.tags",
-              "blog.summary",
-              "portfolio.search",
-              "ui.render",
-              "comment.generate",
-              "document.analyze",
-              "code.analyze",
-              "chat.general",
-              "article.draft",
-              "text.translate"
-            ]
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "보고 작업 식별자. 실행 가능한 AI 작업의 열거형과 구분한다."
           },
           "call_count": {
             "type": "integer",
@@ -8730,18 +8705,9 @@
           },
           "task_type": {
             "type": "string",
-            "enum": [
-              "blog.tags",
-              "blog.summary",
-              "portfolio.search",
-              "ui.render",
-              "comment.generate",
-              "document.analyze",
-              "code.analyze",
-              "chat.general",
-              "article.draft",
-              "text.translate"
-            ]
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "보고 작업 식별자. 실행 가능한 AI 작업의 열거형과 구분한다."
           },
           "id": {
             "type": "string",

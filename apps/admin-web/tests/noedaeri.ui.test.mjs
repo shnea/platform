@@ -73,6 +73,23 @@ test('파일 추가 후 바꾼 burned·한국어가 대기열에 반영되고 �
  const subtitle=[...host.querySelectorAll('label')].find(node=>node.textContent.includes('영상 자동 자막')).querySelector('select');await change(subtitle,'burned');const language=[...host.querySelectorAll('label')].find(node=>node.textContent.includes('음성 인식 언어')).querySelector('select');await change(language,'ko');assert.ok(host.querySelector('.file-upload-list').textContent.includes('영상에 자막 입히기 · ko'));assert.equal(posts().length,0);await dispose();
  await mount(workspace());configured=false;await menu('영상 처리');const picker=host.querySelector('input[type=file]');Object.defineProperty(picker,'files',{configurable:true,value:[new dom.window.File(['fixture'],'sample.mp4')]});await act(async()=>picker.dispatchEvent(new dom.window.Event('change',{bubbles:true})));assert.equal(button('업로드 시작').disabled,true);assert.equal(posts().length,0);await dispose();
 });
+test('3초 이하 참조 음성은 경고하고 업로드·목소리 접수 없이 다시 선택할 수 있다',async()=>{
+ const originalLoad=dom.window.HTMLMediaElement.prototype.load;let seconds=3;
+ dom.window.HTMLMediaElement.prototype.load=function(){if(this.getAttribute('src')){Object.defineProperty(this,'duration',{value:seconds,configurable:true});queueMicrotask(()=>this.dispatchEvent(new dom.window.Event('loadedmetadata')));}};
+ try {
+  await mount(React.createElement(IndependentTask,{menu:'voices',environmentId:environment,available:true,onBusyChange:()=>{}}));
+  await change([...host.querySelectorAll('select')].find(node=>[...node.options].some(option=>option.value==='clone')),'clone');
+  const fileInput=host.querySelector('input[type="file"]');Object.defineProperty(fileInput,'files',{value:[new File(['test'],'reference.wav',{type:'audio/wav'})],configurable:true});
+  await act(async()=>fileInput.dispatchEvent(new dom.window.Event('change',{bubbles:true})));
+  await change(host.querySelector('textarea'),'파일에서 실제 말한 대본');
+  for(const duration of [3,2.5,30.01]) {
+   seconds=duration;await submit();assert.ok(host.querySelector('[role="alert"]').textContent.includes(duration<=3?'3초 이하':'30초 이하'));
+   assert.equal(posts().length,0);assert.equal(button('새 테스트 입력'),undefined);assert.equal(host.querySelector('fieldset').disabled,false);
+   assert.equal(host.querySelector('[role="alert"]').textContent.includes('응답 유실'),false);
+  }
+ }finally{await dispose();dom.window.HTMLMediaElement.prototype.load=originalLoad;}
+});
+
 test('목소리 삭제는 ID·영향 확인을 요구하며 기존 합성 WAV는 보존한다',async()=>{
  await mount(workspace());respond=async(path,method)=>path.endsWith('/voices')?[{id:job,name:'검수 목소리',kind:'preset',speaker:'Sohee',status:'ready'}]:method==='DELETE'?{deleted:true}:[];await menu('목소리 관리');await click(button('삭제'));assert.equal(calls.filter(call=>call.method==='DELETE').length,0);assert.ok(host.querySelector('dialog').textContent.includes(job));assert.ok(host.querySelector('dialog').textContent.includes('이미 저장한 합성 WAV는 삭제하지 않습니다'));await click(button('확인 후 영구 삭제'));const deletion=calls.find(call=>call.method==='DELETE');assert.equal(deletion.headers['X-Confirm-Voice'],job);assert.equal(deletion.path,`/api/v1/files/admin/environments/${environment}/noedaeri/voices/${job}`);assert.equal(posts().length,0);await dispose();
 });

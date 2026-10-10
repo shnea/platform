@@ -1,5 +1,14 @@
 # 작업 상태와 다음 작업
 
+### 사용량 보고 작업 검증 수정·신규 참조 음성 길이 제한 (2026-10-10)
+
+- **완료:** 사용량 응답/필터의 `task_type`을 AI 실행 작업 목록에서 분리해 공백 제외 1~80자 식별자로 검증한다. `indexing`·`vector_search` 및 이후 정상 보고도 전체 조회를 실패시키지 않는다. 필터는 URL 인코딩하며 종류 일치·프로젝트/환경·ID/시간·토큰 검증은 유지한다. 실행 가능한 AI 작업 10종은 확대하지 않았다. 관리자/호스트 OpenAPI·공개 계약 검사·핵심/상세 요구사항·AI 지침을 함께 갱신했다.
+- **사용자 확정/음성:** 3초 이하 제한은 TTS 결과가 아닌 목소리 신규 clone 등록의 참조 음성에만 적용한다. 선택 파일의 길이를 브라우저에서 업로드 전에 확인하고 경고 후 입력을 수정할 수 있다. 저장된 파일 ID·브라우저 미지원 형식도 서버가 ffprobe로 음성 트랙 길이를 확인한 뒤 접수한다. 3초 초과·30초 이하·64MiB 이하이며 검사 불가도 등록을 거절한다. 기존 프리셋·등록 목소리/참조 샘플·합성 WAV·같은 요청 재조회는 보존하고 모델을 자동 재실행하지 않는다. 녹음 길이 검사이며 실제 발화/VAD·대본/목소리 품질 판정은 추가하지 않았다.
+- **백엔드 검증:** `docker compose --env-file .env.example -p platform-usage-voice-check -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check`의 소스를 `/tmp/job-workspace`로 복사해 `gradle --no-daemon :services:project-service:test --tests "*AiJobsDatabaseTest" --tests "*AiSecurityTest" --tests "*OpenApiTest" :services:file-service:test --tests "*ReferenceAudioTest" --tests "*NoedaeriTasksDatabaseTest" --tests "*OpenApiTest"`를 실행했다. 최종 JUnit33개 통과·실패/오류/건너뜀0. 색인/검색/미래 보고·필터 불일치/인코딩·범위/토큰 거절·3초 경계/검사 불가/30초 상한·저장 ID의 접수 전 차단·멱등 재사용·기존 참조 샘플/TTS·프리셋 흐름을 확인했다. XML은 Git 제외 `output/job-checks/usage-voice`에 보존한다.
+- **화면/실제 도구 검증:** `docker build --target build -f apps/admin-web/Dockerfile -t registry.shnea.kr/platform-admin-web:usage-voice-check .`의 TypeScript/Vite·공개 자료 빌드 통과. 같은 이미지에서 `docker run --rm --network none registry.shnea.kr/platform-admin-web:usage-voice-check npm test`로 단위23·모의 UI13개 통과. 3초/2.5초/30초 초과 음성에서 경고·업로드/접수 POST0·입력 수정 가능을 확인했다. 일회용 `eclipse-temurin:21-jre-alpine`에 ffmpeg를 설치하고 2.5/3/3.001/30초 WAV를 생성해 서버와 같은 ffprobe 인수·384MiB 제한에서 정확한 길이 메타데이터를 확인했다. 기존 npm high 취약점1개·번들 크기 경고는 기록만 하고 의존성을 변경하지 않았다.
+- **기타/정리:** `node scripts/check-ai-integration.mjs`, `python -X utf8 scripts/check-admin-security.py`, `git diff --check` 통과. `docker compose --env-file .env.example -p platform-usage-voice-check -f compose.test.yml --profile jobs down`으로 이번 일회용 DB/네트워크만 종료했다. 기존 dev/운영 서비스·데이터·설정·암호화 환경파일은 변경하지 않았고 새 장기 프로세스는 없다. 별도 운영 설정 추가는 필요하지 않으며 file-service 기존 실행 이미지에 ffmpeg가 설치된다.
+- **미검증/다음:** 운영 tmp(dev)의 오류 요청 원문/로그를 직접 확인한 것은 아니며, 코드의 `indexing`·`vector_search` 거절을 재현해 수정한 상태다. 실제 운영 사용량 조회 및 실제 녹음의 등록→뇌대리 검증→샘플/TTS 종단은 미검증이다. main 푸시 후 기존 CI/CD에 배포를 맡기고, 배포 완료 후 tmp(dev)에서 사용량 조회·3초 이하 경고·3초 초과 정상 등록을 확인한다. SSH 수동 배포/원격 키 변경은 하지 않는다.
+
 ### 뇌대리 공통 결과·샘플·화면 검수 (2026-10-10)
 
 - **완료 단위:** 15개 기능/개요/실행 이력/사용량의 기존 어댑터에 AI·번역 원문/결과 비교, 보고 모델/토큰, Raya 확률/잘림, 임베딩 첫8값/전체 CSV, 색인 변경/컬렉션 통계, 코사인 검색 문서·사용량 상세를 연결했다. 현재 실행과 다른 이력에 원문을 붙이지 않고 만료/수령 확인 결과를 닫으며 누락과0을 구분한다. 기능별 샘플 입력/파일 안내는 자동 실행하지 않고 색인 샘플은 noedaeri-test/upsert다. 실험글 샘플은 context.topic을 포함한다.

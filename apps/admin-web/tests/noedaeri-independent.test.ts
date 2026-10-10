@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {independentDefinitions,independentOptions,taskMenu,subtitleCues} from '../src/features/noedaeri/independent-contract.ts';
+import {validateReferenceDuration} from '../src/features/noedaeri/reference-audio.ts';
 const fields={language:'ko',mode:'auto',itn:true,correction:true,seconds:'1.5',voice:'',instruction:''};
+
+test('참조 음성은 정확히 3초도 차단하고 3초 초과부터 30초까지 허용한다',()=>{
+ for(const seconds of [0,-1,2.99,3,30.01,NaN,Infinity])assert.throws(()=>validateReferenceDuration(seconds));
+ assert.throws(()=>validateReferenceDuration(3),/3초 이하/);
+ for(const seconds of [3.001,30])assert.doesNotThrow(()=>validateReferenceDuration(seconds));
+});
 test('독립 6종과 목소리 등록은 통합 영상 자막과 다르며 알 수 없는 작업으로 우회하지 않는다',()=>{
  assert.equal(Object.keys(independentDefinitions).length,7);assert.equal(independentDefinitions.subtitles.kind,'video.subtitles');
  for(const [menu,value] of Object.entries(independentDefinitions))assert.equal(taskMenu(value.kind),menu);

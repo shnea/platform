@@ -3,6 +3,7 @@ import {fileApi,fileHash,chunkHash,type Upload,type FileInfo} from '../files/fil
 import {activeJob} from './test-contract';
 import {independentDefinitions,independentOptions,subtitleCues} from './independent-contract';
 import {fileSamples} from './test-samples';
+import {referenceAudioDuration,validateReferenceDuration} from './reference-audio';
 
 type Json=Record<string,unknown>;
 const object=(value:unknown):Json=>value!==null&&typeof value==='object'&&!Array.isArray(value)?value as Json:{};
@@ -52,7 +53,11 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
     clearPreview();
     const needsFile=menu!=='tts'&&(menu!=='voices'||voiceKind==='clone');
     if(needsFile&&!file&&!sourceId)throw new Error('파일을 선택하거나 이 환경의 저장된 파일 ID를 입력하세요.');
-    if(menu==='voices'&&voiceKind==='clone'&&file&&file.size>64*1024*1024)throw new Error('참조 음성은 64MiB 이하여야 합니다.');
+    if(menu==='voices'&&voiceKind==='clone'&&file) {
+     if(file.size>64*1024*1024)throw new Error('참조 음성은 64MiB 이하여야 합니다.');
+     const duration=await referenceAudioDuration(file,signal.signal);
+     if(duration!==null)validateReferenceDuration(duration);
+    }
     const options=independentOptions(menu,{mode,language,correction,itn,seconds,voice,instruction});
     const input=menu==='tts'?{text:speech,language}:menu==='voices'?{name:voiceName,kind:voiceKind,...(voiceKind==='clone'?{reference_text:reference}:{speaker})}:undefined;
     submission.current={requestId:crypto.randomUUID(),uploadRequest:crypto.randomUUID(),sourceFileId:needsFile?sourceId:'',file:needsFile?file:null,hash:'',kind:definition.kind,options,...(input?{input}:{})};setFrozen(true);
@@ -71,7 +76,7 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
    const body={requestId:value.requestId,kind:value.kind,options:value.options,...(value.input?{input:value.input}:{}),...(value.sourceFileId?{sourceFileId:value.sourceFileId}:{})};
    const accepted=await fileApi<Json>(environmentId,root+'/tasks','POST',body,signal.signal);
    if(mounted.current){setResult(accepted);setProgress('접수됨. 같은 요청 확인은 같은 ID·내용을 유지합니다. 파일 저장 뒤에만 서버가 receipt를 보냅니다.');pollCount.current=0;setPolling(true);}
-  }catch(error){if(mounted.current)setError((error instanceof Error?error.message:String(error))+' 응답 유실 시 새 실행 대신 같은 요청 확인을 사용하세요.');}
+  }catch(error){if(mounted.current)setError((error instanceof Error?error.message:String(error))+(submission.current?' 응답 유실 시 새 실행 대신 같은 요청 확인을 사용하세요.':''));}
   finally{locked.current=false;if(mounted.current)setBusy(false);}
  }
  async function action(path:string) {
