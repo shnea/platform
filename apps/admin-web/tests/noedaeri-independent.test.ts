@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {independentDefinitions,independentOptions,taskMenu,subtitleCues} from '../src/features/noedaeri/independent-contract.ts';
 const fields={language:'ko',mode:'auto',itn:true,correction:true,seconds:'1.5',voice:'',instruction:''};
-test('독립 6종은 통합 영상 자막과 다른 Job이며 알 수 없는 작업으로 우회하지 않는다',()=>{
- assert.equal(Object.keys(independentDefinitions).length,6);assert.equal(independentDefinitions.subtitles.kind,'video.subtitles');
+test('독립 6종과 목소리 등록은 통합 영상 자막과 다르며 알 수 없는 작업으로 우회하지 않는다',()=>{
+ assert.equal(Object.keys(independentDefinitions).length,7);assert.equal(independentDefinitions.subtitles.kind,'video.subtitles');
  for(const [menu,value] of Object.entries(independentDefinitions))assert.equal(taskMenu(value.kind),menu);
- assert.equal(taskMenu('video.package'),undefined);assert.equal(taskMenu('tts.voice.register'),undefined);assert.throws(()=>independentOptions('unknown',fields));
+ assert.equal(taskMenu('video.package'),undefined);assert.equal(taskMenu('tts.voice.register'),'voices');assert.deepEqual(independentOptions('voices',fields),{});assert.throws(()=>independentOptions('unknown',fields));
 });
 test('VTT cue와 전사 구간은 구분하고 무음·표시 상한을 처리한다',()=>{
  assert.deepEqual(subtitleCues('WEBVTT\n\n'),[]);

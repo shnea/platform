@@ -5,9 +5,11 @@ export const independentDefinitions:Record<string,{kind:string;accept:string;des
  stt:{kind:'stt.transcribe',accept:'.wav,.mp3,.flac,.ogg,.m4a,.mp4,.mov,.webm,.mkv,.aac,.aiff',description:'첫 오디오 트랙의 전사와 VAD 구간을 생성합니다. 구간 시각은 단어별 정렬이나 화자 구분이 아닙니다.'},
  tts:{kind:'tts.synthesize',accept:'',description:'단일 speech.wav(24kHz 모노 PCM16)를 생성합니다. ZIP이나 별도 합성 파일을 요청하지 않습니다.'},
  thumbnail:{kind:'video.thumbnail',accept:'.mp4,.m4v,.mov,.mkv,.webm',description:'지정 시점의 JPEG 썸네일만 생성합니다. 영상 HLS 변환이나 별도 STT는 실행하지 않습니다.'},
+ voices:{kind:'tts.voice.register',accept:'.wav,.mp3,.flac,.ogg,.m4a,.aac',description:'프리셋은 즉시 등록하고 참조 음성은 3~30초·64MiB 이하를 검증합니다. 실제 말한 대본과 명료한 녹음을 사용하세요. 대본 일치·목소리 품질은 자동 판정하지 않습니다.'},
 };
 export type IndependentOptions={language:string;itn:boolean;correction:boolean;mode:string;seconds:string;voice:string;instruction:string};
 export function independentOptions(menu:string,value:IndependentOptions):Record<string,unknown> {
+ if(menu==='voices')return {};
  if(menu==='pdf')return {mode:value.mode,language:value.language,language_correction:value.correction};
  if(menu==='ocr')return {language:value.language,language_correction:value.correction};
  if(menu==='thumbnail') {

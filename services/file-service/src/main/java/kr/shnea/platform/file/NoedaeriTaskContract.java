@@ -8,7 +8,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 final class NoedaeriTaskContract {
-    static final Set<String> KINDS=Set.of("video.subtitles","pdf.extract","ocr.recognize","stt.transcribe","tts.synthesize","video.thumbnail");
+    static final Set<String> KINDS=Set.of("video.subtitles","pdf.extract","ocr.recognize","stt.transcribe","tts.synthesize","video.thumbnail","tts.voice.register");
     static final Set<String> SPEAKERS=Set.of("Sohee","Vivian","Serena","Uncle_Fu","Dylan","Eric","Ryan","Aiden","Ono_Anna");
     static final Set<String> SPEECH_LANGUAGES=Set.of("Korean","English","Japanese","Chinese","German","French","Russian","Portuguese","Spanish","Italian");
     static final Set<String> IMAGE_EXTENSIONS=Set.of("png","jpg","jpeg","jfif","gif","webp","bmp","ico","tif","tiff","heic","heif","avif");
@@ -51,6 +51,7 @@ final class NoedaeriTaskContract {
                 if(!voice.isMissingNode()&&!voice.isNull())result.put("voice_id",uuid(voice).toString());
                 result.put("instruct",string(options,"instruct",300,false));
             }
+            case "tts.voice.register" -> fields(options);
             case "video.thumbnail" -> {
                 fields(options,"seconds");var seconds=options.path("seconds");
                 if(!seconds.isMissingNode()&&(!seconds.isNumber()||!Double.isFinite(seconds.asDouble())||seconds.asDouble()<0||seconds.asDouble()>3600))throw FileFailure.invalid();
@@ -61,6 +62,22 @@ final class NoedaeriTaskContract {
         return result;
     }
     static Map<String,Object> input(String kind,JsonNode body,FilesService.FileInfo source,FileAccess.Context context) {
+        if(kind.equals("tts.voice.register")) {
+            fields(body,"name","kind","speaker","reference_text");
+            var result=new LinkedHashMap<String,Object>();String mode=string(body,"kind",12,true);
+            result.put("name",string(body,"name",120,true));result.put("kind",mode);
+            result.put("requester_id",requester(context));result.put("project",context.projectId().toString());result.put("environment",context.environmentId().toString());
+            if(mode.equals("preset")) {
+                String speaker=string(body,"speaker",30,true);
+                if(!SPEAKERS.contains(speaker)||source!=null||body.has("reference_text"))throw FileFailure.invalid();result.put("speaker",speaker);
+            }else if(mode.equals("clone")) {
+                if(source==null||source.size()>64*1024*1024||body.has("speaker"))throw FileFailure.invalid();
+                String name=source.originalName(),extension=name.substring(name.lastIndexOf('.')+1).toLowerCase(Locale.ROOT);
+                if(!Set.of("wav","mp3","flac","ogg","m4a","aac").contains(extension))throw FileFailure.invalid();
+                result.put("reference_text",string(body,"reference_text",1000,true));
+            }else throw FileFailure.invalid();
+            return result;
+        }
         if(kind.equals("tts.synthesize")) {
             fields(body,"text","language");
             return Map.of("type","text","text",string(body,"text",4000,true),"language",choice(body,"language","Korean",SPEECH_LANGUAGES),
@@ -85,6 +102,7 @@ final class NoedaeriTaskContract {
             case "ocr.recognize" -> List.of("text.json","text.txt","text.zip");
             case "stt.transcribe" -> List.of("transcript.json","transcript.txt","transcript.zip");
             case "tts.synthesize" -> List.of("speech.wav");
+            case "tts.voice.register" -> List.of("reference.wav");
             case "video.thumbnail" -> List.of("thumbnail.jpg");
             default -> throw FileFailure.invalid();
         };
@@ -113,7 +131,7 @@ final class NoedaeriTaskContract {
         if(bytes.length>fileLimit(name))throw new IOException("Task artifact too large");
         if(name.endsWith(".zip")){zip(kind,bytes);return null;}
         if(name.endsWith(".jpg")){if(bytes.length<4||(bytes[0]&255)!=255||(bytes[1]&255)!=216||(bytes[2]&255)!=255)throw new IOException("Invalid JPEG");return null;}
-        if(name.endsWith(".wav")){wav(bytes);return null;}
+        if(name.endsWith(".wav")){long samples=wav(bytes);if(kind.equals("tts.voice.register")&&(samples<144000||samples>1440000))throw new IOException("Invalid reference duration");return null;}
         String text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
         if(text.indexOf('\0')>=0)throw new IOException("Invalid text artifact");
         if(name.endsWith(".vtt")&&!text.replaceFirst("^\uFEFF","").startsWith("WEBVTT"))throw new IOException("Invalid VTT");
@@ -163,16 +181,17 @@ final class NoedaeriTaskContract {
     private static boolean flag(JsonNode body,String field,boolean fallback) {
         var value=body.path(field);if(value.isMissingNode())return fallback;if(!value.isBoolean())throw FileFailure.invalid();return value.asBoolean();
     }
-    private static void wav(byte[] bytes) throws IOException {
+    private static long wav(byte[] bytes) throws IOException {
         if(bytes.length<44||!new String(bytes,0,4,StandardCharsets.US_ASCII).equals("RIFF")||!new String(bytes,8,4,StandardCharsets.US_ASCII).equals("WAVE"))throw new IOException("Invalid WAV");
-        var data=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);boolean format=false,samples=false;
+        var data=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);boolean format=false,samples=false;long sampleBytes=0;
         for(int offset=12;offset+8<=bytes.length;) {
             String chunk=new String(bytes,offset,4,StandardCharsets.US_ASCII);long length=Integer.toUnsignedLong(data.getInt(offset+4));
             if(length>bytes.length-offset-8)throw new IOException("Invalid WAV chunk");
             if(chunk.equals("fmt ")){if(length<16||data.getShort(offset+8)!=1||data.getShort(offset+10)!=1||data.getInt(offset+12)!=24000||data.getShort(offset+22)!=16)throw new IOException("Invalid speech format");format=true;}
-            if(chunk.equals("data")){if(length==0||length%2!=0)throw new IOException("Invalid speech samples");samples=true;}
+            if(chunk.equals("data")){if(length==0||length%2!=0)throw new IOException("Invalid speech samples");samples=true;sampleBytes+=length;}
             offset+=(int)length+8+(int)(length%2);
         }
         if(!format||!samples)throw new IOException("Missing speech data");
+        return sampleBytes;
     }
 }

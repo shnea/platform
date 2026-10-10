@@ -18,10 +18,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AdminSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class,RetentionController.class,FileViewsController.class,FileVideosController.class,AdminNoedaeriController.class})
+    @Import({FileSecurity.class,FileErrors.class,AdminFilesController.class,RetentionController.class,FileViewsController.class,FileVideosController.class,AdminNoedaeriController.class,AdminNoedaeriVoicesController.class})
     static class Config {
         @Bean FileAccess access() { return mock(FileAccess.class); }
         @Bean NoedaeriTasks tasks(){return mock(NoedaeriTasks.class);}
+        @Bean NoedaeriVoices voices(){return mock(NoedaeriVoices.class);}
         @Bean FilesService files() { return mock(FilesService.class); }
         @Bean DownloadTickets tickets() { return mock(DownloadTickets.class); }
         @Bean RetentionService retention() { return mock(RetentionService.class); }
@@ -57,6 +58,12 @@ class AdminSecurityTest {
                 mvc.perform(request.header("Authorization","Bearer member")).andExpect(status().isForbidden());
             }
             verifyNoInteractions(context.getBean(NoedaeriTasks.class));
+            for(var request:List.of(get(root+"/noedaeri/voices"),get(root+"/noedaeri/voices/"+id),patch(root+"/noedaeri/voices/"+id),delete(root+"/noedaeri/voices/"+id),post(root+"/noedaeri/voices/"+id+"/sample-ticket"))) {
+                mvc.perform(request).andExpect(status().isUnauthorized());
+                mvc.perform(request.header("X-Platform-Key","pk_not-an-admin")).andExpect(status().isUnauthorized());
+                mvc.perform(request.header("Authorization","Bearer member")).andExpect(status().isForbidden());
+            }
+            verifyNoInteractions(context.getBean(NoedaeriVoices.class));
             mvc.perform(get(root).header("Authorization","Bearer invalid")).andExpect(status().isUnauthorized());
             verifyNoInteractions(context.getBean(FileAccess.class),context.getBean(FilesService.class),context.getBean(DownloadTickets.class),context.getBean(RetentionService.class),context.getBean(FileViews.class));
             mvc.perform(get(root).header("Authorization","Bearer admin")).andExpect(status().isOk());

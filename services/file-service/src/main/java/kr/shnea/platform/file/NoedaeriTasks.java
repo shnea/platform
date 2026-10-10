@@ -34,7 +34,8 @@ class NoedaeriTasks {
         configured();NoedaeriTaskContract.fields(body,"requestId","sourceFileId","kind","input","options");
         UUID request=NoedaeriTaskContract.uuid(body.path("requestId"));String kind=NoedaeriTaskContract.string(body,"kind",32,true);
         if(!NoedaeriTaskContract.KINDS.contains(kind))throw FileFailure.invalid();
-        UUID source=kind.equals("tts.synthesize")?null:NoedaeriTaskContract.uuid(body.path("sourceFileId"));
+        boolean withoutFile=kind.equals("tts.synthesize")||kind.equals("tts.voice.register")&&body.path("input").path("kind").asString().equals("preset");
+        UUID source=withoutFile?null:NoedaeriTaskContract.uuid(body.path("sourceFileId"));
         if(source==null&&!body.path("sourceFileId").isMissingNode())throw FileFailure.invalid();
         var info=source==null?null:files.detail(source,context);
         var input=new TreeMap<>(NoedaeriTaskContract.input(kind,body.path("input"),info,context));
@@ -68,7 +69,7 @@ class NoedaeriTasks {
     }
     Map<String,Object> detail(FileAccess.Context context,UUID id,boolean contents) {
         var row=owned(context,id);var result=new LinkedHashMap<String,Object>();
-        result.put("id",id);result.put("requestId",row.get("request_id"));result.put("kind",row.get("kind"));result.put("sourceFileId",row.get("source_file_id"));result.put("jobId",row.get("job_id"));
+        result.put("id",id);result.put("requestId",row.get("request_id"));result.put("kind",row.get("kind"));result.put("sourceFileId",row.get("source_file_id"));result.put("jobId",row.get("job_id"));result.put("voiceId",row.get("voice_id"));
         String state=(String)row.get("state");
         result.put("status",switch(state){case "NEW"->"pending";case "ACTIVE"->"running";case "IMPORTED"->"succeeded";case "CANCELLED","DISCARDED"->"cancelled";default->"failed";});
         result.put("remoteStatus",row.get("remote_status"));result.put("stage",row.get("stage"));result.put("errorCode",row.get("error_code"));result.put("cancelRequested",row.get("cancel_requested"));
@@ -98,6 +99,7 @@ class NoedaeriTasks {
     }
     Object recover(FileAccess.Context context,UUID id) {
         var row=owned(context,id);
+        if(row.get("state").equals("IMPORTED")&&row.get("job_id")==null)throw new FileFailure("FILE_UPLOAD_CLOSED",409,"즉시 등록된 프리셋은 재실행하지 않습니다. 목소리 목록을 조회하세요.");
         if(!Set.of("NEW","ACTIVE","IMPORTED").contains(row.get("state")))throw new FileFailure("FILE_UPLOAD_CLOSED",409,"종료 작업은 재실행하지 않습니다. 새 테스트에는 새 요청 ID를 사용하세요.");
         db.update("UPDATE file_noedaeri_tasks SET attempts=0,next_check_at=now(),updated_at=now() WHERE id=?",id);
         audit(context,id,"task.recovery.requested");
@@ -117,7 +119,7 @@ class NoedaeriTasks {
             try(Connection connection=Objects.requireNonNull(db.getDataSource()).getConnection()) {
                 try(var statement=connection.createStatement();var result=statement.executeQuery("SELECT pg_try_advisory_lock(736452921)")){result.next();if(!result.getBoolean(1))return;}
                 try {
-                    var due=db.queryForList("SELECT id FROM file_noedaeri_tasks WHERE state IN ('NEW','ACTIVE','IMPORTED') AND attempts<8 AND (state<>'IMPORTED' OR receipt_at IS NULL) AND next_check_at<=now() ORDER BY next_check_at LIMIT 5",UUID.class);
+                    var due=db.queryForList("SELECT id FROM file_noedaeri_tasks WHERE state IN ('NEW','ACTIVE','IMPORTED') AND attempts<8 AND (state<>'IMPORTED' OR receipt_at IS NULL AND job_id IS NOT NULL) AND next_check_at<=now() ORDER BY next_check_at LIMIT 5",UUID.class);
                     for(UUID id:due)try{advance(id);}catch(Exception error){defer(id,error);}
                 }finally{try(var statement=connection.createStatement()){statement.execute("SELECT pg_advisory_unlock(736452921)");}}
             }catch(Exception error){org.slf4j.LoggerFactory.getLogger(getClass()).warn("noedaeri_test_worker_unavailable");}
@@ -138,15 +140,29 @@ class NoedaeriTasks {
         UUID source=(UUID)row.get("source_file_id"),remote=(UUID)row.get("job_id");boolean cancel=(Boolean)row.get("cancel_requested");
         if(source!=null)try{files.detail(source,context);}catch(FileFailure failure){if(failure.status!=404)throw failure;cancel=true;db.update("UPDATE file_noedaeri_tasks SET cancel_requested=true WHERE id=?",id);}
         if(remote==null) {
-            if(cancel){db.update("UPDATE file_noedaeri_tasks SET state='CANCELLED',payload=NULL,updated_at=now() WHERE id=?",id);return;}
+            if(cancel&&row.get("creation_started_at")==null){db.update("UPDATE file_noedaeri_tasks SET state='CANCELLED',payload=NULL,updated_at=now() WHERE id=?",id);return;}
             var payload=node(row.get("payload"));String kind=payload.path("kind").asString();
-            var created=client.create(id,kind,json.convertValue(payload.path("input"),Map.class),json.convertValue(payload.path("options"),Map.class));remote=NoedaeriMedia.uuid(created.path("id"));
+            db.update("UPDATE file_noedaeri_tasks SET creation_started_at=coalesce(creation_started_at,now()) WHERE id=?",id);
+            if(cancel&&kind.equals("tts.synthesize")) {
+                remote=client.findJob(id);if(remote==null)throw new IOException("Unconfirmed TTS creation");
+            }else if(kind.equals("tts.voice.register")) {
+                var input=json.convertValue(payload.path("input"),Map.class);input.put("idempotency_key",id.toString());
+                var profile=client.registerVoice(input);NoedaeriVoices.validate(profile,context,null);if(!profile.path("kind").asString().equals(payload.path("input").path("kind").asString()))throw new IOException("Voice kind mismatch");UUID voice=NoedaeriMedia.uuid(profile.path("id"));
+                if(profile.path("kind").asString().equals("preset")) {
+                    if(!profile.path("status").asString().equals("ready"))throw new IOException("Invalid preset status");
+                    db.update("UPDATE file_noedaeri_tasks SET voice_id=?,state='IMPORTED',payload=NULL,manifest=?::jsonb,attempts=0,error_code=NULL,updated_at=now() WHERE id=?",voice,json.writeValueAsString(NoedaeriVoices.summary(profile)),id);return;
+                }
+                remote=NoedaeriMedia.uuid(profile.path("registration_job_id"));db.update("UPDATE file_noedaeri_tasks SET voice_id=? WHERE id=?",voice,id);
+            }else {
+                var created=client.create(id,kind,json.convertValue(payload.path("input"),Map.class),json.convertValue(payload.path("options"),Map.class));remote=NoedaeriMedia.uuid(created.path("id"));
+            }
             db.update("UPDATE file_noedaeri_tasks SET job_id=?,state='ACTIVE',payload=NULL,updated_at=now() WHERE id=?",remote,id);
         }
+        cancel=cancel||Boolean.TRUE.equals(db.queryForObject("SELECT cancel_requested FROM file_noedaeri_tasks WHERE id=?",Boolean.class,id));
         if(row.get("state").equals("IMPORTED")) {
             if(cancel){db.update("UPDATE file_noedaeri_tasks SET state='DISCARDED',updated_at=now() WHERE id=?",id);return;}
             for(String name:node(row.get("artifacts")).propertyNames())files.detail(NoedaeriMedia.uuid(node(row.get("artifacts")).path(name)),context);
-            client.receipt(remote,(UUID)row.get("event_id"));db.update("UPDATE file_noedaeri_tasks SET receipt_at=now(),attempts=0,updated_at=now() WHERE id=?",id);return;
+            if(remote!=null)client.receipt(remote,(UUID)row.get("event_id"));db.update("UPDATE file_noedaeri_tasks SET receipt_at=now(),attempts=0,updated_at=now() WHERE id=?",id);return;
         }
         var status=client.status(remote);
         if(!NoedaeriMedia.uuid(status.path("id")).equals(remote)||!status.path("kind").asString().equals(row.get("kind")))throw new IOException("Invalid task status");
@@ -162,15 +178,26 @@ class NoedaeriTasks {
         if(state.equals("uploading")){if(source==null)throw new IOException("Unexpected upload");client.upload(remote,store.path(source));db.update("UPDATE file_noedaeri_tasks SET next_check_at=now()+interval '5 seconds',attempts=0 WHERE id=?",id);return;}
         if(Set.of("queued","running","processing","interrupted").contains(state)){db.update("UPDATE file_noedaeri_tasks SET next_check_at=now()+interval '5 minutes',attempts=0 WHERE id=?",id);return;}
         if(!state.equals("succeeded"))throw new IOException("Unknown task status");
-        UUID event=NoedaeriMedia.uuid(status.path("terminal_event_id"));Instant expires=Instant.parse(status.path("expires_at").asString());
+        String kind=(String)row.get("kind");boolean voiceRegistration=kind.equals("tts.voice.register");
+        UUID event=NoedaeriMedia.uuid(status.path("terminal_event_id"));Instant expires=voiceRegistration&&(status.path("expires_at").isNull()||status.path("expires_at").isMissingNode())?null:Instant.parse(status.path("expires_at").asString());
         if(db.queryForObject("SELECT count(*) FROM file_noedaeri_task_events WHERE task_id=? AND (event_id<>? OR job_id<>?)",Integer.class,id,event,remote)>0)throw new IOException("Terminal event mismatch");
-        if(!expires.isAfter(Instant.now()))throw new IOException("Expired remote result");
-        String kind=(String)row.get("kind");var manifest=status.path("result");NoedaeriTaskContract.manifest(kind,manifest);
+        if(!voiceRegistration&&!expires.isAfter(Instant.now()))throw new IOException("Expired remote result");
+        var manifest=status.path("result");UUID voice=null;
+        if(voiceRegistration) {
+            if(!manifest.path("type").asString().equals("voice_profile"))throw new IOException("Invalid voice result");voice=NoedaeriMedia.uuid(manifest.path("voice_id"));
+            var known=db.queryForObject("SELECT voice_id FROM file_noedaeri_tasks WHERE id=?",UUID.class,id);
+            if(known!=null&&!known.equals(voice))throw new IOException("Voice ID mismatch");
+            var profile=client.voice(voice,NoedaeriTaskContract.requester(context),context.projectId(),context.environmentId());NoedaeriVoices.validate(profile,context,voice);
+            if(!profile.path("kind").asString().equals("clone")||!profile.path("status").asString().equals("ready")||!profile.path("sample_available").asBoolean())throw new IOException("Voice not ready");
+            var combined=json.createObjectNode();combined.put("type","voice_profile");combined.put("voice_id",voice.toString());combined.set("profile",NoedaeriVoices.summary(profile));manifest=combined;
+            db.update("UPDATE file_noedaeri_tasks SET voice_id=? WHERE id=?",voice,id);
+        }else NoedaeriTaskContract.manifest(kind,manifest);
         var output=json.createObjectNode();
         for(String name:NoedaeriTaskContract.files(kind)) {
             Path directory=Files.createTempDirectory("platform-noedaeri-");Path temporary=directory.resolve(name);
             try {
-                if(Set.of("tts.synthesize","video.thumbnail").contains(kind)||name.endsWith(".zip"))client.downloadResult(remote,temporary,NoedaeriTaskContract.fileLimit(name));
+                if(voiceRegistration)client.voiceSample(voice,NoedaeriTaskContract.requester(context),context.projectId(),context.environmentId(),temporary);
+                else if(Set.of("tts.synthesize","video.thumbnail").contains(kind)||name.endsWith(".zip"))client.downloadResult(remote,temporary,NoedaeriTaskContract.fileLimit(name));
                 else client.downloadTaskFile(remote,kind,name,temporary);
                 byte[] bytes=Files.readAllBytes(temporary);NoedaeriTaskContract.validate(kind,name,bytes);
                 long declared=manifest.path("file_sizes").path(name).asLong(-1);if(declared>=0&&declared!=bytes.length)throw new IOException("Artifact size mismatch");
@@ -186,11 +213,11 @@ class NoedaeriTasks {
                 db.update("UPDATE file_noedaeri_tasks SET artifacts=?::jsonb WHERE id=?",json.writeValueAsString(output),id);
             }finally{Files.deleteIfExists(temporary);Files.deleteIfExists(directory);}
         }
-        UUID remoteId=remote;
+        UUID remoteId=remote;var savedManifest=manifest;
         tx.executeWithoutResult(transaction->{
             if(source!=null){db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",source);files.detail(source,context);}
             db.update("UPDATE file_noedaeri_tasks SET state='IMPORTED',manifest=?::jsonb,artifacts=?::jsonb,event_id=?,remote_expires_at=?,attempts=0,error_code=NULL,next_check_at=now(),updated_at=now() WHERE id=?",
-                json.writeValueAsString(manifest),json.writeValueAsString(output),event,java.sql.Timestamp.from(expires),id);
+                json.writeValueAsString(savedManifest),json.writeValueAsString(output),event,expires==null?null:java.sql.Timestamp.from(expires),id);
         });
         client.receipt(remoteId,event);db.update("UPDATE file_noedaeri_tasks SET receipt_at=now(),updated_at=now() WHERE id=?",id);
     }

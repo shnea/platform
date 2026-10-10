@@ -1,6 +1,6 @@
 export const menuGroups=[
  {name:'문서·인식',items:[{id:'subtitles',title:'영상 자막',ready:true},{id:'pdf',title:'PDF 추출',ready:true},{id:'ocr',title:'이미지 OCR',ready:true},{id:'stt',title:'음성 인식',ready:true}]},
- {name:'음성',items:[{id:'tts',title:'음성 생성',ready:true},{id:'voices',title:'목소리 관리',ready:false}]},
+ {name:'음성',items:[{id:'tts',title:'음성 생성',ready:true},{id:'voices',title:'목소리 관리',ready:true}]},
  {name:'이미지·영상',items:[{id:'image',title:'이미지 처리',ready:true},{id:'video',title:'영상 처리',ready:true},{id:'thumbnail',title:'영상 썸네일',ready:true}]},
  {name:'AI',items:[{id:'translation',title:'문장 번역',ready:true},{id:'jobs',title:'AI 작업',ready:true},{id:'raya',title:'난이도 판단',ready:true}]},
  {name:'검색·지식',items:[{id:'embeddings',title:'임베딩',ready:true},{id:'indexing',title:'문서 색인',ready:true},{id:'search',title:'벡터 검색',ready:true}]},

@@ -76,6 +76,11 @@ class NoedaeriClient {
         return "?requester_id="+URLEncoder.encode(requester,StandardCharsets.UTF_8)+"&project="+project+"&environment="+environment;
     }
     JsonNode status(UUID id) throws Exception {return json("GET",path(id),null);}
+    UUID findJob(UUID request) throws Exception {
+        var jobs=json("GET","/api/v1/jobs?limit=100",null,1024*1024);if(!jobs.isArray()||jobs.size()>100)throw new IOException("Invalid job list");
+        for(var job:jobs)if(job.path("idempotency_key").asString().equals(request.toString()))return NoedaeriMedia.uuid(job.path("id"));
+        return null;
+    }
     void upload(UUID id,Path original) throws Exception {
         request("PUT",path(id)+"/input",HttpRequest.BodyPublishers.ofFile(original),"application/octet-stream",null,JSON_LIMIT);
     }

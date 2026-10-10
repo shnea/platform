@@ -12,6 +12,7 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
  const definition=independentDefinitions[menu];
  const [file,setFile]=useState<File|null>(null),[sourceId,setSourceId]=useState(''),[language,setLanguage]=useState(menu==='tts'?'Korean':'auto'),[itn,setItn]=useState(true),[correction,setCorrection]=useState(true),[mode,setMode]=useState('auto');
  const [seconds,setSeconds]=useState('0'),[speech,setSpeech]=useState('안녕하세요. 뇌대리 음성 생성 테스트입니다.'),[voice,setVoice]=useState(''),[instruction,setInstruction]=useState('');
+ const [voiceKind,setVoiceKind]=useState('preset'),[voiceName,setVoiceName]=useState('한국어 안내'),[speaker,setSpeaker]=useState('Sohee'),[reference,setReference]=useState(''),[voices,setVoices]=useState<Json[]>([]);
  const [result,setResult]=useState<Json>({}),[error,setError]=useState(''),[busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[services,setServices]=useState<Json>({}),[history,setHistory]=useState<Json[]>([]);
  const [frozen,setFrozen]=useState(false),[sourceUrl,setSourceUrl]=useState(''),[previewUrl,setPreviewUrl]=useState(''),[trackUrl,setTrackUrl]=useState(''),[page,setPage]=useState(0),[line,setLine]=useState(-1);
  const [sourceName,setSourceName]=useState(''),[polling,setPolling]=useState(false);
@@ -25,6 +26,7 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();urls.current.forEach(url=>URL.revokeObjectURL(url));onBusyChange(false);};},[onBusyChange]);
  useEffect(()=>{onBusyChange(busy);},[busy,onBusyChange]);
  useEffect(()=>{if(available)void fileApi<Json>(environmentId,root+'/services').then(value=>{if(mounted.current)setServices(value);}).catch(error=>{if(mounted.current)setError(String(error.message));});},[environmentId,available]);
+ useEffect(()=>{if(available&&menu==='tts')void fileApi<Json[]>(environmentId,root+'/voices').then(value=>{if(mounted.current)setVoices(value);}).catch(error=>{if(mounted.current)setError(String(error.message));});},[environmentId,available,menu]);
  function remember(blob:Blob){if(!mounted.current)throw new Error('이미 닫힌 테스트 화면입니다.');const url=URL.createObjectURL(blob);urls.current.push(url);return url;}
  function clearPreview(){urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current=[];setSourceUrl('');setPreviewUrl('');setTrackUrl('');setCues([]);setPage(0);setLine(-1);}
  async function read(id=String(result.id??'')) {
@@ -47,9 +49,12 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
    const signal=new AbortController();controller.current=signal;
    if(!submission.current) {
     clearPreview();
-    if(menu!=='tts'&&!file&&!sourceId)throw new Error('파일을 선택하거나 이 환경의 저장된 파일 ID를 입력하세요.');
+    const needsFile=menu!=='tts'&&(menu!=='voices'||voiceKind==='clone');
+    if(needsFile&&!file&&!sourceId)throw new Error('파일을 선택하거나 이 환경의 저장된 파일 ID를 입력하세요.');
+    if(menu==='voices'&&voiceKind==='clone'&&file&&file.size>64*1024*1024)throw new Error('참조 음성은 64MiB 이하여야 합니다.');
     const options=independentOptions(menu,{mode,language,correction,itn,seconds,voice,instruction});
-    submission.current={requestId:crypto.randomUUID(),uploadRequest:crypto.randomUUID(),sourceFileId:sourceId,file,hash:'',kind:definition.kind,options,...(menu==='tts'?{input:{text:speech,language}}:{})};setFrozen(true);
+    const input=menu==='tts'?{text:speech,language}:menu==='voices'?{name:voiceName,kind:voiceKind,...(voiceKind==='clone'?{reference_text:reference}:{speaker})}:undefined;
+    submission.current={requestId:crypto.randomUUID(),uploadRequest:crypto.randomUUID(),sourceFileId:needsFile?sourceId:'',file:needsFile?file:null,hash:'',kind:definition.kind,options,...(input?{input}:{})};setFrozen(true);
    }
    const value=submission.current;
    if(value.file&&!value.sourceFileId&&menu!=='tts') {
@@ -62,7 +67,7 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
     }
     const stored=await fileApi<FileInfo>(environmentId,'/uploads/'+upload.uploadId+'/complete','POST',{},signal.signal);value.sourceFileId=stored.fileId;
    }
-   const body={requestId:value.requestId,kind:value.kind,options:value.options,...(value.input?{input:value.input}:{sourceFileId:value.sourceFileId})};
+   const body={requestId:value.requestId,kind:value.kind,options:value.options,...(value.input?{input:value.input}:{}),...(value.sourceFileId?{sourceFileId:value.sourceFileId}:{})};
    const accepted=await fileApi<Json>(environmentId,root+'/tasks','POST',body,signal.signal);
    if(mounted.current){setResult(accepted);setProgress('접수됨. 같은 요청 확인은 같은 ID·내용을 유지합니다. 파일 저장 뒤에만 서버가 receipt를 보냅니다.');pollCount.current=0;setPolling(true);}
   }catch(error){if(mounted.current)setError((error instanceof Error?error.message:String(error))+' 응답 유실 시 새 실행 대신 같은 요청 확인을 사용하세요.');}
@@ -83,7 +88,7 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
   if(locked.current)return;locked.current=true;setBusy(true);setError('');
   try {
    clearPreview();
-   if(menu==='tts'||menu==='thumbnail')setPreviewUrl(remember(new Blob([await bytes(menu==='tts'?'speech.wav':'thumbnail.jpg')],{type:menu==='tts'?'audio/wav':'image/jpeg'})));
+   if(menu==='tts'||menu==='voices'||menu==='thumbnail')setPreviewUrl(remember(new Blob([await bytes(menu==='tts'?'speech.wav':menu==='voices'?'reference.wav':'thumbnail.jpg')],{type:menu==='thumbnail'?'image/jpeg':'audio/wav'})));
    else {
     const original=await bytes('',true);
     const selectedName=String(result.sourceName??submission.current?.file?.name??(menu==='ocr'?'source.png':'source.mp4'));setSourceName(selectedName);
@@ -108,8 +113,10 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
   <button className="secondary" disabled={busy||!available} onClick={()=>{void fileApi<Json>(environmentId,root+'/services').then(value=>{if(mounted.current)setServices(value);}).catch(error=>{if(mounted.current)setError(String(error.message));});}}>서비스 상태 다시 확인</button>
   {error&&<p role="alert" className="alert">{error}</p>}{progress&&<p role="status">{progress}</p>}
   <form className="noedaeri-form" onSubmit={run}><fieldset disabled={busy||frozen||!available||!configured||unavailable}>
-   {menu!=='tts'?<><label>원본 파일<input type="file" accept={definition.accept} onChange={event=>{setFile(event.target.files?.[0]??null);setSourceId('');}}/></label><label>또는 저장된 파일 ID<input value={sourceId} disabled={!!file} onChange={event=>setSourceId(event.target.value)} placeholder="현재 프로젝트·환경의 READY 파일 UUID"/></label></>:<><label>합성 텍스트<textarea required maxLength={4000} value={speech} onChange={event=>setSpeech(event.target.value)}/></label><label>목소리 ID (선택)<input value={voice} onChange={event=>setVoice(event.target.value)} placeholder="비우면 Sohee 기본 목소리"/></label><label>말투 지침 (프리셋만)<input maxLength={300} value={instruction} onChange={event=>setInstruction(event.target.value)}/></label><p className="small muted">존재하지 않는 ID의 기본 목소리 대체는 결과의 voice_source·speaker를 확인하세요. 참조 목소리에는 말투 지침을 넣지 않습니다.</p></>}
-   {menu==='thumbnail'?<label>추출 시점 (초)<input required type="number" min={0} max={3600} step="0.1" value={seconds} onChange={event=>setSeconds(event.target.value)}/></label>:<label>{menu==='tts'?'합성 언어':'인식 언어'}<select value={language} onChange={event=>setLanguage(event.target.value)}>{choices.map(value=><option key={value}>{value}</option>)}</select></label>}
+   {menu==='voices'&&<><label>이름<input required maxLength={120} value={voiceName} onChange={event=>setVoiceName(event.target.value)}/></label><label>등록 종류<select value={voiceKind} onChange={event=>setVoiceKind(event.target.value)}><option value="preset">기본 목소리 프리셋</option><option value="clone">참조 음성</option></select></label>{voiceKind==='preset'?<label>기본 목소리<select value={speaker} onChange={event=>setSpeaker(event.target.value)}>{['Sohee','Vivian','Serena','Uncle_Fu','Dylan','Eric','Ryan','Aiden','Ono_Anna'].map(value=><option key={value}>{value}</option>)}</select></label>:<label>파일에서 실제 말한 대본<textarea required maxLength={1000} value={reference} onChange={event=>setReference(event.target.value)}/></label>}</>}
+   {menu!=='tts'&&(menu!=='voices'||voiceKind==='clone')&&<><label>원본 파일<input type="file" accept={definition.accept} onChange={event=>{setFile(event.target.files?.[0]??null);setSourceId('');}}/></label><label>또는 저장된 파일 ID<input value={sourceId} disabled={!!file} onChange={event=>setSourceId(event.target.value)} placeholder="현재 프로젝트·환경의 READY 파일 UUID"/></label></>}
+   {menu==='tts'&&<><label>합성 텍스트<textarea required maxLength={4000} value={speech} onChange={event=>setSpeech(event.target.value)}/></label><label>목소리<select value={voice} onChange={event=>{setVoice(event.target.value);if(voices.find(profile=>profile.id===event.target.value)?.kind==='clone')setInstruction('');}}><option value="">내장 기본 · Sohee</option>{voices.filter(profile=>profile.status==='ready'&&(profile.kind==='preset'||profile.sample_available===true)).map(profile=><option key={String(profile.id)} value={String(profile.id)}>{String(profile.name)} · {String(profile.kind)}</option>)}</select></label><label>말투 지침 (프리셋만)<input disabled={voices.find(profile=>profile.id===voice)?.kind==='clone'} maxLength={300} value={instruction} onChange={event=>setInstruction(event.target.value)}/></label><p className="small muted">존재하지 않는 ID의 기본 목소리 대체는 결과의 voice_source·speaker를 확인하세요. 참조 목소리에는 말투 지침을 넣지 않습니다.</p></>}
+   {menu==='thumbnail'?<label>추출 시점 (초)<input required type="number" min={0} max={3600} step="0.1" value={seconds} onChange={event=>setSeconds(event.target.value)}/></label>:menu!=='voices'&&<label>{menu==='tts'?'합성 언어':'인식 언어'}<select value={language} onChange={event=>setLanguage(event.target.value)}>{choices.map(value=><option key={value}>{value}</option>)}</select></label>}
    {(menu==='subtitles'||menu==='stt')&&<label className="checkbox"><input type="checkbox" checked={itn} onChange={event=>setItn(event.target.checked)}/>숫자·표기 정규화 (ITN)</label>}
    {(menu==='pdf'||menu==='ocr')&&<label className="checkbox"><input type="checkbox" checked={correction} onChange={event=>setCorrection(event.target.checked)}/>언어 보정</label>}
    {menu==='pdf'&&<label>추출 방법<select value={mode} onChange={event=>setMode(event.target.value)}><option value="auto">자동 · 페이지별 텍스트/OCR</option><option value="text">내장 텍스트만</option><option value="ocr">전체 OCR</option></select></label>}
@@ -117,10 +124,11 @@ export function IndependentTask({menu,environmentId,available,onBusyChange,initi
   {!!result.id&&<section><h4>실행 결과</h4><p>작업 {String(result.id)} · 원격 {String(result.jobId??'접수 전')} · {statusNames[String(result.status)]??String(result.status)} · 단계 {String(result.stage??'대기')}</p>
    <div className="actions"><button className="secondary" disabled={busy} onClick={()=>void read()}>상태 조회</button>{activeJob(result)&&<button className="secondary" disabled={busy||result.cancelRequested===true} onClick={()=>{if(window.confirm('작업을 취소할까요? 실행 종료 확인 전까지 상태는 실행 중입니다.'))void action('/cancel');}}>취소 요청</button>}{result.recoveryRequired===true&&<button className="secondary" disabled={busy} onClick={()=>void action('/recover')}>같은 작업 복구 확인</button>}</div>
    {result.errorCode!=null&&<p className="warning">{String(result.errorCode)}</p>}{result.recoveryRequired===true&&<p className="warning">제한된 재시도가 끝났습니다. 복구 확인은 같은 원격 작업을 조회·수령하며 모델을 새로 실행하지 않습니다.</p>}
-   <p className="small muted">원격 보관 상한 {String(result.remoteExpiresAt??'-')} · 저장 확인 {result.receiptAt?'전송됨':'대기'} · 플랫폼 파일은 별도 보존 정책을 따릅니다.</p>
-   {result.status==='succeeded'&&artifactList.length===0&&<p className="warning">플랫폼 결과가 삭제·정리되었거나 원본에 접근할 수 없습니다. 조회로 재생성하지 않습니다.</p>}
+   <p className="small muted">원격 보관 상한 {String(result.remoteExpiresAt??'-')} · 저장 확인 {menu==='voices'&&result.status==='succeeded'&&!result.jobId?'프리셋은 별도 receipt 없음':result.receiptAt?'전송됨':'대기'} · 플랫폼 파일은 별도 보존 정책을 따릅니다.</p>
+   {menu==='voices'&&result.voiceId!=null&&<p>등록 목소리 {String(result.voiceId)} · 뇌대리 프로필은 명시적으로 삭제할 때까지 유지합니다. 플랫폼 참조 미리보기의 tmp 정리와 다릅니다. 목록을 새로 조회해 ready·샘플 가용 상태를 확인하세요.</p>}
+   {menu!=='voices'&&result.status==='succeeded'&&artifactList.length===0&&<p className="warning">플랫폼 결과가 삭제·정리되었거나 원본에 접근할 수 없습니다. 조회로 재생성하지 않습니다.</p>}
    {artifactList.length>0&&<><div className="actions">{artifactList.map(item=><button key={String(item.name)} className="secondary" disabled={busy} onClick={()=>void download(String(item.name))}>{String(item.name)} ({String(item.bytes)} B)</button>)}</div>{menu!=='pdf'&&<button className="secondary" disabled={busy} onClick={()=>void preview()}>미리보기 준비</button>}</>}
-   {menu==='tts'&&previewUrl&&<audio controls src={previewUrl}/>} {menu==='thumbnail'&&previewUrl&&<img className="noedaeri-image" src={previewUrl} alt="추출한 영상 썸네일"/>}
+   {(menu==='tts'||menu==='voices')&&previewUrl&&<audio controls src={previewUrl}/>} {menu==='thumbnail'&&previewUrl&&<img className="noedaeri-image" src={previewUrl} alt="추출한 영상 썸네일"/>}
    {menu==='ocr'&&sourceUrl&&<figure className="noedaeri-ocr-source"><img src={sourceUrl} alt="OCR 원본"/>{line>=0&&<span className="noedaeri-ocr-box" style={{left:`${Number(object(lines[line]?.bounding_box).left)*100}%`,top:`${Number(object(lines[line]?.bounding_box).top)*100}%`,width:`${Number(object(lines[line]?.bounding_box).width)*100}%`,height:`${Number(object(lines[line]?.bounding_box).height)*100}%`}}/>}</figure>}
    {(menu==='stt'||menu==='subtitles')&&sourceUrl&&<>{menu==='stt'&&/\.(wav|mp3|flac|ogg|m4a|aac|aiff)$/i.test(sourceName)?<audio ref={element=>{media.current=element;}} controls src={sourceUrl}/>:<video ref={element=>{media.current=element;}} className="noedaeri-video" controls src={sourceUrl}>{trackUrl&&<track label="자동 생성 자막 · 근사 시각" src={trackUrl} kind="subtitles" default/>}</video>}<p className="small muted">{sourceName} · 원본 코덱이 브라우저에서 지원되지 않으면 재생되지 않을 수 있습니다. 구간은 전사 기준이며 SRT/VTT cue와 다를 수 있습니다.</p></>}
    {menu==='pdf'&&pages.length>0&&<label>페이지<select value={page} onChange={event=>{setPage(Number(event.target.value));setLine(-1);}}>{pages.map((value,index)=><option key={index} value={index}>{String(value.page)} · {String(value.method)}</option>)}</select></label>}

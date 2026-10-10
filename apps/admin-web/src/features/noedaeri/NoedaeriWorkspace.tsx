@@ -4,6 +4,7 @@ import {Icon} from '../../shared/Icon';
 import {Dialog} from '../../shared/Dialog';
 import {FileWorkspace} from '../files/FileWorkspace';
 import {IndependentTask} from './IndependentTask';
+import {VoiceManager} from './VoiceManager';
 import {taskMenu} from './independent-contract';
 import {fileApi} from '../files/file-api';
 import {activeJob,initialFields,menuGroups,tasks,testRequest,type TestFields,type TestRequest} from './test-contract';
@@ -63,7 +64,7 @@ export function NoedaeriWorkspace({environmentId,environmentLabel,available,file
  }
  function download() {const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`noedaeri-${menu}.json`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  const media=menu==='image'||menu==='video';
- const independent=['subtitles','pdf','ocr','stt','tts','thumbnail'].includes(menu);
+ const independent=['subtitles','pdf','ocr','stt','tts','thumbnail','voices'].includes(menu);
  return <section className="noedaeri-workspace" aria-label="뇌대리 테스트">
   <p className="small muted">{environmentLabel} · 실제 실행·문서 저장·파일 업로드입니다. 무료 한도·사용량이 발생할 수 있습니다. 키는 서버에서만 사용합니다.</p>
   {!available&&<p className="warning">사용 중인 프로젝트와 반영 완료 환경을 선택하세요.</p>}
@@ -74,10 +75,10 @@ export function NoedaeriWorkspace({environmentId,environmentLabel,available,file
   </nav><div className="noedaeri-content">
    <h3>{selected?.title??(menu==='history'?'실행 이력':menu==='usage'?'사용량':'뇌대리 연결 개요')}</h3>
    {error&&<p role="alert" className="alert">{error}</p>}{notice&&<p role="status" className="notice">{notice}</p>}
-   {menu==='overview'&&<><p>이미지·영상·독립 자막·PDF·OCR·STT·TTS·썸네일과 AI·번역·Raya·임베딩·색인·검색을 이 환경에서 검수합니다. 입력은 버튼을 눌렀을 때만 실행하며 화면 새로고침으로 모델을 다시 호출하지 않습니다.</p><p>AI 어댑터 설정: {services.configured===true?'등록됨':services.configured===false?'미설정':'확인 중'}. 설정 확인은 실제 공급자 실행 성공을 의미하지 않습니다.</p><p className="warning">목소리 관리 화면은 후속 연결입니다. 독립 인식·음성 작업의 실행 가능 상태는 각 기능의 서비스 설정을 확인하세요. 영상에 자막 입히기는 영상 처리의 sidecar/burned 선택과 구분합니다.</p><p>검색·색인은 PostgreSQL 계약입니다. n8n Qdrant 컬렉션과 자동 동기화되지 않으며 RAG 워크플로에서 색인 검색 API를 별도로 연결해야 합니다.</p></>}
+   {menu==='overview'&&<><p>이미지·영상·독립 자막·PDF·OCR·STT·TTS·썸네일과 AI·번역·Raya·임베딩·색인·검색을 이 환경에서 검수합니다. 입력은 버튼을 눌렀을 때만 실행하며 화면 새로고침으로 모델을 다시 호출하지 않습니다.</p><p>AI 어댑터 설정: {services.configured===true?'등록됨':services.configured===false?'미설정':'확인 중'}. 설정 확인은 실제 공급자 실행 성공을 의미하지 않습니다.</p><p className="warning">목소리 등록·관리와 TTS 선택을 연결했습니다. 실제 모델·참조 품질 검수는 별도입니다. 독립 인식·음성 작업의 실행 가능 상태는 각 기능의 서비스 설정을 확인하세요. 영상에 자막 입히기는 영상 처리의 sidecar/burned 선택과 구분합니다.</p><p>검색·색인은 PostgreSQL 계약입니다. n8n Qdrant 컬렉션과 자동 동기화되지 않으며 RAG 워크플로에서 색인 검색 API를 별도로 연결해야 합니다.</p></>}
    {selected&&!selected.ready&&<><p className="warning">뇌대리 제공 기능이지만 이 플랫폼의 독립 작업 어댑터는 아직 연결되지 않았습니다. 실행 가능한 기능으로 표시하지 않습니다.</p>{menu==='subtitles'&&<><p>통합 영상 처리에서 자막 파일 생성(SRT/VTT) 또는 영상에 입히기를 선택할 수 있습니다.</p><button className="secondary" disabled={busy} onClick={()=>changeMenu('video')}>영상 처리로 이동</button></>}</>}
    {media&&(filesEnabled?<><p className="small muted">{menu==='image'?'썸네일 JPEG·WebP 미리보기를 확인하세요.':'HLS 화질·자동 자막·자막/전사 다운로드를 상세·보기에서 확인하세요.'} 테스트 파일은 기본 비공개·tmp 보존입니다. 실제 저장되며 자동 정리가 꺼져 있으면 직접 삭제해야 합니다. 목록은 이 환경의 기존 파일도 포함합니다.</p><FileWorkspace key={menu} environmentId={environmentId} environmentLabel={environmentLabel} available={available} onBusyChange={setMediaBusy} testKind={menu}/></>:<p className="warning">프로젝트 설정에서 파일 서비스 사용을 켜야 합니다.</p>)}
-   {independent&&(filesEnabled?<IndependentTask key={menu+environmentId+(fileJobId??'')} menu={menu} environmentId={environmentId} available={available} onBusyChange={setMediaBusy} initialJobId={fileJobId}/>:<p className="warning">파일 서비스 사용을 켜야 원본·결과를 저장할 수 있습니다.</p>)}
+   {independent&&(filesEnabled?(menu==='voices'?<VoiceManager key={environmentId+(fileJobId??'')} environmentId={environmentId} available={available} onBusyChange={setMediaBusy} initialJobId={fileJobId}/>:<IndependentTask key={menu+environmentId+(fileJobId??'')} menu={menu} environmentId={environmentId} available={available} onBusyChange={setMediaBusy} initialJobId={fileJobId}/>):<p className="warning">파일 서비스 사용을 켜야 원본·결과를 저장할 수 있습니다.</p>)}
    {selected?.ready&&!media&&!independent&&<form className="noedaeri-form" onSubmit={submit}>
     <fieldset disabled={disabled||frozen}>
      {(menu==='jobs'||menu==='raya')&&<label>작업 종류<select value={fields.task} onChange={event=>field('task',event.target.value)}>{Object.entries(tasks).map(([id,title])=><option key={id} value={id}>{title} ({id})</option>)}</select></label>}

@@ -17,7 +17,9 @@ class NoedaeriTaskContractTest {
         assertThat(input).containsEntry("type","text").containsEntry("requester_id","admin:"+context.credentialId()).containsEntry("project",context.projectId().toString());
         assertThatThrownBy(()->NoedaeriTaskContract.input("tts.synthesize",json.readTree("{\"text\":\"안녕\",\"requester_id\":\"other\"}"),null,context)).isInstanceOf(FileFailure.class);
         assertThat(NoedaeriTaskContract.files("tts.synthesize")).containsExactly("speech.wav");
-        assertThatThrownBy(()->NoedaeriTaskContract.files("tts.voice.register")).isInstanceOf(FileFailure.class);
+        assertThat(NoedaeriTaskContract.files("tts.voice.register")).containsExactly("reference.wav");
+        assertThat(NoedaeriTaskContract.input("tts.voice.register",json.readTree("{\"name\":\"한국어 안내\",\"kind\":\"preset\",\"speaker\":\"Sohee\"}"),null,context)).containsEntry("requester_id",NoedaeriTaskContract.requester(context));
+        assertThatThrownBy(()->NoedaeriTaskContract.input("tts.voice.register",json.readTree("{\"name\":\"한국어 안내\",\"kind\":\"preset\",\"speaker\":\"unknown\"}"),null,context)).isInstanceOf(FileFailure.class);
     }
     @Test void manifestsRejectMissingExtraOrEscapingArtifacts() throws Exception {
         NoedaeriTaskContract.manifest("stt.transcribe",json.readTree("{\"type\":\"stt_transcribe\",\"files\":[\"transcript.json\",\"transcript.txt\",\"transcript.zip\"]}"));

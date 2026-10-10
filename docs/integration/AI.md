@@ -42,7 +42,7 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 
 명세: [ai.openapi.json](https://platform.shnea.kr/integrations/ai.openapi.json), 서버 예제: [ai-client.py](https://platform.shnea.kr/examples/ai-client.py). 자료 조회는 로그인 없이 가능하다. 실제 API는 `X-Platform-Key`가 필요하다. 지원 목록의 `configured`는 설정 존재 여부이며 실제 공급자 호출 성공·한도·무료 이용을 보장하지 않는다.
 
-`n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·STT·OCR·PDF·독립 영상 자막·단독 썸네일은 관리자 실행 화면에 연결한다. 목소리 관리와 외부 호스트용 신규 API·권한은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
+`n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·STT·OCR·PDF·독립 영상 자막·단독 썸네일은 관리자 실행 화면에 연결한다. 목소리 관리도 관리자 실행 화면에 연결한다. 외부 호스트용 신규 API·권한은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
 
 ## 문장 번역
 
@@ -89,9 +89,19 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 - 모든 결과를 비공개 파일로 영속 저장하고 원본 존재를 다시 확인한 뒤 receipt를 보낸다. 수령 실패는 같은 작업에서 제한 복구한다. TTS와 썸네일은 `/result`의 단일 파일이며 TTS `/files/speech.wav`나 ZIP을 요청하지 않는다.
 - `POST /tasks/{id}/artifacts/{name}/ticket`은 현재 원본·결과 권한을 검사한 기존 일회용 다운로드 티켓이다. 원본 삭제 시 결과 접근을 즉시 닫고 결과 파일도 삭제 대상으로 표시한다. 결과의 플랫폼 보존은 원본 보존 코드(원본 없는 TTS는 tmp)를 사용하며, 뇌대리 보관 상한·receipt와 별도다. 자동 정리가 꺼져 있으면 파일 메뉴에서 삭제한다.
 
-메뉴에서 페이지별 PDF 텍스트/OCR 줄 위치, 이미지 OCR 위치, STT 전사 구간, VTT 실제 cue와 영상 미리보기, 단일 WAV 재생·다운로드, JPEG 썸네일을 확인한다. 원본 코덱의 브라우저 지원은 별도다. 인식/자막 시각과 confidence는 정확도 보장이 아니며 무음·문자 미검출의 빈 결과도 표시한다. 이력 열기는 GET만 사용한다. 목소리 관리 화면·외부 호스트의 신규 서버 키 권한/API는 아직 후속 범위다.
+메뉴에서 페이지별 PDF 텍스트/OCR 줄 위치, 이미지 OCR 위치, STT 전사 구간, VTT 실제 cue와 영상 미리보기, 단일 WAV 재생·다운로드, JPEG 썸네일을 확인한다. 원본 코덱의 브라우저 지원은 별도다. 인식/자막 시각과 confidence는 정확도 보장이 아니며 무음·문자 미검출의 빈 결과도 표시한다. 이력 열기는 GET만 사용한다. 목소리 관리 화면은 아래 계약으로 연결한다. 외부 호스트의 신규 서버 키 권한/API는 아직 후속 범위다.
 
 확정 목소리 경로는 뇌대리 `/api/v1/voices`, TTS 결과는 ZIP 없는 단일 `speech.wav`(`audio/wav`)다. 참조 목소리의 영속 보관·명시적 삭제는 일반 결과 receipt/TTL과 구분한다. `stt.transcribe`, `ocr.recognize`, `pdf.extract`, 독립 `video.subtitles`, `video.thumbnail`과 원본 없는 `tts.synthesize`는 관리자 테스트 전용 파일 어댑터로 연결한다. 외부 호스트의 서버 키에 새 권한을 자동 부여하지 않는다. v28 영상 통합 처리의 선택 자막은 기존 파일 업로드 `videoOptions.subtitles`와 단일 `video.package`로 연결한다. sidecar는 VTT 토글, burned는 모든 HLS 화질에 입히고 끄기 불가다. 전사·자막을 영속 저장한 뒤 기존 파일 receipt를 보내며 AI Job/AI 완료 알림을 사용하지 않는다. 상세 옵션·보호 URL은 [서비스 연동 지침](../SERVICE_INTEGRATION.md)을 따른다.
+
+### 관리자 목소리 관리
+
+파일 관리자 `/api/v1/files/admin/environments/{environmentId}/noedaeri/voices`에서 GET 목록, `/{id}` GET/PATCH(name만)/DELETE, `/{id}/sample-ticket` POST를 제공한다. 일반 서버 키·일반 이용자 토큰으로는 호출하지 않는다. 요청자 `admin:<인증 subject>`·프로젝트 UUID·환경 UUID를 서버에서 확정하고 뇌대리 응답 범위를 다시 검사한다. 변경과 샘플 저장은 원문 없는 감사 기록을 남긴다.
+
+등록은 독립 테스트 `/noedaeri/tasks`의 플랫폼 내부 `kind:tts.voice.register`로 접수하며 **뇌대리 POST /api/v1/voices**로 전달한다. 뇌대리 `/api/v1/jobs`에 이 종류를 직접 등록하지 않는다. `input`은 `name`, `kind:preset`, `speaker` 또는 `name`, `kind:clone`, `reference_text`다. clone만 `sourceFileId`가 필요하며 참조 음성은 3~30초·64MiB 이하·WAV/MP3/FLAC/OGG/M4A/AAC다. preset은 ready 프로필을 저장하고 별도 Job/receipt가 없다. clone은 registration_job_id에 원본을 한 번 업로드하고 서명 job.* 알림·GET 복구로 종료와 프로필 ready·sample_available을 확인한다. 정규화된 24kHz 모노 PCM16 참조 WAV와 필요한 프로필 요약을 플랫폼에 영속 저장한 뒤 기존 파일 receipt를 보낸다. 대본은 접수 확인까지 큐에만 남기고 프로필 조회 응답으로 확인하며 작업 DB 요약·감사에는 저장하지 않는다.
+
+이름 수정 후 같은 등록 본문을 다시 원격 접수하지 않고 프로필을 조회한다. 삭제는 UI에 이름·ID·참조 음성 삭제 영향을 표시하고 `X-Confirm-Voice`에 같은 ID를 요구한다. 사용 중 409와 `deleted:false, cleanup_failed`를 성공으로 처리하지 않는다. 삭제 응답 유실은 같은 ID의 삭제로 복구하며 원격 삭제 후 플랫폼 참조 샘플도 정리한다. 이미 저장한 합성 WAV는 삭제하지 않는다. 목록·새로고침·샘플은 모델을 호출하지 않는다. TTS에서는 ready 프리셋과 실제 샘플이 있는 ready clone만 선택하고 clone의 instruct는 비운다. 실제 결과의 voice_source·speaker를 확인한다.
+
+뇌대리 프로필은 명시적 삭제까지 보관되며 플랫폼 참조/원본 tmp 파일 정리·receipt와 다르다. 샘플 재생은 명시적 버튼에서 현재 프로필 권한·가용을 확인하고 비공개 tmp 파일로 저장한 뒤 일회용 티켓을 발급한다. 삭제와 수령은 같은 파일 처리 잠금으로 조정한다. 등록 접수 유실 후 취소는 같은 멱등 프로필/업로드 Job을 복구하고 입력을 추가 전송하지 않는다. 원본 없는 TTS 접수가 불확실한 경우에는 최근 작업 GET/완료 알림으로 기존 ID만 찾고 취소하며 새 POST로 모델을 시작하지 않는다. 최근 100건에서 찾지 못하면 확인 필요 상태로 남기고 제한 재시도를 종료한다.
 
 ## PostgreSQL 문서 색인·전체 교체
 

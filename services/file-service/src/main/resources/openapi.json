@@ -17,6 +17,294 @@
     }
   ],
   "paths": {
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/voices/{id}/sample-ticket": {
+      "post": {
+        "operationId": "noedaeri_voice_post__voices__id__sample_ticket",
+        "summary": "참조 WAV 검증·영속 저장 후 다운로드 티켓",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "현재 범위의 조회/수정 결과. 삭제 deleted:false는 실패이며 성공처럼 처리하지 않는다. 샘플은 비공개 tmp 보존이며 새 모델 호출 없음."
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "403": {
+            "description": "관리자 권한 필요"
+          },
+          "404": {
+            "description": "프로필·샘플 없음"
+          },
+          "409": {
+            "description": "사용 중·삭제 확인 오류"
+          },
+          "503": {
+            "description": "뇌대리 미설정·통신 실패"
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/voices/{id}": {
+      "get": {
+        "operationId": "noedaeri_voice_get__voices__id_",
+        "summary": "목소리 검증 상태·대본·참조 가용 조회",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "현재 범위의 조회/수정 결과. 삭제 deleted:false는 실패이며 성공처럼 처리하지 않는다. 샘플은 비공개 tmp 보존이며 새 모델 호출 없음."
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "403": {
+            "description": "관리자 권한 필요"
+          },
+          "404": {
+            "description": "프로필·샘플 없음"
+          },
+          "409": {
+            "description": "사용 중·삭제 확인 오류"
+          },
+          "503": {
+            "description": "뇌대리 미설정·통신 실패"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "noedaeri_voice_patch__voices__id_",
+        "summary": "목소리 이름 수정",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "현재 범위의 조회/수정 결과. 삭제 deleted:false는 실패이며 성공처럼 처리하지 않는다. 샘플은 비공개 tmp 보존이며 새 모델 호출 없음."
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "403": {
+            "description": "관리자 권한 필요"
+          },
+          "404": {
+            "description": "프로필·샘플 없음"
+          },
+          "409": {
+            "description": "사용 중·삭제 확인 오류"
+          },
+          "503": {
+            "description": "뇌대리 미설정·통신 실패"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "noedaeri_voice_delete__voices__id_",
+        "summary": "확인한 목소리·참조 음성 삭제 — 사용 중이면 거절",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Confirm-Voice",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "삭제할 id와 동일해야 한다."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "현재 범위의 조회/수정 결과. 삭제 deleted:false는 실패이며 성공처럼 처리하지 않는다. 샘플은 비공개 tmp 보존이며 새 모델 호출 없음."
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "403": {
+            "description": "관리자 권한 필요"
+          },
+          "404": {
+            "description": "프로필·샘플 없음"
+          },
+          "409": {
+            "description": "사용 중·삭제 확인 오류"
+          },
+          "503": {
+            "description": "뇌대리 미설정·통신 실패"
+          }
+        }
+      }
+    },
+    "/api/v1/files/admin/environments/{environmentId}/noedaeri/voices": {
+      "get": {
+        "operationId": "noedaeri_voice_get__voices",
+        "summary": "관리자의 요청자·프로젝트·환경 목소리 목록",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "Administrator": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "현재 범위의 조회/수정 결과. 삭제 deleted:false는 실패이며 성공처럼 처리하지 않는다. 샘플은 비공개 tmp 보존이며 새 모델 호출 없음."
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "403": {
+            "description": "관리자 권한 필요"
+          },
+          "404": {
+            "description": "프로필·샘플 없음"
+          },
+          "409": {
+            "description": "사용 중·삭제 확인 오류"
+          },
+          "503": {
+            "description": "뇌대리 미설정·통신 실패"
+          }
+        }
+      }
+    },
     "/api/v1/files/admin/environments/{environmentId}/noedaeri/tasks/{id}/artifacts/{name}/ticket": {
       "post": {
         "operationId": "noedaeri_post__tasks__id__artifacts__name__ticket",
@@ -334,7 +622,8 @@
                       "ocr.recognize",
                       "stt.transcribe",
                       "tts.synthesize",
-                      "video.thumbnail"
+                      "video.thumbnail",
+                      "tts.voice.register"
                     ]
                   },
                   "sourceFileId": {
@@ -352,8 +641,40 @@
                       },
                       "language": {
                         "type": "string"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "preset",
+                          "clone"
+                        ]
+                      },
+                      "speaker": {
+                        "type": "string",
+                        "enum": [
+                          "Sohee",
+                          "Vivian",
+                          "Serena",
+                          "Uncle_Fu",
+                          "Dylan",
+                          "Eric",
+                          "Ryan",
+                          "Aiden",
+                          "Ono_Anna"
+                        ]
+                      },
+                      "reference_text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
                       }
-                    }
+                    },
+                    "description": "목소리 preset은 sourceFileId 생략, clone은 참조 파일과 실제 대본. requester/project/environment은 서버 지정. 직접 /jobs로 등록하지 않는다."
                   },
                   "options": {
                     "type": "object",
