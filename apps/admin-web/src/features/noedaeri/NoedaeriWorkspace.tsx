@@ -77,6 +77,7 @@ export function NoedaeriWorkspace({environmentId,environmentLabel,available,file
  return <section className="noedaeri-workspace" aria-label="뇌대리 테스트">
   <p className="small muted">{environmentLabel} · 실제 실행·문서 저장·파일 업로드입니다. 무료 한도·사용량이 발생할 수 있습니다. 키는 서버에서만 사용합니다.</p>
   {!available&&<p className="warning">사용 중인 프로젝트와 반영 완료 환경을 선택하세요.</p>}
+  <label className="noedaeri-mobile-switch">기능 선택<select value={menu} disabled={busy||mediaBusy} onChange={event=>changeMenu(event.target.value)}><option value="overview">개요</option>{menuGroups.map(group=><optgroup key={group.name} label={group.name}>{group.items.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</optgroup>)}<optgroup label="실행·운영"><option value="history">실행 이력</option><option value="usage">사용량</option></optgroup></select></label>
   <div className="noedaeri-layout"><nav className="noedaeri-nav" aria-label="뇌대리 기능">
    <button className="secondary" aria-current={menu==='overview'?'page':undefined} disabled={busy||mediaBusy} onClick={()=>changeMenu('overview')}>개요</button>
    {menuGroups.map(group=><div key={group.name}><h3>{group.name}</h3>{group.items.map(item=><button key={item.id} className="secondary" aria-current={menu===item.id?'page':undefined} disabled={busy||mediaBusy} onClick={()=>changeMenu(item.id)}><span>{item.title}</span>{!item.ready&&<span className="small muted">연결 예정</span>}</button>)}</div>)}

@@ -28,6 +28,7 @@ import { DeveloperCenter } from "../features/developer/DeveloperCenter";
 import { EditorEntry } from "../features/editor/EditorEntry";
 import { FileWorkspace } from "../features/files/FileWorkspace";
 import { NoedaeriWorkspace } from "../features/noedaeri/NoedaeriWorkspace";
+import "../styles/console.css";
 
 type View = "projects" | "files" | "noedaeri" | "jobs" | "logs" | "monitoring" | "alerts" | "audit" | "developer" | "editor";
 type ProjectSection = "overview" | "integration" | "auth" | "members" | "keys" | "test" | "settings";
@@ -191,9 +192,10 @@ function App() {
           <p role="status">관리자 환경을 불러오는 중입니다…</p>
         </main>
       ) : !auth.authenticated ? (
-        <main id="main" className="welcome">
+        <main id="main" className="welcome welcome-home">
+          <div className="welcome-copy">
           <div className="welcome-rule" />
-          <p className="muted">공통 서비스 관리</p>
+          <p className="welcome-eyebrow">SHNEA PLATFORM / 공통 서비스 관리</p>
           <h1>
             프로젝트의 시작을
             <br />
@@ -214,7 +216,19 @@ function App() {
           <p className="small muted">
             Keycloak 관리자 계정으로 안전하게 연결합니다.
           </p>
-          <a href="/demo.html">로그인 없이 에디터·미디어 체험하기</a>
+          <a className="welcome-demo" href="/demo.html">로그인 없이 에디터·미디어 체험하기 <span aria-hidden="true">↗</span></a>
+          </div>
+          <div className="welcome-art" aria-hidden="true">
+            <div className="welcome-art-heading"><span>하나의 작업 공간</span><span>01 / 04</span></div>
+            <div className="welcome-orbit"><span className="welcome-orbit-core">S.</span></div>
+            <div className="welcome-art-caption"><span>연결은 단순하게.<br/>관리는 한곳에서.</span><span>↗</span></div>
+          </div>
+          <div className="welcome-services">
+            <article><span>01</span><Icon name="folder"/><h2>프로젝트 · 인증</h2><p>프로젝트별 환경과 접근을 관리합니다.</p></article>
+            <article><span>02</span><Icon name="file"/><h2>파일 · 에디터</h2><p>미디어와 문서 작업을 연결합니다.</p></article>
+            <article><span>03</span><Icon name="activity"/><h2>AI · 뇌대리</h2><p>AI와 미디어 처리를 실행합니다.</p></article>
+            <article><span>04</span><Icon name="list-checks"/><h2>로그 · 운영</h2><p>서비스 상태와 실행 이력을 확인합니다.</p></article>
+          </div>
         </main>
       ) : (
         <Workspace />
@@ -488,7 +502,7 @@ function Workspace() {
         <div id="workspace-menu" className="workspace-menu" onKeyDown={event => {
           if (event.key === "Escape") { setMenuOpen(false); menuButton.current?.focus(); }
         }}>
-          <p className="nav-label">워크스페이스</p>
+          <p className="nav-label">WORKSPACE <span>관리 메뉴</span></p>
           <nav aria-label="관리 메뉴">
             {views.map(item => <button key={item.value} className={tab === item.value ? "nav active" : "nav"}
               disabled={busy} aria-current={tab === item.value ? "page" : undefined}
@@ -506,7 +520,7 @@ function Workspace() {
           </p>
         </div>
       </aside>
-      <main id="main">
+      <main id="main" data-view={tab}>
         <div className="page-heading">
           <div>
             <p className="breadcrumb">
