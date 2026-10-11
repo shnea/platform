@@ -34,10 +34,10 @@ class FilesHttpTest {
             .andExpect(header().string("X-Content-Type-Options", "nosniff"))
             .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("attachment;")))
             .andExpect(content().contentType("application/octet-stream"));
-        verify(access).requireActive(context.environmentId()); verify(files).finishDownload(isNull(),any(),eq(true));
+        verify(access).requireActive(context.environmentId()); verify(files).validateDownload(any()); verify(files).completedDownload(any());
         clearInvocations(files);
         mvc.perform(head("/api/v1/files/"+id+"/download")).andExpect(status().isOk());
-        verify(files).finishDownload(isNull(),any(),eq(false));
+        verify(files).validateDownload(any()); verify(files,never()).completedDownload(any());
     }
     @Test void privateAndConcurrentVisibilityChangesCannotUseAnonymousDownload() throws Exception {
         when(files.downloadable(id)).thenReturn(row("PRIVATE"));
@@ -59,7 +59,7 @@ class FilesHttpTest {
             mvc.perform(get("/api/v1/files/"+id+"/download").header("Range",range)).andExpect(status().isRequestedRangeNotSatisfiable());
         clearInvocations(files);
         mvc.perform(head("/api/v1/files/"+id+"/download").header("Range","bytes=1-")).andExpect(status().isOk()).andExpect(header().string("Content-Length","3"));
-        verify(files).finishDownload(isNull(),any(),eq(false));
+        verify(files).validateDownload(any()); verify(files,never()).completedDownload(any());
     }
     @Test void operationsEnforceDistinctScopesAndDoNotLeakInternalErrors() throws Exception {
         mvc.perform(post("/api/v1/files/uploads").contentType("application/json").content("{broken"))

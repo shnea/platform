@@ -34,10 +34,6 @@ class RetentionService {
         db.execute("SET LOCAL lock_timeout='5s'");
         db.queryForList("SELECT pg_advisory_xact_lock(hashtextextended(?::text,94721))",env.toString());
     }
-    static void lockTransfers(JdbcTemplate db,UUID environmentId) {
-        db.execute("SET LOCAL lock_timeout='5s'");
-        db.queryForList("SELECT pg_advisory_xact_lock_shared(hashtextextended(?::text,94721))",environmentId.toString());
-    }
     Overview overview(FileAccess.Context context) {
         initialize(db,context.environmentId());
         return new Overview(settings(context.environmentId()),policies(context.environmentId()),eligible(context.environmentId()));
@@ -139,7 +135,6 @@ class RetentionService {
             var ids=db.queryForList("""
                 SELECT f.id FROM files f JOIN file_retention_policies p ON p.environment_id=f.environment_id AND p.code=f.retention_code
                 WHERE f.environment_id=? AND f.state='READY' AND file_retention_due(f.last_used_at,p.period_value,p.period_unit)<=now()
-                AND NOT EXISTS(SELECT 1 FROM file_download_leases l WHERE l.file_id=f.id AND l.expires_at>now())
                 ORDER BY CASE WHEN f.retention_marked_at+make_interval(days=>?)<=now() THEN 0 WHEN f.retention_marked_at IS NULL THEN 1 ELSE 2 END,f.last_used_at LIMIT 100 FOR UPDATE OF f SKIP LOCKED
                 """,UUID.class,env,config.graceDays());
             for(UUID id:ids) {

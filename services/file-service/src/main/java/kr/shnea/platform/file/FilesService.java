@@ -33,7 +33,6 @@ class FilesService {
     private final FileStore store;
     private final long quota;
     private final int pendingLimit;
-    private final Map<UUID,Long> downloads = new java.util.concurrent.ConcurrentHashMap<>();
     FilesService(JdbcTemplate db, TransactionTemplate tx, FileStore store,
                  @Value("${platform.files.environment-quota:50000000000}") long quota,
                  @Value("${platform.files.pending-limit:20}") int pendingLimit) {
@@ -191,7 +190,7 @@ class FilesService {
         if(db.queryForObject("SELECT count(*) FROM file_noedaeri_artifacts artifact JOIN files source ON source.id=artifact.source_file_id WHERE artifact.file_id=? AND source.state<>'READY'",Integer.class,id)>0)throw FileFailure.missing();
     }
     void used(UUID id) {
-        db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id);
+        if(db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id)==0)return;
         db.update("UPDATE files source SET last_used_at=now(),retention_marked_at=NULL FROM file_noedaeri_artifacts artifact WHERE artifact.file_id=? AND source.id=artifact.source_file_id AND source.state='READY'",id);
     }
     FileInfo retention(UUID id,FileAccess.Context context,String code,String expectedCode) {
@@ -208,34 +207,12 @@ class FilesService {
             audit(id,context,"file.retention.changed");return info(get(id,false));
         });
     }
-    UUID beginDownload(Row authorized) {
-        UUID lease=tx.execute(status->{
-            RetentionService.lockTransfers(db,authorized.environment());Row current=get(authorized.id(),true);
-            if(!current.state().equals("READY") || !current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
-            requireResultSource(current.id());
-            UUID key=UUID.randomUUID();db.update("INSERT INTO file_download_leases(id,file_id,expires_at) VALUES (?,?,now()+interval '2 minutes')",key,current.id());return key;
-        });
-        downloads.put(lease,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(90));return lease;
+    void validateDownload(Row authorized) {
+        Row current=downloadable(authorized.id());
+        if(!current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
     }
-    void finishDownload(UUID lease,Row row,boolean success) {
-        try {tx.executeWithoutResult(status->{
-            RetentionService.lockTransfers(db,row.environment());
-            if(success && db.queryForObject("SELECT count(*) FROM file_download_leases WHERE id=? AND expires_at>now()",Long.class,lease)==1)used(row.id());
-            db.update("DELETE FROM file_download_leases WHERE id=?",lease);
-        });} finally {downloads.remove(lease);}
-    }
-    void checkDownload(UUID lease) throws java.io.IOException {
-        Long deadline=downloads.get(lease);
-        if(deadline==null || System.nanoTime()>deadline)throw new java.io.IOException("Download lease expired");
-    }
-    @Scheduled(fixedDelay=20000,initialDelay=20000)
-    void heartbeatDownloads() {
-        for(UUID lease:downloads.keySet()) {
-            try {if(db.update("UPDATE file_download_leases SET expires_at=now()+interval '2 minutes' WHERE id=? AND expires_at>now()",lease)==0)downloads.remove(lease);
-                else downloads.replace(lease,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(90));}
-            catch(RuntimeException e){downloads.remove(lease);}
-        }
-        db.update("DELETE FROM file_download_leases WHERE expires_at<=now()");
+    void completedDownload(Row row) {
+        tx.executeWithoutResult(status->used(row.id()));
     }
     void sameEnvironment(Row row, FileAccess.Context context) {
         if (!row.environment().equals(context.environmentId()) || !row.project().equals(context.projectId())) throw FileFailure.missing();
@@ -253,7 +230,6 @@ class FilesService {
                         db.update("UPDATE files SET state='EXPIRED' WHERE id=?", id);
                         audit(id, new FileAccess.Context(row.project(), row.environment(), row.owner(), row.ownerKind()), "upload.expired");
                     } else if (!Set.of("CANCELLED", "EXPIRED", "DELETED").contains(row.state())) return;
-                    if(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE file_id=? AND expires_at>now()",Long.class,id)>0)return;
                     if(db.queryForObject("SELECT count(*) FROM file_videos WHERE file_id=? AND state='PROCESSING' AND heartbeat_at>now()-interval '2 minutes'",Long.class,id)>0)return;
                     store.delete(id);
                     db.update("UPDATE files SET purged_at=coalesce(purged_at,now()) WHERE id=?", id);

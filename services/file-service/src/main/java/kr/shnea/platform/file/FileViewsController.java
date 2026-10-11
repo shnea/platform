@@ -45,11 +45,10 @@ class FileViewsController {
             case "preview" -> {
                 if(!view.state().equals("READY")&&!FileViews.imagePreviewable(view))throw new FileFailure("FILE_PREVIEW_UNAVAILABLE",409,"미리보기가 아직 준비되지 않았거나 지원하지 않는 파일입니다.");
                 if(Set.of("TEXT","MARKDOWN").contains(view.kind())) {
-                    var lease=files.beginDownload(row);boolean success=false;
-                    try {
-                        String text=views.text(id);String body=view.kind().equals("MARKDOWN")?markdown(text):"<pre>"+escape(text)+"</pre>";
-                        html(response,row.name(),body,true,request);success=!request.getMethod().equals("HEAD");
-                    }finally{files.finishDownload(lease,row,success);}
+                    String text=views.text(id);String body=view.kind().equals("MARKDOWN")?markdown(text):"<pre>"+escape(text)+"</pre>";
+                    files.validateDownload(row);
+                    html(response,row.name(),body,true,request);
+                    if(!request.getMethod().equals("HEAD"))files.completedDownload(row);
                 }else if(view.kind().equals("IMAGE")) {
                     var preview=store.preview(id);boolean generated=java.nio.file.Files.isRegularFile(preview);
                     FileDelivery.send(files,generated?preview:store.path(id),row,generated?"image/webp":view.mediaType(),true,request,response);

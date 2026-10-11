@@ -659,93 +659,87 @@ class FilesDatabaseTest {
         assertThat(service.detail(id,owner).retentionCode()).isEqualTo("archive");
         code("INVALID_REQUEST",()->r.preview(owner,new RetentionService.Policy("영구","영구",1,"DAY",true,1)));
     }
-    @Test void activeDownloadsBlockRetentionAndOnlySuccessfulContentResetsUsage() {
-        UUID id=readyOld();var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());
-        db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);
-        var row=service.downloadable(id);var old=row.used();UUID lease=service.beginDownload(row);
-        r.sweepEnvironment(owner.environmentId());assertThat(service.downloadable(id).state()).isEqualTo("READY");
-        service.heartbeatDownloads();service.finishDownload(lease,row,false);
-        assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(old);
-        lease=service.beginDownload(row);service.finishDownload(lease,row,true);
-        r.sweepEnvironment(owner.environmentId());assertThat(r.candidates(owner,0)).isEmpty();
-        assertThat(service.detail(id,owner).lastUsedAt()).isAfter(old);
-    }
-    @Test void waitingTransferDoesNotBlockAnotherFileInTheSameEnvironment() throws Exception {
-        UUID first=readyOld(),second=readyOld();
-        var firstRow=service.downloadable(first);var secondRow=service.downloadable(second);
-        try(var pool=Executors.newFixedThreadPool(2)) {
-            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<UUID>>();
-            tx.executeWithoutResult(status->{
-                RetentionService.lockTransfers(db,owner.environmentId());
-                db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",first);
-                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
-                waiting.set(pool.submit(()->service.beginDownload(firstRow)));
-                awaitBlockedBy(backend);
-                var independent=pool.submit(()->{
-                    UUID lease=service.beginDownload(secondRow);
-                    service.finishDownload(lease,secondRow,true);return lease;
-                });
-                assertThatCode(()->independent.get(2,TimeUnit.SECONDS)).doesNotThrowAnyException();
-                assertThat(waiting.get().isDone()).isFalse();
-            });
-            UUID lease=waiting.get().get(2,TimeUnit.SECONDS);service.finishDownload(lease,firstRow,false);
-        }
-        assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases",Long.class)).isZero();
-        assertThat(service.detail(second,owner).lastUsedAt()).isAfter(secondRow.used());
-        assertThat(service.detail(first,owner).lastUsedAt()).isEqualTo(firstRow.used());
-    }
-    @Test void policyLockStillBlocksTransferRegistration() throws Exception {
-        UUID id=readyOld();var row=service.downloadable(id);
-        try(var pool=Executors.newSingleThreadExecutor()) {
-            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<UUID>>();
-            tx.executeWithoutResult(status->{
-                RetentionService.lock(db,owner.environmentId());
-                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
-                waiting.set(pool.submit(()->service.beginDownload(row)));
-                awaitBlockedBy(backend);
-                assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE file_id=?",Long.class,id)).isZero();
-            });
-            UUID lease=waiting.get().get(2,TimeUnit.SECONDS);service.finishDownload(lease,row,false);
-        }
-    }
-    @Test void policyLockStillBlocksTransferCompletion() throws Exception {
-        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
-        try(var pool=Executors.newSingleThreadExecutor()) {
-            var waiting=new java.util.concurrent.atomic.AtomicReference<Future<?>>();
-            tx.executeWithoutResult(status->{
-                RetentionService.lock(db,owner.environmentId());
-                int backend=db.queryForObject("SELECT pg_backend_pid()",Integer.class);
-                waiting.set(pool.submit(()->service.finishDownload(lease,row,true)));
-                awaitBlockedBy(backend);
-                assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(row.used());
-                assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases WHERE id=?",Long.class,lease)).isEqualTo(1);
-            });
-            waiting.get().get(2,TimeUnit.SECONDS);
-        }
+    @Test void downloadWithoutTransferRecordsResetsRetentionOnlyAfterSuccess() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);var retention=retention();enableRetention(retention);
+        retention.sweepEnvironment(owner.environmentId());
+        var response=new org.springframework.mock.web.MockHttpServletResponse();
+        FileDelivery.send(service,store,row,new org.springframework.mock.web.MockHttpServletRequest("GET","/"),response);
+        assertThat(response.getContentAsByteArray()).isEqualTo(bytes);
         assertThat(service.detail(id,owner).lastUsedAt()).isAfter(row.used());
         assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases",Long.class)).isZero();
+        retention.sweepEnvironment(owner.environmentId());assertThat(retention.candidates(owner,0)).isEmpty();
     }
-    @Test void deletedFileIsPhysicallyRetainedUntilActiveTransferFinishes() throws Exception {
-        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
-        service.delete(id,owner);code("FILE_NOT_FOUND",()->service.downloadable(id));
-        service.cleanup();assertThat(Files.readAllBytes(store.path(id))).isEqualTo(bytes);
-        assertThat(db.queryForObject("SELECT purged_at FROM files WHERE id=?",java.sql.Timestamp.class,id)).isNull();
-        service.finishDownload(lease,row,true);service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
+    @Test void downloadDoesNotWaitForEnvironmentPolicyLock() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        try(var pool=Executors.newSingleThreadExecutor()) {
+            tx.executeWithoutResult(status->{
+                RetentionService.lock(db,owner.environmentId());
+                var sent=pool.submit(()->{
+                    var response=new org.springframework.mock.web.MockHttpServletResponse();
+                    FileDelivery.send(service,store,row,new org.springframework.mock.web.MockHttpServletRequest("GET","/"),response);
+                    return response.getContentAsByteArray();
+                });
+                assertThatCode(()->assertThat(sent.get(2,TimeUnit.SECONDS)).isEqualTo(bytes)).doesNotThrowAnyException();
+            });
+        }
+    }
+    @Test void downloadValidationDoesNotAcquireFileRowLock() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        try(var pool=Executors.newSingleThreadExecutor()) {
+            tx.executeWithoutResult(status->{
+                db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);
+                var checked=pool.submit(()->service.validateDownload(row));
+                assertThatCode(()->checked.get(2,TimeUnit.SECONDS)).doesNotThrowAnyException();
+            });
+        }
+    }
+    @Test void openedDownloadSurvivesDeletionWithoutRestoringUsage() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);var delivery=org.mockito.Mockito.spy(service);
+        org.mockito.Mockito.doAnswer(invocation->{
+            invocation.callRealMethod();service.delete(id,owner);service.cleanup();
+            assertThat(Files.exists(store.path(id))).isFalse();return null;
+        }).when(delivery).validateDownload(row);
+        var response=new org.springframework.mock.web.MockHttpServletResponse();
+        FileDelivery.send(delivery,store,row,new org.springframework.mock.web.MockHttpServletRequest("GET","/"),response);
+        assertThat(response.getContentAsByteArray()).isEqualTo(bytes);
+        code("FILE_NOT_FOUND",()->service.downloadable(id));
         assertThat(db.queryForObject("SELECT last_used_at FROM files WHERE id=?",java.sql.Timestamp.class,id).toInstant()).isEqualTo(row.used());
     }
-    @Test void expiredTransferDoesNotPreventPhysicalCleanup() {
-        UUID id=readyOld();var row=service.downloadable(id);UUID lease=service.beginDownload(row);
-        service.delete(id,owner);db.update("UPDATE file_download_leases SET expires_at=now()-interval '1 second' WHERE id=?",lease);
-        service.heartbeatDownloads();service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
-        service.finishDownload(lease,row,false);
+    @Test void obsoleteTransferRecordDoesNotPreventRetentionOrPhysicalCleanup() {
+        UUID id=readyOld();var retention=retention();enableRetention(retention);retention.sweepEnvironment(owner.environmentId());
+        db.update("UPDATE files SET retention_marked_at=now()-interval '8 days' WHERE id=?",id);
+        db.update("INSERT INTO file_download_leases(id,file_id,expires_at) VALUES (?,?,now()+interval '2 minutes')",UUID.randomUUID(),id);
+        retention.sweepEnvironment(owner.environmentId());code("FILE_NOT_FOUND",()->service.downloadable(id));
+        service.cleanup();assertThat(Files.exists(store.path(id))).isFalse();
     }
-    void awaitBlockedBy(int backend) {
-        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);
-        while(System.nanoTime()<deadline) {
-            if(db.queryForObject("SELECT count(*) FROM pg_locks WHERE NOT granted AND ?=ANY(pg_blocking_pids(pid))",Integer.class,backend)>0)return;
-            try {Thread.sleep(10);}catch(InterruptedException error){Thread.currentThread().interrupt();throw new AssertionError(error);}
-        }
-        fail("Expected a transfer to wait for the transaction lock");
+    @Test void headAndFailedDownloadDoNotResetUsage() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        var head=new org.springframework.mock.web.MockHttpServletResponse();
+        FileDelivery.send(service,store,row,new org.springframework.mock.web.MockHttpServletRequest("HEAD","/"),head);
+        assertThat(head.getContentAsByteArray()).isEmpty();assertThat(head.getContentLengthLong()).isEqualTo(bytes.length);
+        var failed=org.mockito.Mockito.mock(jakarta.servlet.http.HttpServletResponse.class);
+        org.mockito.Mockito.when(failed.getOutputStream()).thenThrow(new IOException("Disconnected"));
+        assertThatThrownBy(()->FileDelivery.send(service,store,row,new org.springframework.mock.web.MockHttpServletRequest("GET","/"),failed)).isInstanceOf(IOException.class);
+        assertThat(service.detail(id,owner).lastUsedAt()).isEqualTo(row.used());
+        assertThat(db.queryForObject("SELECT count(*) FROM file_download_leases",Long.class)).isZero();
+    }
+    @Test void rangedDownloadKeepsResponseContractWithoutTransferRecords() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        var request=new org.springframework.mock.web.MockHttpServletRequest("GET","/");request.addHeader("Range","bytes=1-5");
+        var response=new org.springframework.mock.web.MockHttpServletResponse();FileDelivery.send(service,store,row,request,response);
+        assertThat(response.getStatus()).isEqualTo(206);
+        assertThat(response.getHeader("Content-Range")).isEqualTo("bytes 1-5/"+bytes.length);
+        assertThat(response.getContentAsByteArray()).isEqualTo(Arrays.copyOfRange(bytes,1,6));
+        assertThat(service.detail(id,owner).lastUsedAt()).isAfter(row.used());
+    }
+    @Test void changedVisibilityAndDeletedFileAreRejectedBeforeDownloadBody() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);service.visibility(id,owner,"PRIVATE");
+        var response=new org.springframework.mock.web.MockHttpServletResponse();
+        var request=new org.springframework.mock.web.MockHttpServletRequest("GET","/");
+        code("FILE_NOT_FOUND",()->FileDelivery.send(service,store,row,request,response));
+        assertThat(response.getContentAsByteArray()).isEmpty();
+        service.delete(id,owner);service.cleanup();
+        code("FILE_NOT_FOUND",()->FileDelivery.send(service,store,row,request,response));
     }
     @Test void expiryAuditFailureRollsBackAndPausedCleanupRetainsFiles() {
         UUID id=readyOld();var r=retention();enableRetention(r);r.sweepEnvironment(owner.environmentId());

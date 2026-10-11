@@ -1,5 +1,13 @@
 # 작업 상태와 다음 작업
 
+### 콘텐츠 전송 중 기록 제거 (2026-10-11)
+
+- **사용자 확정/범위:** 운영 읽기 전용 관찰에서 파일 요청의 WAL 커밋 대기를 확인한 뒤 전송 중 기록 제거를 승인했다. 이전 공유 잠금 방식 대신 lease 등록·heartbeat·삭제·정리 제외와 전송용 환경/행 잠금을 제거한다. 인증·공개 범위·자동 보존 정책·성공 시 마지막 이용 갱신은 유지하며 status 중계나 DB 내구성 설정은 변경하지 않는다.
+- **구현:** 파일 핸들을 먼저 열고 READY/공개 범위/원본 관계를 읽기 전용 재확인한 뒤 같은 핸들의 크기와 본문으로 Range/HEAD를 처리한다. Linux의 열린 핸들은 unlink 이후에도 읽으며 신규 요청은 404다. 텍스트/Markdown은 읽은 본문을 보내기 전에 상태를 재확인한다. 정리/보존 정책 변경의 기존 잠금·감사·유예·재시도는 유지하지만 전송 중이라는 이유로 삭제를 늦추지 않는다. 삭제된 파일의 뒤늦은 전송 완료는 이용 시각과 원본 이용 시각을 갱신하지 않는다.
+- **호환:** 기존 전송 테이블/마이그레이션은 롤백 호환용으로 유지하고 런타임 참조는 제거했다. 새 환경값이나 운영 수동 변경은 없다. 자동 정리·인증·캐시 금지·성공 이용 기록의 쓰기는 유지하므로 모든 DB 대기가 사라졌다고 해석하지 않는다.
+- **검증:** `docker compose --env-file .env.example -p platform-transfer-removal-checks -f compose.test.yml --profile jobs run --rm --entrypoint sh job-check /reports/transfer-removal-check.sh`로 일회용 PostgreSQL과 복사한 소스에서 실행했다. `gradle --no-daemon :services:file-service:test --tests '*FilesDatabaseTest.download*' --tests '*FilesDatabaseTest.*Download*' --tests '*FilesDatabaseTest.obsoleteTransfer*' --rerun-tasks` 집중 8개 통과. `gradle --no-daemon :services:file-service:test --rerun-tasks` 전체101개 중100개 통과·실패/오류0·기존 선택 검사1개 건너뜀. Linux 열린 파일 unlink 후 전송 완료, 정책/파일 행 잠금 중 읽기 확인, 전송 성공 이용 갱신, 삭제 상태 보존, 이전 lease가 있어도 정리, HEAD/실패/Range/권한 변경을 확인했다. 최초 컴파일에서 남아 있던 HTTP 테스트의 이전 종료 메서드 검증을 새 성공 기록 계약으로 바꾼 후 통과했다. 결과는 Git 제외 `output/job-checks/transfer-removal-focused`·`transfer-removal-full`에 보존하며 `git diff --check`도 통과했다.
+- **정리/반영/다음:** 같은 Compose 프로젝트 `down`으로 이번 DB/네트워크만 정리했고 기존 개발/운영 컨테이너·설정은 건드리지 않았다. 원격 main 이력 일치를 확인한 뒤 관련10개 파일을 커밋·푸시하고 배포는 기존 CI/CD에 맡긴다. 수동 SSH 배포는 하지 않는다. 실제 운영 배포와 배포 후 동일 이미지 TTFB 개선 수치는 아직 미검증이며 다음 확인 대상이다.
+
 ### 파일 콘텐츠 전송 공유 잠금·물리 삭제 보호 (2026-10-11)
 
 - **사용자 승인/범위:** 기존 파일서비스보다 이미지 응답이 느린 원인을 읽기 전용 비교한 뒤, 환경 전체 독점 잠금으로 전송끼리 대기하는 부분의 개선을 승인받았다. 이번 완료 단위는 플랫폼의 공통 전송 잠금과 전송 중 삭제 보호만 변경한다. status의 문서 검사·응답 버퍼링·추가 메타데이터 조회, 플랫폼 반복 조회·이용 기록 쓰기·인증·캐시 정책은 유지한다.
