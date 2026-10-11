@@ -44,6 +44,9 @@ class FileStore {
     }
     Path path(UUID id) {
         String key = db.queryForObject("SELECT storage_path FROM files WHERE id=?", String.class, id);
+        return path(id,key);
+    }
+    private Path path(UUID id,String key) {
         if (key == null) return root.resolve(id + ".bin");
         Path relative = Path.of(key);
         Path target = root.resolve(relative).normalize();
@@ -57,9 +60,14 @@ class FileStore {
     Path localThumbnail(UUID id) { return derivative(path(id),id,"thumbnail.jpg",".jpg"); }
     Path localPreview(UUID id) { return derivative(path(id),id,"preview.webp",".preview.webp"); }
     private Path mediaAsset(UUID id,String name,String suffix) {
-        var paths=db.query("SELECT media_generation,kind FROM file_views WHERE file_id=? AND media_generation IS NOT NULL",
-            (r,n)->(r.getString("kind").equals("VIDEO")?video(id):media(id)).resolve(r.getObject(1,UUID.class).toString()).resolve(name),id);
-        return paths.isEmpty()?derivative(path(id),id,name,suffix):paths.getFirst();
+        return db.queryForObject("SELECT f.storage_path,v.media_generation,v.kind FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.id=?",
+            (result,index)->{
+                Path original=path(id,result.getString("storage_path"));
+                UUID generation=result.getObject("media_generation",UUID.class);
+                if(generation==null)return derivative(original,id,name,suffix);
+                boolean video="VIDEO".equals(result.getString("kind"));
+                return derivative(original,id,video?"hls":"media",video?".hls":".media").resolve(generation.toString()).resolve(name);
+            },id);
     }
     Path media(UUID id) { return derivative(path(id),id,"media",".media"); }
     Path mediaOutput(UUID id,UUID generation,boolean video) { return (video?video(id):media(id)).resolve(generation.toString()); }

@@ -8,6 +8,7 @@ import java.util.*;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,6 +34,7 @@ class FilesService {
     private final FileStore store;
     private final long quota;
     private final int pendingLimit;
+    private final DownloadUsage downloadUsage;
     FilesService(JdbcTemplate db, TransactionTemplate tx, FileStore store,
                  @Value("${platform.files.environment-quota:50000000000}") long quota,
                  @Value("${platform.files.pending-limit:20}") int pendingLimit) {
@@ -40,6 +42,7 @@ class FilesService {
         this.db = db; this.tx = new TransactionTemplate(tx.getTransactionManager());
         this.tx.setTimeout(300);
         this.store = store; this.quota = quota; this.pendingLimit = pendingLimit;
+        this.downloadUsage = new DownloadUsage(this::usedDownloads);
     }
     Upload create(FileAccess.Context context, Create input) {
         return create(context,input,true);
@@ -190,8 +193,19 @@ class FilesService {
         if(db.queryForObject("SELECT count(*) FROM file_noedaeri_artifacts artifact JOIN files source ON source.id=artifact.source_file_id WHERE artifact.file_id=? AND source.state<>'READY'",Integer.class,id)>0)throw FileFailure.missing();
     }
     void used(UUID id) {
-        if(db.update("UPDATE files SET last_used_at=now(),retention_marked_at=NULL WHERE id=? AND state='READY'", id)==0)return;
-        db.update("UPDATE files source SET last_used_at=now(),retention_marked_at=NULL FROM file_noedaeri_artifacts artifact WHERE artifact.file_id=? AND source.id=artifact.source_file_id AND source.state='READY'",id);
+        usedDownloads(Set.of(id));
+    }
+    void usedDownloads(Set<UUID> ids) {
+        tx.executeWithoutResult(status->{
+            var named=new NamedParameterJdbcTemplate(db);
+            var updated=named.queryForList("UPDATE files SET last_used_at=GREATEST(last_used_at,now()),retention_marked_at=NULL WHERE id IN (:ids) AND state='READY' RETURNING id",Map.of("ids",ids),UUID.class);
+            if(updated.isEmpty())return;
+            named.update("""
+                UPDATE files source SET last_used_at=GREATEST(source.last_used_at,now()),retention_marked_at=NULL
+                FROM file_noedaeri_artifacts artifact WHERE artifact.file_id IN (:ids) AND source.id=artifact.source_file_id
+                AND source.state='READY' AND source.id NOT IN (:ids)
+                """,Map.of("ids",updated));
+        });
     }
     FileInfo retention(UUID id,FileAccess.Context context,String code,String expectedCode) {
         return tx.execute(status->{
@@ -212,7 +226,7 @@ class FilesService {
         if(!current.visibility().equals(authorized.visibility()))throw FileFailure.missing();
     }
     void completedDownload(Row row) {
-        tx.executeWithoutResult(status->used(row.id()));
+        downloadUsage.record(row.id());
     }
     void sameEnvironment(Row row, FileAccess.Context context) {
         if (!row.environment().equals(context.environmentId()) || !row.project().equals(context.projectId())) throw FileFailure.missing();

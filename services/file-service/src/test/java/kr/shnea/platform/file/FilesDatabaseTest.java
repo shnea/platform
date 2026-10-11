@@ -659,6 +659,91 @@ class FilesDatabaseTest {
         assertThat(service.detail(id,owner).retentionCode()).isEqualTo("archive");
         code("INVALID_REQUEST",()->r.preview(owner,new RetentionService.Policy("영구","영구",1,"DAY",true,1)));
     }
+    @Test void mediaPathsUseOneConnectionForGeneratedAndLegacyAssets() throws Exception {
+        UUID id=readyOld(),generation=UUID.randomUUID();
+        Path original=store.path(id);
+        try(var pool=new com.zaxxer.hikari.HikariDataSource()) {
+            pool.setJdbcUrl(System.getenv("JOB_TEST_DB_URL")+"?currentSchema="+schema);
+            pool.setUsername("job_checks");pool.setPassword("isolated-test-only");
+            pool.setMaximumPoolSize(1);pool.setMinimumIdle(1);pool.setConnectionTimeout(250);
+            var single=new FileStore(directory.toString(),new JdbcTemplate(pool));
+            assertThat(single.preview(id)).isEqualTo(original.resolveSibling("preview.webp"));
+            db.update("INSERT INTO file_views(file_id,media_generation,kind) VALUES (?,?,'IMAGE') ON CONFLICT(file_id) DO UPDATE SET media_generation=excluded.media_generation,kind='IMAGE'",id,generation);
+            assertThat(single.preview(id)).isEqualTo(original.resolveSibling("media").resolve(generation.toString()).resolve("preview.webp"));
+            assertThat(single.thumbnail(id)).isEqualTo(original.resolveSibling("media").resolve(generation.toString()).resolve("thumbnail.jpg"));
+            db.update("UPDATE file_views SET kind='VIDEO' WHERE file_id=?",id);
+            assertThat(single.thumbnail(id)).isEqualTo(original.resolveSibling("hls").resolve(generation.toString()).resolve("thumbnail.jpg"));
+            db.update("UPDATE files SET storage_path=NULL WHERE id=?",id);
+            assertThat(single.thumbnail(id)).isEqualTo(directory.resolve(id+".hls").resolve(generation.toString()).resolve("thumbnail.jpg"));
+            db.update("UPDATE file_views SET media_generation=NULL WHERE file_id=?",id);
+            assertThat(single.preview(id)).isEqualTo(directory.resolve(id+".preview.webp"));
+            db.update("UPDATE files SET storage_path='../outside' WHERE id=?",id);
+            assertThatThrownBy(()->single.preview(id)).isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test void downloadUsageBatchRollsBackAllUpdatesAndIgnoresDeletedFiles() {
+        UUID first=readyOld(),second=readyOld(),deleted=readyOld();
+        var before=service.downloadable(first).used();service.delete(deleted,owner);
+        db.execute("ALTER TABLE files ADD CONSTRAINT reject_usage CHECK(id<>'"+second+"'::uuid OR last_used_at<='"+service.downloadable(second).used()+"'::timestamptz)");
+        assertThatThrownBy(()->service.usedDownloads(Set.of(first,second,deleted))).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(service.downloadable(first).used()).isEqualTo(before);
+        db.execute("ALTER TABLE files DROP CONSTRAINT reject_usage");
+        service.usedDownloads(Set.of(first,second,deleted));
+        assertThat(service.downloadable(first).used()).isAfter(before);
+        assertThat(service.downloadable(second).used()).isEqualTo(service.downloadable(first).used());
+        assertThat(db.queryForObject("SELECT state FROM files WHERE id=?",String.class,deleted)).isEqualTo("DELETED");
+        assertThat(db.queryForObject("SELECT last_used_at<now()-interval '1 year' FROM files WHERE id=?",Boolean.class,deleted)).isTrue();
+    }
+
+    @Test void queuedUsageWritesLeavePoolConnectionsAvailableForReaders() throws Exception {
+        UUID id=readyOld();var row=service.downloadable(id);
+        try(var pool=new com.zaxxer.hikari.HikariDataSource();var threads=Executors.newVirtualThreadPerTaskExecutor()) {
+            pool.setJdbcUrl(System.getenv("JOB_TEST_DB_URL")+"?currentSchema="+schema);
+            pool.setUsername("job_checks");pool.setPassword("isolated-test-only");
+            pool.setMaximumPoolSize(2);pool.setMinimumIdle(2);pool.setConnectionTimeout(250);
+            var pooledDb=new JdbcTemplate(pool);
+            var pooledService=new FilesService(pooledDb,new TransactionTemplate(new DataSourceTransactionManager(pool)),store,10_000_000,20);
+            var usage=(DownloadUsage)org.springframework.test.util.ReflectionTestUtils.getField(pooledService,"downloadUsage");
+            var results=new ArrayList<Future<?>>();
+            tx.executeWithoutResult(status->{
+                db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);
+                results.add(threads.submit(()->pooledService.completedDownload(row)));
+                try {
+                    DownloadUsageTest.until(()->pool.getHikariPoolMXBean()!=null&&pool.getHikariPoolMXBean().getActiveConnections()==1);
+                    for(int index=0;index<8;index++)results.add(threads.submit(()->pooledService.completedDownload(row)));
+                    DownloadUsageTest.until(()->DownloadUsageTest.pending(usage)==8);
+                    var read=threads.submit(()->pooledDb.queryForObject("SELECT state FROM files WHERE id=?",String.class,id));
+                    assertThat(read.get(2,TimeUnit.SECONDS)).isEqualTo("READY");
+                    assertThat(pool.getHikariPoolMXBean().getActiveConnections()).isEqualTo(1);
+                    assertThat(results).allMatch(result->!result.isDone());
+                } catch(Exception error) {throw new IllegalStateException(error);}
+            });
+            for(var result:results)result.get(5,TimeUnit.SECONDS);
+            assertThat(service.downloadable(id).used()).isAfter(row.used());
+        }
+    }
+
+    @Test void downloadUsageBatchUpdatesArtifactSourcesAtomicallyWithoutRevivingDeletedRows() {
+        UUID source=readyOld(),artifact=readyOld(),task=UUID.randomUUID();
+        db.update("INSERT INTO file_noedaeri_tasks(id,environment_id,project_id,actor_id,request_id,source_file_id,kind,fingerprint) VALUES (?,?,?,?,?,?,'pdf.extract',?)",
+            task,owner.environmentId(),owner.projectId(),owner.credentialId(),UUID.randomUUID(),source,"0".repeat(64));
+        db.update("INSERT INTO file_noedaeri_artifacts(file_id,task_id,source_file_id) VALUES (?,?,?)",artifact,task,source);
+        var before=service.downloadable(artifact).used();
+        db.execute("ALTER TABLE files ADD CONSTRAINT reject_source_usage CHECK(id<>'"+source+"'::uuid OR last_used_at<='"+service.downloadable(source).used()+"'::timestamptz)");
+        assertThatThrownBy(()->service.usedDownloads(Set.of(artifact))).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(service.downloadable(artifact).used()).isEqualTo(before);
+        db.execute("ALTER TABLE files DROP CONSTRAINT reject_source_usage");
+        service.usedDownloads(Set.of(artifact));
+        assertThat(service.downloadable(source).used()).isEqualTo(service.downloadable(artifact).used()).isAfter(before);
+        service.usedDownloads(Set.of(source,artifact));
+        var sourceUsed=service.downloadable(source).used();
+        service.delete(artifact,owner);service.usedDownloads(Set.of(artifact));
+        assertThat(service.downloadable(source).used()).isEqualTo(sourceUsed);
+        service.delete(source,owner);service.usedDownloads(Set.of(source,artifact));
+        assertThat(db.queryForObject("SELECT last_used_at FROM files WHERE id=?",java.sql.Timestamp.class,source).toInstant()).isEqualTo(sourceUsed);
+    }
+
     @Test void downloadWithoutTransferRecordsResetsRetentionOnlyAfterSuccess() throws Exception {
         UUID id=readyOld();var row=service.downloadable(id);var retention=retention();enableRetention(retention);
         retention.sweepEnvironment(owner.environmentId());
