@@ -89,7 +89,7 @@ NPM·NAS 뒤에서 접속 기기의 실제 IP를 표시하려면 [역방향 프�
 - 파일: 최대 5GB, 멀티·드래그·분할·재개 업로드, 기본 공개와 별도 비공개/비밀번호 공유.
 - 보존: 고정 `default`·`tmp`·`영구`와 사용자 등록 코드. 코드 기간 변경은 기존 파일에도 적용.
 - 알림: 이메일·앱 내·웹 푸시·SMS·카카오·Telegram. 이메일·SMS는 NCP.
-- Git: https://git.shnea.kr/shnea/platform.git
+- Git: https://github.com/shnea/platform.git
 
 ## 변경 기록
 
