@@ -20,6 +20,7 @@ class NoedaeriWebhook {
     NoedaeriWebhook(JdbcTemplate db,TransactionTemplate tx,NoedaeriClient client){this.db=db;this.tx=tx;this.client=client;}
     @PostMapping({"/api/webhooks/noedaeri","/api/v1/files/integrations/noedaeri/events"})
     Map<String,Object> receive(HttpServletRequest request) throws Exception {
+        if(client.disabled())throw FileFailure.processingDisabled();
         if(!client.configured())throw new FileFailure("FILE_MEDIA_NOT_CONFIGURED",503,"파일 변환 서비스 연결 설정이 필요합니다.");
         byte[] body=request.getInputStream().readNBytes(NoedaeriClient.JSON_LIMIT+1);
         if(body.length>NoedaeriClient.JSON_LIMIT)throw new FileFailure("FILE_MEDIA_EVENT_TOO_LARGE",413,"완료 알림 크기 제한을 초과했습니다.");

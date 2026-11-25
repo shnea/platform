@@ -55,7 +55,7 @@ class FilesService {
         validate(input);
         var videoOptions=VideoOptions.normalize(input.videoOptions());
         if(videoOptions!=null&&!FileVideos.candidate(input.originalName()))throw FileFailure.invalid();
-        if(videoOptions!=null&&videoOptions.subtitles()!=null&&!processingBackend.equals("noedaeri"))
+        if(videoOptions!=null&&videoOptions.subtitles()!=null&&processingBackend.equals("local"))
             throw new FileFailure("FILE_VIDEO_SUBTITLES_UNAVAILABLE",503,"자동 자막은 뇌대리 영상 처리 연결이 필요합니다.");
         String encodedOptions=VideoOptions.encode(videoOptions);
         String visibility = input.visibility() == null ? "PUBLIC" : input.visibility();
@@ -75,6 +75,7 @@ class FilesService {
                     throw new FileFailure("FILE_REQUEST_CONFLICT", 409, "같은 요청 ID에 다른 파일 정보가 지정되었습니다.");
                 return upload(old);
             }
+            if(videoOptions!=null&&processingBackend.equals("none"))throw FileFailure.processingDisabled();
             long reserved = db.queryForObject("SELECT coalesce(sum(size_bytes+video_bytes+video_reserved_bytes),0) FROM files WHERE environment_id=? AND purged_at IS NULL", Long.class, context.environmentId());
             long pending = db.queryForObject("SELECT count(*) FROM files WHERE environment_id=? AND state='UPLOADING'", Long.class, context.environmentId());
             if (input.size() > quota - reserved || pending >= pendingLimit)

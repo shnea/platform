@@ -21,17 +21,22 @@ class NoedaeriClient {
     static final int JSON_LIMIT=128*1024;
     final String webhookSecret;
     final long videoInputLimit;
+    private boolean disabled;
     private final URI base;
     private final String key;
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
     private final JsonMapper json=new JsonMapper();
-    @Autowired
-    NoedaeriClient(@Value("${platform.noedaeri.url:}") String url,
-                   @Value("${platform.noedaeri.api-key:}") String key,
-                   @Value("${platform.noedaeri.webhook-secret:}") String secret,
-                   @Value("${platform.noedaeri.video-input-limit:536870912}") long limit) {
+    NoedaeriClient(String url,String key,String secret,long limit) {
         this(url.isBlank()?null:URI.create(url),key,secret,limit);
         if(base!=null&&!base.getScheme().equals("https"))throw new IllegalArgumentException("Noedaeri requires HTTPS");
+    }
+    @Autowired
+    NoedaeriClient(@Value("${platform.noedaeri.url:}") String url,
+                  @Value("${platform.noedaeri.api-key:}") String key,
+                  @Value("${platform.noedaeri.webhook-secret:}") String secret,
+                  @Value("${platform.noedaeri.video-input-limit:536870912}") long limit, MediaBackend backend) {
+        this(backend.disabled()?"":url,key,secret,limit);
+        disabled=backend.disabled();
     }
     // HTTP loopback is used only by isolated protocol tests; production uses the HTTPS constructor above.
     NoedaeriClient(URI base,String key,String secret,long limit) {
@@ -42,6 +47,11 @@ class NoedaeriClient {
         this.base=base;this.key=key;this.webhookSecret=secret;this.videoInputLimit=limit;
     }
     boolean configured(){return base!=null&&!key.isBlank()&&!webhookSecret.isBlank();}
+    boolean disabled(){return disabled;}
+    void requireConfigured(){
+        if(disabled)throw FileFailure.processingDisabled();
+        if(!configured())throw new FileFailure("FILE_MEDIA_NOT_CONFIGURED",503,"뇌대리 연결 설정이 필요합니다.");
+    }
     JsonNode create(UUID request,String kind,String extension) throws Exception {
         return create(request,kind,extension,Map.of());
     }

@@ -17,7 +17,8 @@ export function VideoPlayer({data}:{data:FileViewsData}) {
  const [settings,setSettings]=useState(false),[fullscreen,setFullscreen]=useState(false),[expanded,setExpanded]=useState(false);
  const [quality,setQuality]=useState(-1),[actual,setActual]=useState(""),[error,setError]=useState("");
  const [native,setNative]=useState(false),[nativeSource,setNativeSource]=useState<string|null>(null),[expired,setExpired]=useState(false);
- const source=data.streamUrl??data.previewUrl;
+ const originalOnly=data.errorCode==='FILE_PROCESSING_DISABLED';
+ const source=originalOnly?data.originalUrl:data.streamUrl??data.previewUrl;
  const expires=data.streamUrl?data.streamExpiresAt:data.expiresAt;
  useEffect(()=>{setCaptions(false);},[caption.vtt]);
  useEffect(()=>{if(captionTrack.current)captionTrack.current.track.mode=captions?"showing":"disabled";},[captions,caption.vtt]);
@@ -68,7 +69,7 @@ export function VideoPlayer({data}:{data:FileViewsData}) {
     <button type="button" title={fullscreen||expanded?'전체 화면 종료':'전체 화면'} data-tooltip={fullscreen||expanded?'전체 화면 종료':'전체 화면'} aria-label={fullscreen||expanded?'전체 화면 종료':'전체 화면'} onClick={()=>void toggleFullscreen()}><Icon name={fullscreen||expanded?'minimize':'maximize'}/></button>
    </div>
   </div>:<p className="muted">{data.video&&['FAILED','UNSUPPORTED'].includes(data.video.state)?"현재 스트리밍으로 재생할 수 없습니다. 원본을 내려받아 확인해 주세요.":"변환이 끝나면 스트리밍으로 재생할 수 있습니다. 원본 다운로드는 계속 사용할 수 있습니다."}</p>}
-  {!data.streamUrl&&source&&<p className="small muted">현재 원본으로 재생합니다. 스트리밍 변환이 끝나면 화질을 선택할 수 있습니다.</p>}
+  {!data.streamUrl&&source&&<p className="small muted">{originalOnly?'원본 전용 모드에서 원본 영상으로 재생합니다.':'현재 원본으로 재생합니다. 스트리밍 변환이 끝나면 화질을 선택할 수 있습니다.'}</p>}
   {!expired&&caption.notice&&<><p className="small muted" role="status">{caption.notice}</p><nav aria-label="자막·전사 다운로드">{Object.entries(data.subtitleUrls??{}).map(([name,url])=><a key={name} href={url}>{name} </a>)}</nav></>}
   {error&&<p role="alert" className="warning">{error}</p>}
  </div>;

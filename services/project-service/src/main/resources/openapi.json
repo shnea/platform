@@ -8017,11 +8017,16 @@
         "properties": {
           "completionReceiverConfigured": {
             "type": "boolean",
-            "description": "플랫폼 공유 서명 설정 존재 여부. 뇌대리의 AI 수신 URL·실제 전송 성공은 별도 확인"
+            "description": "플랫폼 공유 서명 설정 존재 여부. 원본 전용 모드에서는 false."
           },
           "configured": {
             "type": "boolean",
-            "description": "서버 설정 존재 여부이며 실제 연결 성공을 보장하지 않음"
+            "description": "서버 설정 존재 여부. 원본 전용 모드에서는 false."
+          },
+          "processingBackend": {
+            "type": "string",
+            "enum": ["noedaeri", "local", "none"],
+            "description": "설치 단위 모드. none에서 뇌대리 실행 요청은 503 AI_DISABLED를 반환"
           },
           "features": {
             "type": "array",
@@ -8050,6 +8055,7 @@
         },
         "required": [
           "configured",
+          "processingBackend",
           "features"
         ]
       },

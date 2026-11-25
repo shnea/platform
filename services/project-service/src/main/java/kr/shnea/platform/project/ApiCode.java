@@ -7,6 +7,7 @@ import org.springframework.web.server.ResponseStatusException;
 enum ApiCode {
     AI_INVALID_REQUEST(422, "AI 요청의 필드·텍스트·모델·차원·배치 개수를 확인해 주세요."),
     AI_NOT_CONFIGURED(503, "뇌대리 AI 서버 연결 설정이 필요합니다. 관리자에게 문의해 주세요."),
+    AI_DISABLED(503, "이 설치는 원본 전용 모드입니다. AI 서비스를 사용할 수 없습니다."),
     AI_UPSTREAM_AUTH_FAILED(502, "뇌대리 서버 인증 설정을 확인해야 합니다. 관리자에게 문의해 주세요."),
     AI_BUSY(429, "AI 처리 또는 공급자 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."),
     AI_UNAVAILABLE(503, "뇌대리 AI 처리를 확인하지 못했습니다. 연결·지원 기능·자원 상태를 확인해 주세요."),

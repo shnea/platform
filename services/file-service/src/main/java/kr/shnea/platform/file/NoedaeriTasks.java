@@ -26,12 +26,13 @@ class NoedaeriTasks {
         this.db=db;this.tx=tx;this.files=files;this.store=store;this.access=access;this.client=client;
     }
     Object services() {
+        if(client.disabled())return Map.of("configured",false,"reachable",false,"services",List.of(),"errorCode","FILE_PROCESSING_DISABLED");
         if(!client.configured())return Map.of("configured",false,"reachable",false,"services",List.of());
         try{return Map.of("configured",true,"reachable",true,"services",client.services());}
         catch(Exception error){return Map.of("configured",true,"reachable",false,"services",List.of(),"errorCode","FILE_SERVICE_UNAVAILABLE");}
     }
     Object create(FileAccess.Context context,JsonNode body) throws Exception {
-        configured();NoedaeriTaskContract.fields(body,"requestId","sourceFileId","kind","input","options");
+        client.requireConfigured();NoedaeriTaskContract.fields(body,"requestId","sourceFileId","kind","input","options");
         UUID request=NoedaeriTaskContract.uuid(body.path("requestId"));String kind=NoedaeriTaskContract.string(body,"kind",32,true);
         if(!NoedaeriTaskContract.KINDS.contains(kind))throw FileFailure.invalid();
         boolean withoutFile=kind.equals("tts.synthesize")||kind.equals("tts.voice.register")&&body.path("input").path("kind").asString().equals("preset");
@@ -95,6 +96,7 @@ class NoedaeriTasks {
         return result;
     }
     Object cancel(FileAccess.Context context,UUID id) {
+        if(client.disabled())throw FileFailure.processingDisabled();
         return tx.execute(status->{
             db.queryForList("SELECT id FROM file_noedaeri_tasks WHERE id=? FOR UPDATE",id);
             var row=owned(context,id);if(!Set.of("NEW","ACTIVE").contains(row.get("state")))throw new FileFailure("FILE_UPLOAD_CLOSED",409,"실행이 종료된 작업은 취소할 수 없습니다.");
@@ -104,6 +106,7 @@ class NoedaeriTasks {
         });
     }
     Object recover(FileAccess.Context context,UUID id) {
+        if(client.disabled())throw FileFailure.processingDisabled();
         var row=owned(context,id);
         if(row.get("state").equals("IMPORTED")&&row.get("job_id")==null)throw new FileFailure("FILE_UPLOAD_CLOSED",409,"즉시 등록된 프리셋은 재실행하지 않습니다. 목소리 목록을 조회하세요.");
         if(!Set.of("NEW","ACTIVE","IMPORTED").contains(row.get("state")))throw new FileFailure("FILE_UPLOAD_CLOSED",409,"종료 작업은 재실행하지 않습니다. 새 테스트에는 새 요청 ID를 사용하세요.");
@@ -245,5 +248,4 @@ class NoedaeriTasks {
     private JsonNode node(Object value){return value==null?json.createObjectNode():json.readTree(value.toString());}
     private String limited(JsonNode value,int limit){String text=value.asString("");return text.matches("[A-Za-z0-9_.-]{1,"+limit+"}")?text:null;}
     private static String hash(byte[] bytes) throws Exception {return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}
-    private void configured(){if(!client.configured())throw new FileFailure("FILE_MEDIA_NOT_CONFIGURED",503,"뇌대리 연결 설정이 필요합니다.");}
 }

@@ -40,6 +40,7 @@ class FileVideos {
     Status retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
             db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);var info=files.detail(id,context);
+            if(backend.disabled())throw FileFailure.processingDisabled();
             if(!candidate(info.originalName())||!db.queryForObject("SELECT automatic_derivatives FROM files WHERE id=?",Boolean.class,id))throw FileFailure.invalid();
             db.update("INSERT INTO file_videos(file_id) VALUES (?) ON CONFLICT DO NOTHING",id);
             if(db.update("UPDATE file_videos SET state='QUEUED',attempts=0,error_code=NULL,progress=0 WHERE file_id=? AND state='FAILED'",id)>0)
@@ -49,7 +50,7 @@ class FileVideos {
     }
     @Scheduled(fixedDelay=5000,initialDelay=20000)
     void work() {
-        if(backend.remote())return;
+        if(backend.remote()||backend.disabled())return;
         // ponytail: one conversion for this shared volume. A session lock also excludes a second service replica.
         synchronized(store.mediaMonitor) {
             try(Connection lock=Objects.requireNonNull(db.getDataSource()).getConnection()) {

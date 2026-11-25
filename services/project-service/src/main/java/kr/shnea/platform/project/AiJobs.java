@@ -38,6 +38,7 @@ class AiJobs {
     }
 
     private JsonNode submit(ProjectService.Context context, ObjectNode request, boolean translation) {
+        ai.requireEnabled();
         String requestId = request.path("request_id").asText();
         ObjectNode semantic = request.deepCopy(); semantic.remove("sync");
         String fingerprint = ProjectService.hash(json.writeValueAsString(canonical(semantic)));

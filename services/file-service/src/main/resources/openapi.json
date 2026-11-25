@@ -4932,7 +4932,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "원본 전용 모드(FILE_PROCESSING_DISABLED)에서는 파생물 URL이 없고 originalUrl을 사용합니다."
           },
           "thumbnailUrl": {
             "type": [

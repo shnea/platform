@@ -21,8 +21,8 @@ await build({stdin:{contents:"export {NoedaeriWorkspace} from './src/features/no
 const {NoedaeriWorkspace,NoedaeriResult,IndependentTask}=await import(pathToFileURL(bundle).href);
 const featureIds=['raya.route','embeddings','n8n.execute','text.translate','vector.index'];
 const environment='00000000-0000-4000-8000-000000000010',job='00000000-0000-4000-8000-000000000020';
-let root,host,calls,configured,respond;
-function reset(){calls=[];configured=true;respond=async()=>[];globalThis.__noedaeriTestApi=async(path,method='GET',body,headers)=>{calls.push({path,method,body,headers});if(path==='/ai/services')return {configured,features:featureIds.map(id=>({id,status:'implemented'}))};return respond(path,method,body,headers);};globalThis.fetch=async(path,options={})=>{calls.push({path,method:options.method??'GET',body:options.body?JSON.parse(options.body):undefined,headers:options.headers});const value=String(path).endsWith('/services')?{configured,reachable:true,services:[]} :String(path).endsWith('/retention')?{policies:[]}:await respond(String(path),options.method??'GET',options.body?JSON.parse(options.body):undefined,options.headers);return new Response(JSON.stringify(value),{status:200,headers:{'Content-Type':'application/json'}});};}
+let root,host,calls,configured,processingBackend,respond;
+function reset(){calls=[];configured=true;processingBackend='noedaeri';respond=async()=>[];globalThis.__noedaeriTestApi=async(path,method='GET',body,headers)=>{calls.push({path,method,body,headers});if(path==='/ai/services')return {configured,processingBackend,features:featureIds.map(id=>({id,status:'implemented'}))};return respond(path,method,body,headers);};globalThis.fetch=async(path,options={})=>{calls.push({path,method:options.method??'GET',body:options.body?JSON.parse(options.body):undefined,headers:options.headers});const value=String(path).endsWith('/services')?{configured,reachable:true,services:[]} :String(path).endsWith('/retention')?{policies:[]}:await respond(String(path),options.method??'GET',options.body?JSON.parse(options.body):undefined,options.headers);return new Response(JSON.stringify(value),{status:200,headers:{'Content-Type':'application/json'}});};}
 async function mount(element){reset();host=document.body.appendChild(document.createElement('div'));root=createRoot(host);await act(async()=>{root.render(element);});}
 async function dispose(){await act(async()=>root.unmount());host.remove();}
 const workspace=()=>React.createElement(NoedaeriWorkspace,{environmentId:environment,environmentLabel:'테스트 프로젝트 / DEV',available:true,filesEnabled:true,onBusyChange:()=>{}});
@@ -33,6 +33,16 @@ async function change(node,value){assert.ok(node);const prototype=node.tagName==
 async function submit(){await act(async()=>host.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));}
 const posts=()=>calls.filter(call=>call.method==='POST');
 after(()=>{dom.window.close();rmSync(folder,{recursive:true,force:true});});
+
+test('설치가 원본 전용이면 파일 변환과 AI 실행 메뉴가 비활성화된다',async()=>{
+ await mount(workspace());
+ try {
+  configured=false;processingBackend='none';await click(button('AI 설정 다시 확인'));
+  assert.match(host.textContent,/원본 전용 모드/);
+  for(const title of ['이미지 처리','영상 처리','문장 번역','AI 작업','목소리 관리'])assert.equal(button(title).disabled,true);
+  assert.equal(posts().length,0);
+ } finally {await dispose();}
+});
 
 test('15개 메뉴 진입과 샘플 안내는 실제 POST·업로드·receipt를 호출하지 않는다',async()=>{
  await mount(workspace());

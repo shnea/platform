@@ -23,6 +23,7 @@ class AiGateway {
         "comment.generate", "document.analyze", "code.analyze", "chat.general", "article.draft", "text.translate");
     private final URI base;
     private final String key;
+    private String processingBackend = "noedaeri";
     private boolean completionReceiverConfigured;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
         .followRedirects(HttpClient.Redirect.NEVER).build();
@@ -34,9 +35,15 @@ class AiGateway {
     @org.springframework.beans.factory.annotation.Autowired
     AiGateway(@Value("${platform.noedaeri.url:}") String url,
               @Value("${platform.noedaeri.key:}") String key,
-              @Value("${platform.noedaeri.webhook-secret:}") String webhookSecret) {
-        this(url, key);
-        completionReceiverConfigured = !webhookSecret.isBlank();
+              @Value("${platform.noedaeri.webhook-secret:}") String webhookSecret,
+              @Value("${platform.files.processing-backend:noedaeri}") String processingBackend) {
+        this(switch(processingBackend) {
+            case "none" -> "";
+            case "noedaeri","local" -> url;
+            default -> throw new IllegalArgumentException("Invalid media backend");
+        }, key);
+        this.processingBackend = processingBackend;
+        completionReceiverConfigured = !processingBackend.equals("none") && !webhookSecret.isBlank();
     }
 
     AiGateway(String url, String key) {
@@ -55,9 +62,13 @@ class AiGateway {
 
     boolean configured() { return base != null && key != null && !key.isBlank(); }
     boolean completionReceiverConfigured() { return completionReceiverConfigured; }
+    void requireEnabled() {
+        if (processingBackend.equals("none")) throw ApiCode.AI_DISABLED.beforeDispatch();
+    }
 
     Map<String, Object> services() {
-        return Map.of("configured", configured(), "completionReceiverConfigured", completionReceiverConfigured(), "features", List.of(
+        return Map.of("configured", configured(), "completionReceiverConfigured", completionReceiverConfigured(),
+            "processingBackend", processingBackend, "features", List.of(
             Map.of("id", "raya.route", "status", "implemented", "path", "/api/v1/ai/raya/route", "scope", "ai:route"),
             Map.of("id", "embeddings", "status", "implemented", "path", "/api/v1/ai/embeddings", "scope", "ai:embed",
                 "model", EMBEDDING_MODEL, "defaultDimensions", 768, "maxDimensions", 3072, "maxBatch", 100),
@@ -151,6 +162,7 @@ class AiGateway {
     }
 
     JsonNode exchange(String method, String path, JsonNode input, int limit) {
+        requireEnabled();
         if (!configured()) throw ApiCode.AI_NOT_CONFIGURED.beforeDispatch();
         if (!slots.tryAcquire()) throw ApiCode.AI_BUSY.beforeDispatch();
         CompletableFuture<HttpResponse<byte[]>> future = null;

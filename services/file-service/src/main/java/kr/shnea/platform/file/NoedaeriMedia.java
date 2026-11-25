@@ -29,6 +29,7 @@ class NoedaeriMedia {
     }
     @Scheduled(fixedDelay=3000,initialDelay=20000)
     void work() {
+        if(backend.disabled())return;
         synchronized(store.mediaMonitor) {
             try(Connection connection=Objects.requireNonNull(db.getDataSource()).getConnection()) {
                 try(var statement=connection.createStatement();var result=statement.executeQuery("SELECT pg_try_advisory_lock(736452919)")) {

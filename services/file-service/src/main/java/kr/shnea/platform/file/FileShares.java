@@ -73,7 +73,7 @@ class FileShares {
                 byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);String token=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
                 db.update("DELETE FROM file_view_tokens WHERE share_id=? AND greatest(expires_at,playback_expires_at)<=now()",id);
                 db.update("DELETE FROM file_view_tokens WHERE token_hash IN (SELECT token_hash FROM file_view_tokens WHERE share_id=? ORDER BY expires_at DESC OFFSET 19)",id);
-                db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at,playback_expires_at,share_id) SELECT ?,file_id,access_revision,?,?,id FROM file_shares WHERE id=?",FileViews.hash(token),Timestamp.from(end),Timestamp.from(end),id);
+                db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at,playback_expires_at,share_id) SELECT ?,file_id,access_revision,?,?,id FROM file_shares WHERE id=?",FileViews.hash(token),Timestamp.from(end),views.playbackExpiry(end),id);
                 audit(current.fileId(),id,"anonymous:share","file.share.opened");
                 return views.links(current.fileId(),token,end);
             });

@@ -19,6 +19,7 @@ class ImagePreviewWebTest {
         when(store.path(id)).thenReturn(original);when(store.preview(id)).thenReturn(preview);
         when(views.authorize(id,"allowed",null)).thenReturn(row);
         when(views.view(id)).thenReturn(new FileViews.View("READY","IMAGE","image/png",true,null));
+        when(views.originalView(row)).thenReturn(new FileViews.View("READY","IMAGE","image/png",true,null));
         var mvc=MockMvcBuilders.standaloneSetup(new FileViewsController(views,files,store,mock(FileAccess.class))).setControllerAdvice(new FileErrors()).build();
         String base="/api/v1/files/"+id+"/content/";
         mvc.perform(get(base+"preview").param("token","allowed")).andExpect(status().isOk()).andExpect(content().contentType("image/webp")).andExpect(content().string("preview-bytes"));

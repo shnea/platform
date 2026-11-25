@@ -22,6 +22,7 @@ class AiCompletion {
     private final TransactionTemplate tx;
     private final ProjectService projects;
     private final String secret;
+    @Value("${platform.files.processing-backend:noedaeri}") private String processingBackend = "noedaeri";
     private final JsonMapper json = JsonMapper.builder()
         .enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
         .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
@@ -33,6 +34,7 @@ class AiCompletion {
 
     @PostMapping(value="/api/webhooks/noedaeri/ai", consumes="application/json")
     ResponseEntity<?> receive(HttpServletRequest request) throws Exception {
+        if (processingBackend.equals("none")) throw ApiCode.AI_DISABLED.beforeDispatch();
         if (secret == null || secret.isBlank()) throw ApiCode.AI_DELIVERY_NOT_CONFIGURED.failure();
         byte[] bytes = request.getInputStream().readNBytes(LIMIT + 1);
         if (bytes.length > LIMIT) throw ApiCode.PAYLOAD_TOO_LARGE.failure();

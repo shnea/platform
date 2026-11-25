@@ -1,5 +1,14 @@
 # 작업 상태와 다음 작업
 
+### 설치 단위 원본 전용 모드 (2026-11-26)
+
+- `FILE_PROCESSING_BACKEND=none`을 파일·프로젝트 서비스에 동일하게 전달한다. 파일 원본 업로드·다운로드·공개/비공개 권한·보존을 유지하고 신규 미리보기·썸네일·HLS·자막 및 뇌대리 호출을 중단한다. 기존 파생물과 이미 발급된 유효 링크는 기존 권한에 따라 사용한다. 새 보기 응답은 원본을 제공하고 관리자 화면은 변환·AI 실행을 비활성화한다.
+- 격리 Compose에서 뇌대리 없이 기동했다. 공개 PNG와 비공개 MP4의 원본 해시·전송 범위·다운로드, 익명 접근 차단, 파생물·AI 작업 미생성, 뇌대리 설정을 지정했을 때도 모의 서버 요청 0건을 확인했다. Playwright로 관리자 로그인·일반 파일 업로드·이미지 표시·영상 재생·변환 및 AI 메뉴 잠금을 검증했다.
+- `docker compose --env-file .env.example -p platform-original-mode-coder -f compose.test.yml --profile jobs up --abort-on-container-exit --exit-code-from job-check`는 Java 테스트 224개 통과, 실패 0개, 실제 뇌대리 연결을 전제로 한 선택 검사 3개 건너뜀으로 종료했다. `npm test --prefix packages/editor` 46개, `npm test --prefix apps/admin-web` 37개, `npm run build --prefix apps/admin-web`, `node scripts/check-ai-integration.mjs`, `git diff --check`가 통과했다. 기존 Vite 번들 크기 경고는 남아 있다.
+- 기존 파일 검사 `file-check`의 명세 개수 58과 예제 다운로드 헤더 `attachment;` 단언은 이관 기준 소스의 실제 응답 73개 및 `attachment`와 다르다. 격리 사본에서 두 단언만 맞춘 검사는 시작, 서비스 재기동, 이어올리기, 공유·권한·삭제까지 통과했다. `local`의 JPEG 썸네일·HLS 생성과 `none` 재전환 후 기존 파생 URL·새 보호 공유의 원본 접근을 확인했다.
+- 모드 미지정 시 기본 `noedaeri`가 모의 서버와 TLS로 연결해 임베딩 결과를 받아 왔고 서비스 목록과 예약된 파일 처리 요청을 전송했다. 실제 원격 산출물 생성은 미검증이다.
+- 대상 NAS에서 적용할 때는 [환경값 설정](NAS_DEPLOYMENT.md#env-management)을 따른다. 현재 운영 NAS의 기동·기존 데이터·실제 뇌대리 연결은 별도 검증 대상이다. 프로젝트별 모드, Loki 선택 기동, 객체 저장소와 서비스별 DB 전환은 후속 작업이다.
+
 ### 프로젝트 이관 인계 (2026-11-22)
 
 - 기존 개발 PC에서 `./scripts/dev.ps1 config --quiet`와 `python -X utf8 scripts/check-ci.py`를 실행해 개발 구성 해석, 암호화 설정과 비밀 파일의 Git 제외를 확인했다. 대상 장비에서의 기동·데이터 복원은 인수 시 검증한다.

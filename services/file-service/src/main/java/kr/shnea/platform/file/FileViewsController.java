@@ -34,15 +34,18 @@ class FileViewsController {
     @GetMapping("/api/v1/files/{id}/content/{variant}")
     void content(@PathVariable UUID id,@PathVariable String variant,@RequestParam(required=false) String token,
                  @RequestHeader(value="X-Platform-Key",required=false) String key,HttpServletRequest request,HttpServletResponse response) throws IOException {
-        var row=views.authorize(id,token,key);var view=views.view(id);
+        var row=views.authorize(id,token,key);
         switch(variant) {
             case "download" -> FileDelivery.send(files,store,row,request,response);
             case "original" -> {
-                boolean inline=view.state().equals("READY")||FileViews.imagePreviewable(view);
+                var view=views.originalView(row);
+                boolean inline=view.state().equals("READY")||FileViews.imagePreviewable(view)
+                    ||"FILE_PROCESSING_DISABLED".equals(view.errorCode())&&!view.kind().equals("OTHER");
                 FileDelivery.send(files,store.path(id),row,inline?view.mediaType():"application/octet-stream",inline,request,response);
             }
-            case "thumbnail" -> {if(!view.thumbnail())throw FileFailure.missing();FileDelivery.send(files,store.thumbnail(id),row,"image/jpeg",true,request,response);}
+            case "thumbnail" -> {if(!views.view(id).thumbnail())throw FileFailure.missing();FileDelivery.send(files,store.thumbnail(id),row,"image/jpeg",true,request,response);}
             case "preview" -> {
+                var view=views.view(id);
                 if(!view.state().equals("READY")&&!FileViews.imagePreviewable(view))throw new FileFailure("FILE_PREVIEW_UNAVAILABLE",409,"미리보기가 아직 준비되지 않았거나 지원하지 않는 파일입니다.");
                 if(Set.of("TEXT","MARKDOWN").contains(view.kind())) {
                     String text=views.text(id);String body=view.kind().equals("MARKDOWN")?markdown(text):"<pre>"+escape(text)+"</pre>";
@@ -62,9 +65,11 @@ class FileViewsController {
     void viewer(@PathVariable UUID id,@RequestParam(required=false) String token,HttpServletRequest request,HttpServletResponse response) throws IOException {
         var row=views.authorize(id,token,null);var links=views.links(id,token,null);
         // Keep redirects relative: the servlet sees internal HTTP behind the HTTPS gateway.
-        if(links.video()!=null||links.kind().equals("IMAGE")){response.setStatus(302);response.setHeader("Location","/file-viewer.html?id="+id+(token==null?"":"&token="+token));return;}
-        String source=escape(links.previewUrl()==null?"":links.previewUrl());String content;
-        if(links.previewUrl()==null)content="<p>미리보기가 준비되지 않았거나 지원하지 않는 형식입니다. 원본을 다운로드해 확인해 주세요.</p>";
+        boolean originalOnly="FILE_PROCESSING_DISABLED".equals(links.errorCode());
+        if(links.video()!=null||links.kind().equals("IMAGE")||originalOnly&&links.kind().equals("VIDEO")){response.setStatus(302);response.setHeader("Location","/file-viewer.html?id="+id+(token==null?"":"&token="+token));return;}
+        String viewUrl=originalOnly&&!links.kind().equals("OTHER")?links.originalUrl():links.previewUrl();
+        String source=escape(viewUrl==null?"":viewUrl);String content;
+        if(viewUrl==null)content="<p>미리보기가 준비되지 않았거나 지원하지 않는 형식입니다. 원본을 다운로드해 확인해 주세요.</p>";
         else content=switch(links.kind()) {
             case "IMAGE" -> "<img alt=\""+escape(row.name())+"\" src=\""+source+"\">";
             case "VIDEO" -> "<video controls playsinline preload=\"metadata\" src=\""+source+"\"></video><p>재생되지 않으면 원본을 내려받아 확인해 주세요. 브라우저마다 지원 코덱이 다를 수 있습니다.</p>";

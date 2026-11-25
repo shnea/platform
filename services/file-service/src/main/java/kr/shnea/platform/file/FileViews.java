@@ -6,6 +6,7 @@ import java.nio.charset.*;
 import java.nio.file.*;
 import java.security.*;
 import java.time.Instant;
+import java.sql.Timestamp;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,6 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 class FileViews {
     static final String IMAGE_FORMATS="image2,png_pipe,jpeg_pipe,gif,webp_pipe,bmp_pipe,ico,tiff_pipe,heif,avif";
     static final String MEDIA_FORMATS=IMAGE_FORMATS+",mov,matroska,mp3,wav";
+    private static final long PDF_INLINE_LIMIT=100_000_000;
     record View(String state,String kind,String mediaType,boolean thumbnail,String errorCode) {}
     record Links(UUID fileId,String state,String kind,String mediaType,String errorCode,String originalUrl,String previewUrl,
                  String thumbnailUrl,String viewerUrl,String downloadUrl,Instant expiresAt,
@@ -29,8 +31,10 @@ class FileViews {
         this.db=db;this.tx=tx;this.files=files;this.access=access;this.store=store;this.videos=videos;this.backend=backend;
     }
     View view(UUID id) {
-        db.update("INSERT INTO file_views(file_id,state) SELECT id,CASE WHEN automatic_derivatives THEN 'QUEUED' ELSE 'UNSUPPORTED' END FROM files WHERE id=? ON CONFLICT DO NOTHING",id);
-        return db.queryForObject("SELECT * FROM file_views WHERE file_id=?",(r,n)->new View(r.getString("state"),r.getString("kind"),r.getString("media_type"),r.getBoolean("thumbnail"),r.getString("error_code")),id);
+        if(!backend.disabled())
+            db.update("INSERT INTO file_views(file_id,state) SELECT id,CASE WHEN automatic_derivatives THEN 'QUEUED' ELSE 'UNSUPPORTED' END FROM files WHERE id=? ON CONFLICT DO NOTHING",id);
+        return db.query("SELECT * FROM file_views WHERE file_id=?",(r,n)->new View(r.getString("state"),r.getString("kind"),r.getString("media_type"),r.getBoolean("thumbnail"),r.getString("error_code")),id)
+            .stream().findFirst().orElseGet(()->{if(!backend.disabled())throw FileFailure.missing();return unsupported("FILE_PROCESSING_DISABLED");});
     }
     Links manage(UUID id,FileAccess.Context context,Instant expiry) {
         return tx.execute(s->{
@@ -44,11 +48,12 @@ class FileViews {
                 // Keep at most 20 short-lived viewer sessions per file; do not invalidate an active video on refresh.
                 db.update("DELETE FROM file_view_tokens WHERE token_hash IN (SELECT token_hash FROM file_view_tokens WHERE file_id=? AND share_id IS NULL ORDER BY expires_at DESC OFFSET 19)",id);
                 db.update("INSERT INTO file_view_tokens(token_hash,file_id,access_revision,expires_at,playback_expires_at) SELECT ?,id,access_revision,?,? FROM files WHERE id=?",hash(token),java.sql.Timestamp.from(end),
-                    FileVideos.candidate(info.originalName())?java.sql.Timestamp.from(Instant.now().plusSeconds(7200)):null,id);
+                    FileVideos.candidate(info.originalName())?playbackExpiry(Instant.now().plusSeconds(7200)):null,id);
             }
             return links(id,token,end);
         });
     }
+    Timestamp playbackExpiry(Instant expiry) { return backend.disabled()?null:Timestamp.from(expiry); }
     FilesService.Row authorize(UUID id,String token,String key) {
         return authorize(id,token,key,false);
     }
@@ -64,8 +69,16 @@ class FileViews {
     }
     Links links(UUID id,String token,Instant expiry) {
         if(token!=null&&expiry==null)expiry=db.query("SELECT expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=?",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
-        View v=view(id);String base="/api/v1/files/"+id;String query=token==null?"":"?token="+token;
-        var video=FileVideos.candidate(files.downloadable(id).name())?videos.status(id):null;
+        String base="/api/v1/files/"+id;String query=token==null?"":"?token="+token;
+        var row=files.downloadable(id);
+        String share=row.visibility().equals("PUBLIC")?base+"/share":null;
+        if(backend.disabled()) {
+            var original=originalView(row);
+            return new Links(id,original.state(),original.kind(),original.mediaType(),original.errorCode(),base+"/content/original"+query,
+                null,null,base+"/view"+query,base+"/content/download"+query,expiry,null,null,null,share,Map.of());
+        }
+        View v=view(id);
+        var video=FileVideos.candidate(row.name())?videos.status(id):null;
         Instant streamEnd=token==null?null:db.query("SELECT playback_expires_at FROM file_view_tokens WHERE token_hash=? AND file_id=? AND playback_expires_at IS NOT NULL",(r,n)->r.getTimestamp(1).toInstant(),hash(token),id).stream().findFirst().orElse(null);
         var subtitleUrls=new LinkedHashMap<String,String>();
         if(video!=null&&video.state().equals("READY")&&video.subtitles()!=null)
@@ -73,11 +86,13 @@ class FileViews {
         return new Links(id,v.state(),video==null?v.kind():"VIDEO",v.mediaType(),v.errorCode(),base+"/content/original"+query,
             v.state().equals("READY")||imagePreviewable(v)?base+"/content/preview"+query:null,v.thumbnail()?base+"/content/thumbnail"+query:null,
             base+"/view"+query,base+"/content/download"+query,expiry,video,video!=null&&video.state().equals("READY")?base+"/hls/master.m3u8"+query:null,streamEnd,
-            files.downloadable(id).visibility().equals("PUBLIC")?base+"/share":null,subtitleUrls);
+            share,subtitleUrls);
     }
     Object retry(UUID id,FileAccess.Context context) {
         return tx.execute(s->{
-            db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.detail(id,context);view(id);
+            db.queryForList("SELECT id FROM files WHERE id=? FOR UPDATE",id);files.detail(id,context);
+            if(backend.disabled())throw FileFailure.processingDisabled();
+            view(id);
             db.update("UPDATE file_views SET state='QUEUED',attempts=0,error_code=NULL WHERE file_id=? AND state='FAILED' AND EXISTS (SELECT 1 FROM files WHERE id=? AND automatic_derivatives)",id,id);
             return view(id);
         });
@@ -93,6 +108,7 @@ class FileViews {
     @Scheduled(fixedDelay=3000,initialDelay=15000)
     void work() {
         db.update("DELETE FROM file_view_tokens WHERE greatest(expires_at,playback_expires_at)<=now()");
+        if(backend.disabled())return;
         // Discover completed files, including files uploaded before this feature was installed.
         db.update("INSERT INTO file_views(file_id) SELECT f.id FROM files f LEFT JOIN file_views v ON v.file_id=f.id WHERE f.state='READY' AND f.automatic_derivatives AND v.file_id IS NULL ORDER BY f.completed_at LIMIT 100 ON CONFLICT DO NOTHING");
         db.update("UPDATE file_views SET state=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,error_code='FILE_PREVIEW_INTERRUPTED' WHERE state='PROCESSING' AND processing_backend='local' AND started_at<now()-interval '2 minutes'");
@@ -147,7 +163,7 @@ class FileViews {
         }
         byte[] head;try(var in=store.open(row.id())){head=in.readNBytes(16);}
         if(ext.equals("pdf")) {
-            if(row.size()>100_000_000)return unsupported("FILE_PREVIEW_INPUT_LIMIT");
+            if(row.size()>PDF_INLINE_LIMIT)return unsupported("FILE_PREVIEW_INPUT_LIMIT");
             if(!new String(head,StandardCharsets.ISO_8859_1).startsWith("%PDF-"))throw new IOException("Invalid PDF");
             return new View("READY","PDF","application/pdf",false,null);
         }
@@ -194,6 +210,33 @@ class FileViews {
             String value=StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
             if(value.indexOf('\0')>=0)throw new IOException("Binary text");return value;
         }
+    }
+    View originalView(FilesService.Row row) {
+        if(!backend.disabled())return view(row.id());
+        String name=row.name().toLowerCase(Locale.ROOT);
+        String extension=name.substring(name.lastIndexOf('.')+1);
+        if(!Set.of("jpg","jpeg","jfif","png","gif","webp","mp4","m4v","mov","webm","pdf","mp3","wav").contains(extension))
+            return unsupported("FILE_PROCESSING_DISABLED");
+        String header;
+        try(var in=store.open(row.id())){header=new String(in.readNBytes(64),StandardCharsets.ISO_8859_1);}
+        catch(IOException e){throw FileFailure.unavailable();}
+        // Fixed, inactive MIME types only. A file name alone cannot enable inline delivery.
+        String mime=switch(extension) {
+            case "jpg","jpeg","jfif" -> header.startsWith("\u00ff\u00d8\u00ff")?"image/jpeg":null;
+            case "png" -> header.startsWith("\u0089PNG\r\n\u001a\n")?"image/png":null;
+            case "gif" -> header.startsWith("GIF87a")||header.startsWith("GIF89a")?"image/gif":null;
+            case "webp" -> header.startsWith("RIFF")&&header.startsWith("WEBP",8)?"image/webp":null;
+            case "mp4","m4v" -> header.startsWith("ftyp",4)?"video/mp4":null;
+            case "mov" -> header.startsWith("ftypqt  ",4)?"video/quicktime":null;
+            case "webm" -> header.startsWith("\u001a\u0045\u00df\u00a3")&&header.contains("\u0042\u0082\u0084webm")?"video/webm":null;
+            case "pdf" -> row.size()<=PDF_INLINE_LIMIT&&header.startsWith("%PDF-")?"application/pdf":null;
+            case "mp3" -> header.startsWith("ID3")?"audio/mpeg":null;
+            case "wav" -> header.startsWith("RIFF")&&header.startsWith("WAVE",8)?"audio/wav":null;
+            default -> null;
+        };
+        if(mime==null)return unsupported("FILE_PROCESSING_DISABLED");
+        String kind=mime.equals("application/pdf")?"PDF":mime.substring(0,mime.indexOf('/')).toUpperCase(Locale.ROOT);
+        return new View("UNSUPPORTED",kind,mime,false,"FILE_PROCESSING_DISABLED");
     }
     private static View unsupported(String reason){return new View("UNSUPPORTED","OTHER","application/octet-stream",false,reason);}
     static byte[] run(List<String> command,int seconds) throws Exception {

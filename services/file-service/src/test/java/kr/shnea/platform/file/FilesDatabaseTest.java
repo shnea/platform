@@ -41,6 +41,39 @@ class FilesDatabaseTest {
     RetentionService retention() {return new RetentionService(db,tx,org.mockito.Mockito.mock(FileAccess.class));}
     FileVideos videos(){return new FileVideos(db,tx,store,service,org.mockito.Mockito.mock(FileAccess.class),10_000_000,new MediaBackend("local"));}
     FileViews views(){return new FileViews(db,tx,service,org.mockito.Mockito.mock(FileAccess.class),store,videos(),new MediaBackend("local"));}
+    @Test void originalOnlyModePreservesOriginalDeliveryWithoutSchedulingDerivatives() throws Exception {
+        var backend=new MediaBackend("none");
+        var access=org.mockito.Mockito.mock(FileAccess.class);
+        var videos=new FileVideos(db,tx,store,service,access,10_000_000,backend);
+        var views=new FileViews(db,tx,service,access,store,videos,backend);
+        var controller=new FileViewsController(views,service,store,access);
+        for(String name:List.of("photo.png","video.mp4")) {
+            byte[] original=name.endsWith(".png")
+                ? Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aH9sAAAAASUVORK5CYII=")
+                : HexFormat.of().parseHex("00000018667479706d703432000000006d70343269736f6d");
+            String visibility=name.endsWith(".png")?"PUBLIC":"PRIVATE";
+            var input=new FilesService.Create(UUID.randomUUID(),name,(long)original.length,hash(original),visibility,"default");
+            UUID id=service.create(owner,input).uploadId();append(id,0,original);service.complete(id,owner);
+            var links=views.manage(id,owner,null);
+            assertThat(links.previewUrl()).isNull();
+            assertThat(links.thumbnailUrl()).isNull();
+            assertThat(links.streamUrl()).isNull();
+            String token=visibility.equals("PRIVATE")?links.originalUrl().split("token=")[1]:null;
+            var request=new org.springframework.mock.web.MockHttpServletRequest("GET",links.originalUrl());
+            var response=new org.springframework.mock.web.MockHttpServletResponse();
+            controller.content(id,"original",token,null,request,response);
+            assertThat(response.getContentAsByteArray()).isEqualTo(original);
+            assertThat(response.getContentType()).isEqualTo(name.endsWith(".png")?"image/png":"video/mp4");
+            assertThat(response.getHeader("Content-Disposition")).startsWith("inline;");
+            if(token!=null)code("FILE_NOT_FOUND",()->views.authorize(id,null,null));
+            code("FILE_PROCESSING_DISABLED",()->views.retry(id,owner));
+            if(token!=null)code("FILE_PROCESSING_DISABLED",()->videos.retry(id,owner));
+        }
+        views.work();videos.work();
+        assertThat(db.queryForObject("SELECT count(*) FROM file_views",Long.class)).isZero();
+        assertThat(db.queryForObject("SELECT count(*) FROM file_videos",Long.class)).isZero();
+        assertThat(db.queryForObject("SELECT count(*) FROM file_media_jobs",Long.class)).isZero();
+    }
     class RemoteMediaFixture implements AutoCloseable {
         final UUID id,remote=UUID.randomUUID(),event=UUID.randomUUID();
         UUID request;

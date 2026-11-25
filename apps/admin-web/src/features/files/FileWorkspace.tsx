@@ -1,6 +1,7 @@
 import {Icon} from '../../shared/Icon';
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../shared/api-error";
+import { api } from "../../shared/auth";
 import { Dialog } from "../../shared/Dialog";
 import { SectionTabs } from "../../shared/SectionTabs";
 import { RetentionPanel, type RetentionPolicy } from "./RetentionPanel";
@@ -34,6 +35,9 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [visibility, setVisibility] = useState<"PUBLIC" | "PRIVATE">(testKind?'PRIVATE':'PUBLIC');
+  const [processingBackend,setProcessingBackend]=useState<string>();
+  const originalOnly=processingBackend==="none";
+  const subtitleAvailable=testKind!==undefined||processingBackend!==undefined&&!originalOnly;
   const [subtitleMode,setSubtitleMode]=useState<"none"|"sidecar"|"burned">("none");
   const [subtitleLanguage,setSubtitleLanguage]=useState<SubtitleOptions["language"]>("auto");
   const [subtitleItn,setSubtitleItn]=useState(true);
@@ -98,6 +102,14 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     finally { if (mounted.current && version === loadVersion.current) setLoading(false); }
   }
   useEffect(() => { if (available) void load(0); }, [environmentId, available]);
+  useEffect(() => {
+    if(!available||testKind)return;
+    let active=true;
+    void api<{processingBackend?:string}>("/ai/services").then(({processingBackend})=>{
+      if(active)setProcessingBackend(processingBackend??"noedaeri");
+    }).catch(()=>{ /* File uploads remain usable when AI status cannot be read. */ });
+    return()=>{active=false;};
+  },[available,testKind]);
   function addFiles(selected: FileList | File[]) {
     const candidates = [...selected];
     if(testKind&&candidates.some(file=>testKind==='video'?!isVideoUpload(file.name):! /\.(png|jpe?g|jfif|gif|webp|bmp|ico|tiff?|heic|heif|avif)$/i.test(file.name))) {
@@ -107,7 +119,7 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
     if (waiting + candidates.length > 20) { setError("한 번에 대기할 수 있는 파일은 최대 20개입니다. 기존 업로드를 완료하거나 취소한 뒤 추가해 주세요."); return; }
     const accepted = candidates.filter(file => file.size <= 5_000_000_000);
     setError(accepted.length !== candidates.length ? "5GB를 초과한 파일은 제외했습니다. 나머지 파일은 업로드할 수 있습니다." : "");
-    const videoOptions:VideoOptions|null=subtitleMode==='none'?null:{seconds:0,subtitles:{mode:subtitleMode,language:subtitleLanguage,useItn:subtitleItn}};
+    const videoOptions:VideoOptions|null=subtitleMode==='none'||!subtitleAvailable?null:{seconds:0,subtitles:{mode:subtitleMode,language:subtitleLanguage,useItn:subtitleItn}};
     updateItems(old => [...old, ...accepted.map(file => ({ id: crypto.randomUUID(), name: file.name, size: file.size, visibility, retention,videoOptions:isVideoUpload(file.name)?videoOptions:null, file, received: 0, stage: "queued" as Stage, hashProgress: 0 }))]);
     setTab("uploads");
     if (input.current) input.current.value = "";
@@ -253,9 +265,9 @@ export function FileWorkspace({ environmentId, environmentLabel, available, onBu
           <option value="PUBLIC">공개 — 링크를 알면 다운로드 가능</option><option value="PRIVATE">비공개 — 인증된 접근만 허용</option></select></label>
         <label className="file-visibility">추가할 파일의 보존 코드<select value={retention} disabled={busy||loading} onChange={e=>setRetention(e.target.value)}>{policies.filter(p=>p.enabled).map(p=><option value={p.code} key={p.code}>{p.displayName} ({p.code})</option>)}</select></label>
         <p className="small muted file-guidance">일시정지 후 다른 화면으로 이동할 수 있습니다. 돌아오면 같은 원본 파일을 다시 선택해 이어 올리세요. 원본 확인 중인 파일은 새로 추가해야 합니다.</p>
-        {testKind!=='image'&&<label className="file-visibility">영상 자동 자막<select value={subtitleMode} disabled={busy} onChange={event=>changeSubtitles(event.target.value as typeof subtitleMode,subtitleLanguage,subtitleItn)}><option value="none">자막 없음</option><option value="sidecar">자막 파일 생성 · 켜기·끄기 가능</option><option value="burned">영상에 자막 입히기 · 끄기 불가</option></select></label>}
-        {subtitleMode!=='none'&&<><label className="file-visibility">음성 인식 언어<select value={subtitleLanguage} disabled={busy} onChange={event=>changeSubtitles(subtitleMode,event.target.value as SubtitleOptions['language'],subtitleItn)}>{Object.entries({auto:'자동 감지',ko:'한국어',en:'영어',ja:'일본어',zh:'중국어',yue:'광둥어'}).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label className="checkbox file-visibility"><input type="checkbox" checked={subtitleItn} disabled={busy} onChange={event=>changeSubtitles(subtitleMode,subtitleLanguage,event.target.checked)}/>숫자·문장 표기 정규화</label></>}
-        <p className="small muted">파일을 추가한 뒤에도 업로드 시작 전 대기 영상에는 자막 선택이 반영됩니다. 시작한 업로드·재개 세션·저장된 영상의 옵션은 변경하지 않습니다. 아래 파일별 선택을 확인한 뒤 시작하세요. 자동 생성 자막의 시각은 근삿값이며 자막 번역·MP4 출력은 제공하지 않습니다.</p>
+        {testKind!=='image'&&<label className="file-visibility">영상 자동 자막<select value={subtitleAvailable?subtitleMode:'none'} disabled={busy||!subtitleAvailable} onChange={event=>changeSubtitles(event.target.value as typeof subtitleMode,subtitleLanguage,subtitleItn)}><option value="none">자막 없음</option><option value="sidecar">자막 파일 생성 · 켜기·끄기 가능</option><option value="burned">영상에 자막 입히기 · 끄기 불가</option></select></label>}
+        {!originalOnly&&subtitleMode!=='none'&&<><label className="file-visibility">음성 인식 언어<select value={subtitleLanguage} disabled={busy} onChange={event=>changeSubtitles(subtitleMode,event.target.value as SubtitleOptions['language'],subtitleItn)}>{Object.entries({auto:'자동 감지',ko:'한국어',en:'영어',ja:'일본어',zh:'중국어',yue:'광둥어'}).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label className="checkbox file-visibility"><input type="checkbox" checked={subtitleItn} disabled={busy} onChange={event=>changeSubtitles(subtitleMode,subtitleLanguage,event.target.checked)}/>숫자·문장 표기 정규화</label></>}
+        <p className="small muted">{originalOnly?'원본 전용 모드입니다. 업로드한 원본은 그대로 저장되며 자동 자막 생성은 비활성 상태입니다.':'파일을 추가한 뒤에도 업로드 시작 전 대기 영상에는 자막 선택이 반영됩니다. 시작한 업로드·재개 세션·저장된 영상의 옵션은 변경하지 않습니다. 아래 파일별 선택을 확인한 뒤 시작하세요. 자동 생성 자막의 시각은 근삿값이며 자막 번역·MP4 출력은 제공하지 않습니다.'}</p>
         <div className="section-line"><h3>업로드 현황 <span className="muted">{items.length}개</span></h3><div className="actions">
           {active ? <button className="secondary" onClick={() => { stopQueue.current = true; controller.current?.abort(); }}><Icon name="pause"/>일시정지</button>
             : <button disabled={!available || !processingAvailable || mutating || !items.some(item => item.file && ["queued", "paused", "error"].includes(item.stage))}

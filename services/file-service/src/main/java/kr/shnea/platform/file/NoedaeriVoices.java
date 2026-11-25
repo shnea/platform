@@ -18,7 +18,7 @@ class NoedaeriVoices {
     private final JsonMapper json=new JsonMapper();
     NoedaeriVoices(NoedaeriClient client,FilesService files,FileStore store,JdbcTemplate db){this.client=client;this.files=files;this.store=store;this.db=db;}
     Object list(FileAccess.Context context) {
-        configured();
+        client.requireConfigured();
         try {
             var profiles=client.voices(NoedaeriTaskContract.requester(context),context.projectId(),context.environmentId());
             if(!profiles.isArray()||profiles.size()>500)throw new IOException("Invalid voice list");
@@ -27,7 +27,7 @@ class NoedaeriVoices {
         }catch(Exception error){throw failure(error);}
     }
     JsonNode detail(FileAccess.Context context,UUID id) {
-        configured();
+        client.requireConfigured();
         try{var profile=client.voice(id,NoedaeriTaskContract.requester(context),context.projectId(),context.environmentId());validate(profile,context,id);return display(profile);}
         catch(Exception error){throw failure(error);}
     }
@@ -39,7 +39,7 @@ class NoedaeriVoices {
     Object delete(FileAccess.Context context,UUID id,String confirmation) {synchronized(store.mediaMonitor){return deleteProfile(context,id,confirmation);}}
     private Object deleteProfile(FileAccess.Context context,UUID id,String confirmation) {
         if(!id.toString().equals(confirmation))throw new FileFailure("FILE_REQUEST_CONFLICT",409,"삭제할 목소리 ID를 확인해 주세요.");
-        configured();
+        client.requireConfigured();
         try {
             JsonNode deleted;
             try{deleted=client.deleteVoice(id,NoedaeriTaskContract.requester(context),context.projectId(),context.environmentId());}
@@ -107,5 +107,4 @@ class NoedaeriVoices {
         return FileFailure.unavailable();
     }
     private void audit(FileAccess.Context context,UUID id,String action){db.update("INSERT INTO file_noedaeri_voice_audit(environment_id,actor,voice_id,action,request_id) VALUES (?,?,?,?,?)",context.environmentId(),context.actor(),id,action,org.slf4j.MDC.get("requestId"));}
-    private void configured(){if(!client.configured())throw new FileFailure("FILE_MEDIA_NOT_CONFIGURED",503,"뇌대리 연결 설정이 필요합니다.");}
 }

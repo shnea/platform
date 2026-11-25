@@ -48,6 +48,8 @@ AI·번역·색인은 실제 실행이다. 안정된 요청 ID와 내용을 유�
 
 `n8n.execute`·`usage`는 기존 실제 서버 API에, `vector.index`는 PostgreSQL 색인 API에 연결한다. 기존 `blog.tags`, `blog.summary`, `comment.generate`, `article.draft`에 v26의 `text.translate`를 추가했다. 실제 블로그 저장·기존 hash 캐시·댓글 문맥·결과 검증은 블로그 호스트가 유지한다. 기존 수동 n8n Qdrant 예제는 별개다. TTS·STT·OCR·PDF·독립 영상 자막·단독 썸네일은 관리자 실행 화면에 연결한다. 목소리 관리도 관리자 실행 화면에 연결한다. 외부 호스트용 신규 API·권한은 후속 구현이다. 고자원 모델 관리·학습 데이터 수집/파인튜닝·실제 공급자 한도 순환·공통 결과 캐시는 완료로 표시하지 않는다. 연결 설정·문서 조회와 실제 n8n·공급자·벡터 검색 검수 성공을 구분한다.
 
+설치가 `FILE_PROCESSING_BACKEND=none`이면 지원 목록은 `processingBackend: "none"`, `configured: false`, `completionReceiverConfigured: false`를 반환한다. AI 작업 요청은 접수 번호나 실행 원장을 만들기 전에 503 `AI_DISABLED`로 종료된다. 이 모드에서는 뇌대리 호출과 완료 웹훅 수신이 중지된다.
+
 ## 문장 번역
 
 `POST /api/v1/translations`는 항상 HTTP 202로 접수 상태를 반환한다. 원문은 공백 제외 1~4000자, 본문은 64KiB 이하이며 제어문자는 거부한다. 출발 언어는 기본 `auto` 또는 `ko/en/ja/zh/es/fr/de`, 도착 언어는 이 7개 중 하나다. `auto`는 실제 감지 언어를 뜻하지 않는다.
@@ -277,6 +279,7 @@ summary에는 provider/model/task_type별 call_count·total_prompt_tokens·total
 | 429 `AI_BUSY` | 동시 실행/공급자 한도 확인 후 제한적으로 새 요청 판단. 토큰 전체 소진과 구분 |
 | 502 `AI_UPSTREAM_AUTH_FAILED` / `AI_INVALID_RESPONSE` | 운영자에게 서버 인증/결과 계약 확인 요청 |
 | 503 `AI_NOT_CONFIGURED` / `AI_UNAVAILABLE` | 서버 설정·지원 API·연결·자원 상태 확인 |
+| 503 `AI_DISABLED` | 설치가 원본 전용 모드. 자동 재시도하지 않음 |
 | 504 `AI_TIMEOUT` | 종료 상태를 확인하고 무조건 재호출 금지 |
 
 오류는 RFC 9457 `code`·한국어 detail·requestId로 처리한다. 뇌대리 오류 본문·키·주소를 그대로 노출하지 않는다. 문서 조회·명세 등록·예제 import와 실제 서버/공급자 호출·n8n 운영 전환·벡터 검색·사용량 검수 성공을 각각 구분해 보고한다.
