@@ -1,7 +1,10 @@
 plugins { java }
 group = "kr.shnea.platform"
 version = "0.1.0"
-repositories { mavenCentral() }
+repositories {
+    maven("https://maven-central.storage-download.googleapis.com/maven2/")
+    mavenCentral()
+}
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
 dependencies {
